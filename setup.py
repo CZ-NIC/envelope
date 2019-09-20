@@ -5,13 +5,13 @@ with open("requirements.txt", "r") as f:
 
 setup(
     name='gpggo',
-    version='0.6',
+    version='0.7',
     packages=['.'],
     author='Edvard Rejthar',
     author_email='edvard.rejthar@nic.cz',
     url='https://github.com/CZ-NIC/gpggo',
     license='GNU GPLv3',
-    description='You insert a message and receive signed and/or encrypted output by a single line.',
+    description='Insert a message and attachments and send e-mail / sign / encrypt contents by a single line.',
     install_requires=[requirements.split("\n")],
     entry_points={
         'console_scripts': [
