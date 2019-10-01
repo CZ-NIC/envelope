@@ -5,7 +5,7 @@ with open("requirements.txt", "r") as f:
 
 setup(
     name='gpggo',
-    version='0.7',
+    version='0.8',
     packages=['.'],
     author='Edvard Rejthar',
     author_email='edvard.rejthar@nic.cz',

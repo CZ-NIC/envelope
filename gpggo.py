@@ -3,14 +3,10 @@
 import argparse
 import io
 import logging
-import mimetypes
 import smtplib
 import sys
-from email.message import Message, EmailMessage
-from email.mime.application import MIMEApplication
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
-from email.policy import SMTP
+from copy import copy
+from email.message import EmailMessage
 from email.utils import make_msgid, formatdate
 from pathlib import Path
 
@@ -77,25 +73,72 @@ def assure_list(l):
     return l
 
 
+class AutoSubmittedHeader:
+    """  "auto-replied": direct response to another message by an automatic process """
+
+    def __init__(self, parent: 'Gpggo'):
+        self._parent = parent
+
+    def __call__(self, val="auto-replied"):
+        """
+        :param val: "auto-replied": direct response to another message by an automatic process
+        """
+        self._parent.header("Auto-Submitted", val)
+        return self._parent
+
+    def no(self):
+        """ message was originated by a human """
+        return self("no")
+
+    def auto_replied(self):
+        """ direct response to another message by an automatic process """
+        return self()
+
+    def auto_generated(self):
+        """ automatic (often periodic) processes (such as UNIX "cron jobs") which are not direct responses to other messages """
+        return self("auto-generated")
+
+
 class Gpggo:
+    default: 'Gpggo'
 
-    def __init__(self):
-        self.message = None
-        self.output = None
-        self.gnupg = None
-        self.sign = None
-        self.passphrase = None
-        self.encrypt = None
-        self.recipients = None
-        self.sender = None
-        self.cc = None
-        self.bcc = None
-        self.subject = None
-        self.smtp = None
-        self.reply_to = None
-        self.attachments = None
+    _message = None
+    _output = None
+    _gnupg = None
+    _sign = None
+    _passphrase = None
+    _encrypt = None
+    _recipients = []
+    _sender = None
+    _cc = []
+    _bcc = []
+    _subject = None
+    _smtp = None
+    _attachments = []
+    _reply_to = None
+    _headers = {}
 
-    def __call__(self, message=None, output=None, gnupg=None,
+    # cache of different smtp connections.
+    # Usecase: user passes smtp server info in dict in a loop but we do want it connects just once
+    _smtps = {}
+
+    def __bool__(self):
+        # XXdocument
+        return self._status
+
+    def __str__(self):
+        if self._result is None and (self._encrypt or self._sign):
+            self._start()
+        return assure_fetched(self._result, str)
+
+    def __bytes__(self):
+        return assure_fetched(self._result, bytes)
+
+    def __eq__(self, other):
+        if type(other) in [str, bytes]:
+            return assure_fetched(self._result, bytes) == assure_fetched(other, bytes)
+
+    def __init__(self, message=None, output=None, gnupg=None, headers=None,
                  sign=None, passphrase=None,
                  encrypt=None, recipients=None, sender=None,
                  subject=None, cc=None, bcc=None, reply_to=None, attachments=None,
@@ -129,43 +172,285 @@ class Gpggo:
         :param send: True for sending the mail. False will just print the output.
         :param cc: E-mail or their list.
         :param bcc: E-mail or their list. XXIdentity may be exposed by design when encrypting.
-        :param attachments: Attachment or their list. Attachment is defined by file path or stream (ex: from open()), optionaly in tuple with the file name in the e-mail.
+        :param attachments: Attachment or their list. Attachment is defined by file path or stream (ex: from open()),
+            optionally in tuple with the file name in the e-mail and/or mimetype.
+        :param headers: List of headers which are tuples of name, value. Ex: [("X-Mailer", "my-cool-application"), ...]
         """
-        # check if there is something to do
-        if sign is not True and encrypt is None and send is None:
-            logger.warning("There is nothing to do – no signing, no ecrypting, no sending.")
-            return False
+        self._status = False  # whether we successfully encrypted/signed/send
+        self._result = ""  # text output for str() conversion
+        self.auto_submitted = AutoSubmittedHeader(self)  # allows fluent interface to set header
 
         # load default values
-        message = message or self.message
-        output = output or self.output
-        gnupg = gnupg or self.gnupg
-        sign = sign or self.sign
-        passphrase = passphrase or self.passphrase
-        encrypt = encrypt or self.encrypt
-        recipients = recipients or self.recipients
-        sender = sender if sender is not None else self.sender  # we may set sender=False
-        subject = subject or self.subject
-        bcc = bcc or self.bcc
-        cc = cc or self.cc
-        reply_to = reply_to or self.reply_to
-        attachments = attachments or self.attachments
+        # self._message = self._output = self._gnupg = self._sign = self._passphrase = self._encrypt = \
+        #     self._sender = self._subject = self._reply_to = self._smtp = self._send = None
+        # self._recipients = []
+        # self._attachments = []
+        # self._cc = []
+        # self._bcc = []
+
+        # if a parameter is not set, use class defaults, else init with parameter
+        for k, v in locals().items():
+            if k in ["self", "send"]:
+                continue
+            elif v is None:
+                if hasattr(self, "default"):
+                    v = copy(getattr(self.default, "_" + k))  # ex `v = copy(self.default._message)`
+            elif k == "passphrase":
+                self.signature(passphrase=v)
+            elif k == "recipients":
+                self.recipient(v)
+            elif k == "attachments":
+                self.attach(v)
+            elif k == "headers":  # [(header-name, val), ...]
+                for it in v:
+                    self.header(*it)
+            elif k == "sign":
+                self.signature(v)
+            elif k == "encrypt":
+                self.encryption(v)
+            elif v is not None:
+                getattr(self, k)(v)  # ex: self.message(message)
+
+        if sign or encrypt or send is not None:
+            self._start(sign=sign, encrypt=encrypt, send=send)
+
+        # message = message or copy(self.message)
+        # output = output or copy(self.output)
+        # gnupg = gnupg or copy(self.gnupg)
+        # sign = sign or copy(self.sign)
+        # passphrase = passphrase or copy(self.passphrase)
+        # encrypt = encrypt or copy(self.encrypt)
+        # recipients = recipients or copy(self.recipients)
+        # sender = sender if sender is not None else self.sender  # we may set sender=False
+        # subject = subject or copy(self.subject)
+        # bcc = bcc or copy(self.bcc)
+        # cc = cc or copy(self.cc)
+        # reply_to = reply_to or copy(self.reply_to)
+        # attachments = attachments or copy(self.attachments)
+
+    def cc(self, email_or_list):
+        self._cc += assure_list(email_or_list)
+        return self
+
+    def bcc(self, email_or_list):
+        self._bcc += assure_list(email_or_list)
+        return self
+
+    def message(self, text=None, *, path=None):
+        if path:
+            text = Path(path)
+        self._message = assure_fetched(text, bytes)
+        return self
+
+    def reply_to(self, email):
+        self._reply_to = email
+        return self
+
+    def sender(self, email):
+        self._sender = email
+        return self
+
+    def output(self, output_file):
+        self._output = output_file
+        return self
+
+    def gnupg(self, gpnugp_home):
+        self._gnupg = gpnugp_home
+        return self
+
+    def subject(self, subject):
+        self._subject = subject
+        return self
+
+    def list_unsubscribe(self, url_or_email=None, one_click=False, *, url=None, email=None):
+        """ The header will not be encrypted with GPG nor S/MIME.
+        :param url_or_email: URL or e-mail address.
+            We try to determine whether this is e-mail and prepend brackets and 'https:'/'mailto:' if needed
+            Ex: "me@example.com?subject=unsubscribe", "example.com/unsubscribe", "<https://example.com/unsubscribe>"
+        :param one_click: If True, rfc8058 List-Unsubscribe-Post header is added.
+            This says user can unsubscribe with a single click that is realized by a POST request
+            in order to prevent e-mail scanner to access the unsubscribe page by mistake. A 'https' url must be present.
+        :param url: URL. Ex: "example.com/unsubscribe", "http://example.com/unsubscribe"
+        :param email: E-mail address. Ex: "me@example.com", "mailto:me@example.com"
+        :return: self
+        """
+
+        elements = []
+        if "List-Unsubscribe" in self._headers:
+            elements.extend(self._headers["List-Unsubscribe"].split(","))
+
+        if url_or_email.startswith("<"):
+            elements.append(url_or_email)
+        elif url_or_email.startswith(("http:", "https:", "mailto:", "//")):
+            elements.append(f"<{url_or_email}>")
+        elif "@" in url_or_email:
+            elements.append(f"<mailto:{url_or_email}>")
+        else:
+            elements.append(f"<https://{url_or_email}>")
+
+        if url:
+            if url_or_email.startswith(("http:", "https:", "//")):
+                elements.append(f"<{url}>")
+            else:
+                elements.append(f"<https://{url}>")
+
+        if email:
+            if url_or_email.startswith("mailto:"):
+                elements.append(f"<{email}>")
+            else:
+                elements.append(f"<mailto:{email}>")
+
+        if one_click:
+            self.header("List-Unsubscribe-Post", "List-Unsubscribe=One-Click")
+
+        self.header("List-Unsubscribe", ", ".join(elements))
+        return self
+
+    auto_submitted: AutoSubmittedHeader
+
+    def header(self, key, val):
+        """ Add a generic header.
+        The header will not be encrypted with GPG nor S/MIME.
+        :param key: Header name
+        :param val: Header value
+        :return:
+        """
+        self._headers[key] = val
+        return self
+
+    def smtp(self, host="localhost", port=25, user=None, password=None, security=None):
+        d = locals()
+        del d["self"]
+        # if isinstance(d, smtplib.SMTP):
+        self._smtp = d
+        return self
+
+    def recipient(self, email_or_list):
+        self._recipients += assure_list(email_or_list)
+        return self
+
+    def attach(self, attachment_or_list=None, path=None, mimetype=None, filename=None):
+        # "path"/Path, [mimetype/filename], [mimetype/filename]
+        if type(attachment_or_list) is list:
+            if path or mimetype or filename:
+                raise ValueError("Cannot specify both path, mimetype or filename and put list in attachment_or_list.")
+        else:
+            if path:
+                attachment_or_list = Path(path)
+            attachment_or_list = attachment_or_list, mimetype, filename
+        self._attachments += assure_list(attachment_or_list)
+        return self
+
+    def signature(self, key_id=True, passphrase=None):
+        if key_id is True and type(self._sign) is str:
+            # usecase gpggo().signature(key=fingerprint).send(sign=True) should still have fingerprint in self._sign
+            # (and not just "True")
+            pass
+        else:
+            self._sign = key_id if not None else True
+        if passphrase is not None:
+            self._passphrase = passphrase
+        return self
+
+    def sign(self, key_id=None, passphrase=None):
+        self.signature(key_id=None, passphrase=None)
+        return self._start(sign=True)
+
+    def encryption(self, key_id=None, key_path=None, key=None):
+        if key_path:
+            key = Path(key_path)
+        val = key_id or key
+        if val is True and type(self._encrypt) is str:
+            # usecase gpggo().encrypt(key="keystring").send(encrypt=True) should still have key in self._encrypt
+            # (and not just "True")
+            pass
+        else:
+            self._encrypt = assure_fetched(val, str)
+        return self
+
+    def encrypt(self, sign=None, key_id=None, key_path=None, key=None):
+        self.encryption(key_id=None, key_path=None, key=None)
+        return self._start(encrypt=True, sign=sign)
+
+    def send(self, send=True, *, sign=None, encrypt=None):
+        if sign is not None:
+            self.signature(sign)
+        if encrypt is not None:
+            self.encryption(encrypt)
+        return self._start(send=True, sign=False, encrypt=False)
+
+    def _start(self, sign=False, encrypt=False, send=None):  # XXX
+        # check if there is something to do
+        if self._sign is not None:
+            sign = self._sign
+        if self._encrypt is not None:
+            encrypt = self._encrypt
+        if sign is not True and encrypt is None and send is None:
+            logger.warning("There is nothing to do – no signing, no encrypting, no sending.")
+            return
+
+
+        # assure streams are fetched and files are read from their paths
+        text = message = self._message
+        encrypt = self._encrypt
+        recipients = self._recipients
+        cc = self._cc
+        bcc = self._bcc
+        sender = self._sender
 
         # we need a message
         if message is None:
             raise RuntimeError("Missing message")
 
-        # assure streams are fetched and files are read from their paths
-        message = assure_fetched(message, bytes)
-        encrypt = assure_fetched(encrypt, str)
-        text = message
-        recipients = assure_list(recipients)
-        cc = assure_list(cc)
-        bcc = assure_list(bcc)
-        attachments = assure_list(attachments)
+        msg = None
+        if send is not None:
+            # we'll send it later, transform the text to the e-mail first
+            msg_text = EmailMessage()
+            msg_text.set_content(text.decode("utf-8"), subtype="html")
+
+            for contents in self._attachments:
+                # get contents, user defined name and user defined mimetype
+                # "path"/Path, [mimetype/filename], [mimetype/filename]
+                name = mimetype = None
+                if type(contents) is tuple:
+                    for s in contents[1:]:
+                        if "/" in s:
+                            mimetype = s
+                        else:
+                            name = s
+                    contents = contents[0]
+                if not name and isinstance(contents, Path):
+                    name = contents.name
+                if not mimetype:
+                    mimetype = getattr(magic.Magic(mime=True), "from_file" if isinstance(contents, Path) else "from_buffer")(
+                        str(contents))
+                msg_text.add_attachment(assure_fetched(contents, bytes),
+                                        maintype=mimetype.split("/")[0],
+                                        subtype=mimetype.split("/")[1],
+                                        filename=name or "attachment.txt")
+
+            if encrypt:
+                # in order to encrypt subject field → encapsulate the message into multipart having rfc822-headers submessage
+                msg = EmailMessage()
+                msg.set_type("multipart/mixed")
+                msg.set_param("protected-headers", "v1")
+
+                msg_headers = EmailMessage()
+                msg_headers.set_type("text/rfc822-headers")
+                msg_headers.set_param("protected-headers", "v1")
+                msg_headers["Subject"] = self._subject
+                # XX reply to, list-unsubscribe here? – zobrazí se reply-to ve zprávě, když je tady?
+
+                msg.attach(msg_headers)
+                msg.attach(msg_text)
+            else:
+                msg = msg_text
+                msg["Subject"] = self._subject
+
+            message = msg.as_bytes()
 
         # encrypt or sign
-        gpg = gnupglib.GPG(gnupghome=gnupg, options=["--trust-model=always"],  # XX trust model should be optional only
+        gpg = gnupglib.GPG(gnupghome=(self._gnupg), options=["--trust-model=always"],  # XX trust model should be optional only
                            verbose=False) if sign or encrypt else None
         if encrypt:
             exc = []
@@ -184,10 +469,11 @@ class Gpggo:
                 data=message,
                 recipients=deciphering,
                 sign=sign if sign else None,
-                passphrase=passphrase if passphrase else None
+                passphrase=self._passphrase if self._passphrase else None
             )
             if status.ok:
                 text = status.data
+                self._status = True
             else:
                 logger.warning(status.stderr)
                 if "No secret key" in status.stderr:
@@ -206,95 +492,135 @@ class Gpggo:
                             found = True
                             logger.warning(f"Key for {identity} seems missing.")
                     if found:
-                        s = f"GNUPGHOME={gnupg} " if gnupg else ""
+                        s = f"GNUPGHOME={self._gnupg} " if self._gnupg else ""
                         logger.warning(f"See {s}gpg --list-keys")
-                return False
+                return
             # print(status.ok)
             # print(status.status)
             # print(status.stderr)
         elif sign:
             status = gpg.sign(
                 message,
+                extra_args=["--textmode"],
+                # Enigmail had troubles to validate even though signature worked in CLI (https://superuser.com/questions/933333)
                 keyid=sign if sign and sign is not True else None,
-                passphrase=passphrase if passphrase else None
+                passphrase=self._passphrase if self._passphrase else None,
+                detach=True if send is not None else None
             )
+
             text = status.data
+            # import ipdb; ipdb.set_trace()
+            # with open("/tmp/ram/2/foo.txt", "wb") as f:
+            #     f.write(message)
+            # with open("/tmp/ram/2/foo.sig", "wb") as f:
+            #     f.write(text)
+            self._status = True
 
         # sending file
-        if send in [True, False]:
+        if send is not None:
+            self._status = False
+            if encrypt:
+                # encrypted message structure according to RFC3156
+                msg = EmailMessage()
+                msg["Subject"] = "Encrypted message"  # real subject should be revealed when decrypted
+                msg.set_type("multipart/encrypted")
+                msg.set_param("protocol", "application/pgp-encrypted")
 
-            base_msg = EmailMessage()
-            base_msg.set_content(text.decode("utf-8"), subtype="html")
+                msg_version = EmailMessage()
+                msg_version["Content-Type"] = "application/pgp-encrypted"
+                msg_version.set_payload("Version: 1")
 
-            for contents in attachments:
-                # get contents, user defined name and user defined mimetype
-                # "path"/Path[, mimetype/filename[, mimetype/filename]]
-                name = mimetype = None
-                if type(contents) is tuple:
-                    for s in contents[1:]:
-                        if "/" in s:
-                            mimetype = s
-                        else:
-                            name = s
-                    contents = contents[0]
-                if not name and isinstance(contents, Path):
-                    name = contents.name
-                if not mimetype:
-                    mimetype = getattr(magic.Magic(mime=True), "from_file" if isinstance(contents, Path) else "from_buffer")(str(contents))
-                base_msg.add_attachment(assure_fetched(contents, bytes),
-                                       maintype=mimetype.split("/")[0],
-                                       subtype=mimetype.split("/")[1],
-                                       filename=name or "attachment.txt")
+                msg_text = EmailMessage()
+                msg_text["Content-Type"] = 'application/octet-stream; name="encrypted.asc"'
+                msg_text["Content-Description"] = "OpenPGP encrypted message"
+                msg_text["Content-Disposition"] = 'inline; filename="encrypted.asc"'
+                msg_text.set_payload(text)  # text was replaced by a GPG stream
 
-            msg = base_msg
+                msg.attach(msg_version)
+                msg.attach(msg_text)
+
+            elif sign:
+                msg_payload = msg
+                msg = EmailMessage()
+                msg[
+                    "Subject"] = self._subject  # msg_payload["Subject"], diacritics threw error only when in subject and signing XX porad hazi error
+                msg.set_type("multipart/signed")
+                msg.set_param("protocol", "application/pgp-signature")
+                msg.attach(msg_payload)
+
+                msg_signature = EmailMessage()
+                msg_signature['Content-Type'] = 'application/pgp-signature; name="signature.asc"'
+                msg_signature['Content-Description'] = 'OpenPGP digital signature'
+                msg_signature['Content-Disposition'] = 'attachment; filename="signature.asc"'
+                msg_signature.set_payload(text)
+                msg.attach(msg_signature)
 
             msg["From"] = sender or ""
-            msg["Subject"] = subject
             if recipients:
                 msg["To"] = ",".join(recipients)
             if cc:
                 msg["Cc"] = ",".join(cc)
-            if bcc:  # XX Will it be possible to guess the number of recipients while encrypting? See the message size when having no bcc.
-                msg["Bcc"] = ",".join(bcc)
-            if reply_to:
-                msg["Reply-To"] = reply_to
+            # I don't see any advantage in listing Bcc here. MTA should take them off. (And they stay here while encrypting.)
+            # if bcc:  # XX Will it be possible to guess the number of recipients while encrypting? See the message size when having no bcc.
+            #    msg["Bcc"] = ",".join(bcc)
+            if self._reply_to:  # XX shouldnt we add him to the decipherers too? even if he wont receive the message, he ll get replies
+                msg["Reply-To"] = self._reply_to
             msg["Date"] = formatdate(localtime=True)
             msg["Message-ID"] = make_msgid()
 
+            for k, v in self._headers.items():
+                msg[k] = v
+
             if send:
-                # XXX
+                smtp = self._smtp
 
 
                 if not isinstance(smtp, smtplib.SMTP):
-                    if type(smtp) is dict:  # ex: {"host": "localhost", "port": 1234}
-                        smtp = self.set_smtp(**smtp)
-                    elif type(smtp) is not str:  # ex: ["localhost", 1234]
-                        smtp = self.set_smtp(*smtp)
-                    else:  # ex: "localhost" or None
-                        smtp = self.set_smtp(smtp)
+                    key = repr(smtp)
+                    if key not in Gpggo._smtps:
+                        if type(smtp) is dict:  # ex: {"host": "localhost", "port": 1234}
+                            smtp = self._smtp_connect(**smtp)
+                        elif type(smtp) is not str:  # ex: ["localhost", 1234]
+                            smtp = self._smtp_connect(*smtp)
+                        else:  # ex: "localhost" or None
+                            smtp = self._smtp_connect(smtp)
+                        Gpggo._smtps[key] = smtp
+                    else:
+                        smtp = Gpggo._smtps[key]
 
                 try:
-                    smtp.send_message(msg)
+                    smtp.send_message(msg,
+                                      to_addrs=list(
+                                          set(recipients + cc + bcc)))  # to_addrs cannot be taken from headers when encrypting
                 except smtplib.SMTPRecipientsRefused:
-                    logger.warning(f"SMTP refuse to send an e-mail from the address {sender}")
-                else:
-                    if not output:
-                        return True
+                    logger.warning(f"SMTP refuses to send an e-mail from the address {sender}")
+                # except Timeout: XX
+                #    continue somehow
+                # else:
+                # if not self._output:
+                #     self._status = True
+                #     return
             else:
                 # XX should I test here SMTP is working?
-                print("*" * 100 + f"\n\nHave not been sent:\nIntended path: " + (sender or "")+ " → " + ",".join(set(recipients +cc+bcc)) + "\n\n" + msg.as_string())
-                return True
+                # print("*" * 100 + f"\n\nHave not been sent:\nIntended path: " + (sender or "") + " → " + ",".join(
+                #     set(recipients + cc + bcc))) # + "\n\n" + msg.as_string())
+                # print("**********")
+                # self._status = True
+                self._result = "{}\nHave not been sent:\nIntended path: {}  → {}\n" \
+                    .format("*" * 100, (sender or ""), ",".join(set(recipients + cc + bcc)))
+            self._status = True
+            # return
 
         # output to file or display
         if text:
-            if output:
-                with open(output, "wb") as f:
+            self._result += assure_fetched(text, str)
+            # print("HEJ", self._result)
+            if self._output:
+                with open(self._output, "wb") as f:
                     f.write(text)
-                    return True
-            else:
-                return text
+            self._status = True
 
-    def set_smtp(self, host="localhost", port=25, user=None, password=None, security=None):
+    def _smtp_connect(self, host="localhost", port=25, user=None, password=None, security=None):
         smtp = smtplib.SMTP(host, port)
         if security == "starttls":
             smtp.starttls()
@@ -307,8 +633,6 @@ class Gpggo:
         self.smtp = smtp
         return smtp
 
-
-sys.modules[__name__] = Gpggo()
 
 if __name__ == "__main__":
     class BlankTrue(argparse.Action):
@@ -348,8 +672,11 @@ if __name__ == "__main__":
     parser.add_argument('--subject', help="E-mail subject")
     parser.add_argument('--smtp', help="SMTP server. Blank or list (host, [port, [username, password]]) or dict XX examples",
                         nargs="*", action=BlankTrue)
+    parser.add_argument('--header',
+                        help="Any e-mail header in the form `name value`",
+                        nargs="+", action="append")
 
-    gpggo = Gpggo()
+    # gpggo = Gpggo()
     args = vars(parser.parse_args())
 
     # in command line, we may specify input message by path (in module we would rather call message=Path("path"))
@@ -396,11 +723,24 @@ if __name__ == "__main__":
             args["attachments"].append(tuple(attachment))
     del args["attachment"]
 
-    res = gpggo(**args)
-    if type(res) is not bool:
+    args["headers"] = args["header"]
+    del args["header"]
+
+    res = Gpggo(**args)  # Xgpggo
+    if res:
+        # print("HEJ2", res._result)
         print(res)
-    if res is False:
+    else:
         sys.exit(1)
+else:
+    sys.modules[__name__] = Gpggo
+    Gpggo.gpggo = Gpggo  # pycharm does not autocomplete # XX If the autocompletion doest not work in your IDE, try `gpggo.Gpggo`. Works in Jupyter, doesnt in PyCharm
+    Gpggo.default = Gpggo()
+
+    # if type(res) is not bool:
+    #     print(res)
+    # if res is False:
+    #     sys.exit(1)
 
 # XXX Address for representing e-mails?   Address(display_name='Aly Sivji', username='alysivji', domain='gmail.com'),
 # XXX TO BE DIGGED OUT:
