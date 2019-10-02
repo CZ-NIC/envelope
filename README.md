@@ -1,22 +1,51 @@
-# ENVELOPE
+# Envelope
 
 Quick layer over [python-gnupg](https://bitbucket.org/vinay.sajip/python-gnupg/src), [smime](https://pypi.org/project/smime/), [smtplib](https://docs.python.org/3/library/smtplib.html) and [email](https://docs.python.org/3/library/email.html?highlight=email#module-email) handling packages. Their common usecases merged into a single function. Want to sign a text and tired of forgetting how to do it right? You do not need to know everything about GPG or S/MIME, you do not have to bother with importing keys. Do not hassle with reconnecting SMTP server. Do not study various headers meanings to let your users unsubscribe via a URL.
 You insert a message and attachments and receive signed and/or encrypted output to the file or to your recipients' e-mail. 
-Just single line of code. With the great help of the examples below.
+Just single line of code. With the great help of the examples below.  
 
-If the encryption fails, it tries to determine which recipient misses the key.  
+```python3
+envelope("my message").subject("hello world").to("example@example.com").sign().send()
+```
+
+- [Installation](#installation)
+- [Usage](#usage)
+  * [CLI](#cli)
+  * [Module: one-liner function](#module--one-liner-function)
+  * [Module: fluent interface](#module--fluent-interface)
+- [Documentation](#documentation)
+  * [Command list](#command-list)
+    + [Input / Output](#input---output)
+    + [Cipher standard method](#cipher-standard-method)
+    + [Signing](#signing)
+    + [Encrypting](#encrypting)
+    + [Sending](#sending)
+      - [Specific headers](#specific-headers)
+    + [Supportive](#supportive)
+  * [Default values](#default-values)
+  * [Converting object to str or bool](#converting-object-to-str-or-bool)
+- [Examples](#examples)
+  * [Signing and encrypting](#signing-and-encrypting)
+  * [Sending](#sending-1)
+  * [Attachment](#attachment)
+  * [Complex example](#complex-example)
+
 
 # Installation
-* Install with a single command
+* Install with a single command from [PyPi](https://pypi.org/project/envelope/)
 ```bash 
-pip3 install git+https://github.com/CZ-NIC/envelope.git  # without root use may want to use --user
+pip3 install envelope
+```
+* Or install current GitHub master
+```bash
+pip3 install git+https://github.com/CZ-NIC/envelope.git
 ```
 * If planning to sign/encrypt with GPG, install the corresponding package 
 ```bash
 sudo apt install gpg
 ```
 
-# Usage:
+# Usage
 As an example, let's produce in three equal ways an `output_file` with the GPG-encrypted "Hello world" content.
 ## CLI
 Launch as a CLI application in terminal, see `./envelope.py --help`
@@ -51,7 +80,8 @@ envelope().message("Hello world")\
     .encrypt(key_path="/tmp/remote_key.asc")
 ```
 
-Note: if you're in trouble, try importing `from envelope import gppgo` instead of `import envelope` 
+Note: if autocompletion does not work, use **`from envelope import envelope`** instead of `import envelope`.  
+(For example, Jupyter can autocomplete with `import envelope` but PyCharm cannot because it does not serves itself with a [running kernel](https://youtrack.jetbrains.com/issue/PY-38086#comment=27-3716668).)
 
 # Documentation
 
@@ -94,7 +124,16 @@ Any fetchable content means plain text, bytes or stream (ex: from open()). In *m
     * **--output**
     * **envelope(output=)**
     * **.output(output_file)**
-  * **gnupg**: Home path to GNUPG rings else default ~/.gnupg is used
+### Cipher standard method
+Note that if neither *gpg* nor *smime* is specified, we try to determine the method automatically.
+  * **gpg**: True to prefer GPG over S/MIME or home path to GNUPG rings (otherwise default ~/.gnupg is used)
+    * **--gpg [path]**
+    * **envelope(gpg=True)**
+    * **.gpg(path=True)**
+  * **.smime**: Prefer S/MIME over GPG
+    * **--smime**
+    * **envelope(smime=True)**
+    * **.smime()**
 ### Signing
   * **sign**: Sign the message.
     * **--sign**: Blank for user default key or key-id.
@@ -104,6 +143,8 @@ Any fetchable content means plain text, bytes or stream (ex: from open()). In *m
     * **.sign(key_id=, passphrase=)**: Sign now (and you may specify the parameters)
     * **.signature(key_id=, passphrase=)**: Sign later (when launched with *.sign()*, *.encrypt()* or *.send()* functions
 ### Encrypting
+If the GPG encryption fails, it tries to determine which recipient misses the key.
+
   * **encrypt**:  Recipient GPG public key or S/MIME certificate to be encrypted with. 
     * **--encrypt**: String for key-id or blank or 1/true/yes if the key should be in the ring from before. Put 0/false/no to disable `encrypt-file`.
     * **--encrypt-file** *(CLI only)*: Recipient public key stored in a file path. (Alternative to `--encrypt`.)  
@@ -140,7 +181,7 @@ Any fetchable content means plain text, bytes or stream (ex: from open()). In *m
     * **--bcc**
     * **envelope(bcc=)**
     * **.bcc(email_or_list)**
-  * **reply-to**: E-mail to be replied to
+  * **reply-to**: E-mail to be replied to. The field is not encrypted.
     * **--reply-to**
     * **envelope(reply_to=)**
     * **.reply_to(email)**
@@ -175,6 +216,9 @@ Any fetchable content means plain text, bytes or stream (ex: from open()). In *m
         * **.attach(attachment_or_list=, mimetype=, filename=)**: You can put any fetchable content in *attachment_or_list* and optionally mimetype or displayed filename.
         * **.attach(path=, mimetype=, filename=)**: You can specify path and optionally mimetype or displayed filename.
         * **.attach(attachment_or_list=)**: You can put a list of attachments.
+    ```python3
+    envelope().attach(path="/tmp/file.txt").attach(path="/tmp/another-file.txt")
+    ```
     * **headers**: Any custom headers (these will not be encrypted with GPG nor S/MIME)
         * **--header name value** (may be used multiple times)
         * **envelope(headers=[(name, value)])**
@@ -189,7 +233,7 @@ Any fetchable content means plain text, bytes or stream (ex: from open()). In *m
         envelope(headers=[("X-Mailer", "my-app")])
         envelope().header("X-Mailer", "my-app")
         ```                
-#### Specific headers:
+#### Specific headers
 These helpers are available via fluent interface.
     
 * **.list_unsubscribe(uri=None, one_click=False, web=None, email=None)**: You can specify either url, email or both.
@@ -218,6 +262,10 @@ These helpers are available via fluent interface.
 envelope().auto_submitted()  # mark message as automatic        
 envelope().auto_submitted.no()  # mark message as human produced
 ```    
+### Supportive
+  * **check**: Check SMTP connection and returns True/False
+    * **--check**
+    * **.check()**
     
 ## Default values
 
@@ -291,7 +339,7 @@ envelope.default.signature(True).gnupghome("/tmp/my-keyring")
 envelope(message="Hello world")
 ```
 
-### Sending
+## Sending
 Send an e-mail via module call.
 ```python3
 envelope(message="Hello world", send=True)
@@ -319,7 +367,7 @@ envelope(message="Hello world", to="user@example.org", send=True, smtp={"host":"
 ```
 
 ## Attachment
-You can attach a file in many different ways. 
+You can attach a file in many different ways. Pick the one that suits you the best.
 ```python3
 envelope(attachment=Path("/tmp/file.txt"))  # filename will be 'file.txt'
 

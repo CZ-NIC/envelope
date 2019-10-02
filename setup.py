@@ -5,7 +5,7 @@ with open("requirements.txt", "r") as f:
 
 setup(
     name='envelope',
-    version='0.8.1',
+    version='0.9',
     packages=['.'],
     author='Edvard Rejthar',
     author_email='edvard.rejthar@nic.cz',
@@ -17,7 +17,5 @@ setup(
         'console_scripts': [
             'envelope=envelope:main',
         ],
-    }#,
-    #package_data={'convey': ['defaults/*']},
-    #include_package_data=True
+    }
 )

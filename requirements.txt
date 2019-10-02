@@ -1,3 +1,4 @@
+jsonpickle
 python-magic
 python-gnupg
 smime
