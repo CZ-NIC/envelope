@@ -405,7 +405,8 @@ class Envelope:
         encrypt = self._encrypt
         # we need a message
         if data is None:
-            raise RuntimeError("Missing message")
+            logger.error("Missing message")
+            return False
 
         # determine if we are using gpg or smime
         gpg_on = None
@@ -752,6 +753,7 @@ def _cli():
     parser.add_argument('--cc', help="E-mail or list", nargs="+")
     parser.add_argument('--bcc', help="E-mail or list", nargs="+")
     parser.add_argument('--reply-to', help="Header that states e-mail to be replied to. The field is not encrypted.")
+    parser.add_argument('--from', help="Alias of --sender")
     parser.add_argument('--sender', help="E-mail – needed to choose our key if encrypting")
     parser.add_argument('--no-sender', action="store_true",
                         help="We explicitly say we do not want to decipher later if encrypting.")
@@ -829,6 +831,15 @@ def _cli():
             print("Check succeeded.")
     del args["check"]
 
+    if args["from"]:
+        args["sender"] = args["from"]
+    del args["from"]
+
+    if not (args["sign"] or args["encrypt"] or args["send"]):
+        # if there is anything to do, pretend the input parameters are a bone of a message
+        print("Nothing to do, let's assume this is a bone of an e-mail message "
+              "by appending `--send False` flag to produce an output.\n")
+        args["send"] = False
     res = Envelope(**args)
     if res:
         print(res)
