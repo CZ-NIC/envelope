@@ -723,7 +723,7 @@ class Envelope:
         return bool(self._get_smtp(self._smtp))  # check SMTP
 
 
-if __name__ == "__main__":
+def _cli():
     class BlankTrue(argparse.Action):
         """ When left blank, this flag produces True. (Normal behaviour is to produce None which I use for not being set."""
 
@@ -731,7 +731,6 @@ if __name__ == "__main__":
             if values in [None, []]:  # blank argument with nargs="?" produces None, with ="*" produces []
                 values = True
             setattr(namespace, self.dest, values)
-
 
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--message', help='Plain text message.')
@@ -835,7 +834,10 @@ if __name__ == "__main__":
         print(res)
     else:
         sys.exit(1)
+
+
+if __name__ == "__main__":
+    _cli()
 else:
-    sys.modules[__name__] = Envelope
-    Envelope.envelope = Envelope  # to support static inspection autocompletion
+    Envelope._cli = _cli
     Envelope.default = Envelope()

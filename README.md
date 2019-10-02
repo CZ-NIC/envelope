@@ -40,6 +40,7 @@ pip3 install envelope
 ```bash
 pip3 install git+https://github.com/CZ-NIC/envelope.git
 ```
+* Or just download the project and launch `./envelope.py`
 * If planning to sign/encrypt with GPG, install the corresponding package 
 ```bash
 sudo apt install gpg
@@ -48,10 +49,10 @@ sudo apt install gpg
 # Usage
 As an example, let's produce in three equal ways an `output_file` with the GPG-encrypted "Hello world" content.
 ## CLI
-Launch as a CLI application in terminal, see `./envelope.py --help`
+Launch as a CLI application in terminal, see `envelope --help`
   
 ```bash
-./envelope.py --message "Hello world" \
+envelope --message "Hello world" \
                --output "/tmp/output_file" \
                --sender "me@example.com" \
                --to "remote_person@example.com" \
@@ -85,7 +86,7 @@ Note: if autocompletion does not work, use **`from envelope import envelope`** i
 
 # Documentation
 
-Both `./envelope.py --help` for CLI arguments help and `pydoc3 envelope` to see module arguments help should contain same information as here.
+Both `envelope --help` for CLI arguments help and `pydoc3 envelope` to see module arguments help should contain same information as here.
 
 ## Command list
 All parameters are optional. 
@@ -110,7 +111,7 @@ Any fetchable content means plain text, bytes or stream (ex: from open()). In *m
     envelope(message="hello") == envelope().message("hello")
     ```
     ```bash
-    ./envelope --message "hello"
+    envelope --message "hello"
     ``` 
     Equivalents for setting contents of a file.
     ```python3
@@ -118,7 +119,7 @@ Any fetchable content means plain text, bytes or stream (ex: from open()). In *m
     envelope(message=Path("file.txt")) == envelope(message=open("file.txt")) == envelope.message(path="file.txt") 
     ```
     ```bash
-    ./envelope --input file.txt
+    envelope --input file.txt
     ```
   * **output**: Path to file to be written to (else the contents is returned).
     * **--output**
@@ -156,7 +157,7 @@ If the GPG encryption fails, it tries to determine which recipient misses the ke
     * **envelope(to=)**: E-mail or their list.
     * **.to(email_or_list)**:
       ```bash
-      ./envelope.py --to first@example.com second@example.com --message "hello" 
+      envelope --to first@example.com second@example.com --message "hello" 
       ```  
   * **sender**: E-mail – needed to choose our key if encrypting.
     * **--sender** E-mail
@@ -193,9 +194,9 @@ If the GPG encryption fails, it tries to determine which recipient misses the ke
         * `None` default localhost server used
         * `smtplib.SMTP` object
         * `list` or `tuple` having `host, [port, [username, password, [security]]]` parameters
-            * ex: `./envelope.py --smtp localhost 125 me@example.com` will set up host, port and username parameters
+            * ex: `envelope --smtp localhost 125 me@example.com` will set up host, port and username parameters
         * `dict` specifying {"host": ..., "port": ...}
-            * ex: `./envelope.py --smtp '{"host": "localhost"}'` will set up host parameter
+            * ex: `envelope --smtp '{"host": "localhost"}'` will set up host parameter
     * Parameters: `security` parameter may have "starttls" value for calling `smtp.starttls()` connection security        
     * Do not fear to pass the `smtp` in a loop, we make just a single connection to the server. If timed out, we attempt to reconnect once.
     ```python3
@@ -206,7 +207,7 @@ If the GPG encryption fails, it tries to determine which recipient misses the ke
   * **attachments**
     * **--attachment**: Path to the attachment, followed by optional file name to be used and/or mime type. This parameter may be used multiple times.
     ```bash
-    ./envelope.py --attachment "/tmp/file.txt" "displayed-name.txt" "text/plain" --attachment "/tmp/another-file.txt"
+    envelope --attachment "/tmp/file.txt" "displayed-name.txt" "text/plain" --attachment "/tmp/another-file.txt"
     ```
     * **gpggp(attachments=)**: Attachment or their list. Attachment is defined by any fetchable content, optionally in tuple with the file name to be used in the e-mail and/or mime type: `content [,name] [,mimetype]`
     ```python3
@@ -226,7 +227,7 @@ If the GPG encryption fails, it tries to determine which recipient misses the ke
         
         Equivalent headers:
         ```bash
-        ./envelope.py --header X-Mailer my-app
+        envelope --header X-Mailer my-app
         ```
         
         ```python3
@@ -347,18 +348,18 @@ envelope(message="Hello world", send=True)
 
 Send an e-mail via CLI and default SMTP server localhost on port 25.
 ```bash
-./envelope.py --to "user@example.org" --message "Hello world" --send
+envelope --to "user@example.org" --message "Hello world" --send
 ```
 
 Send while having specified the SMTP server host, port, username, password.
 
 ```bash
-./envelope.py ----to "user@example.org" message "Hello world" --send --smtp localhost 123 username password 
+envelope --to "user@example.org" message "Hello world" --send --smtp localhost 123 username password 
 ```
 
 Send while having specified the SMTP server through a dictionary.
 ```bash
-./envelope.py --to "user@example.org" --message "Hello world" --send --smtp '{"host": "localhost", "port": "123"}' 
+envelope --to "user@example.org" --message "Hello world" --send --smtp '{"host": "localhost", "port": "123"}' 
 ```
 
 Send while having specified the SMTP server via module call.
@@ -383,5 +384,5 @@ envelope().attach(path="/tmp/file.txt",filename="filename.txt")
 ## Complex example
 Send an encrypted and signed message via the default SMTP server.
 ```bash
-./envelope.py --message "Hello world" --to "user@example.org" --sender "me@example.org" --subject "Test" --send --sign --encrypt --attachment /tmp/file.txt --attach /tmp/file2 application/gzip zipped-file.zip
+envelope --message "Hello world" --to "user@example.org" --sender "me@example.org" --subject "Test" --send --sign --encrypt --attachment /tmp/file.txt --attach /tmp/file2 application/gzip zipped-file.zip
 ```

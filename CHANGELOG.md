@@ -1,6 +1,7 @@
 # CHANGELOG
 
-## 0.8 (unreleased)
+## 0.9 (unreleased)
 - signing, encrypting, sending
-- interface change to `import envelope; envelope(...)` from `from envelope import envelope; envelope(...)`
-- fluent interface
+- GPG, S/MIME support
+- cli, one-liner, fluent interface
+- SMTP reconnection
