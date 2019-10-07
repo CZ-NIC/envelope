@@ -1,21 +1,27 @@
 # Envelope
 
-Quick layer over [python-gnupg](https://bitbucket.org/vinay.sajip/python-gnupg/src), [smime](https://pypi.org/project/smime/), [smtplib](https://docs.python.org/3/library/smtplib.html) and [email](https://docs.python.org/3/library/email.html?highlight=email#module-email) handling packages. Their common usecases merged into a single function. Want to sign a text and tired of forgetting how to do it right? You do not need to know everything about GPG or S/MIME, you do not have to bother with importing keys. Do not hassle with reconnecting SMTP server. Do not study various headers meanings to let your users unsubscribe via a URL.
-You insert a message and attachments and receive signed and/or encrypted output to the file or to your recipients' e-mail. 
+Quick layer over [python-gnupg](https://bitbucket.org/vinay.sajip/python-gnupg/src), [smime](https://pypi.org/project/smime/), [smtplib](https://docs.python.org/3/library/smtplib.html) and [email](https://docs.python.org/3/library/email.html?highlight=email#module-email) handling packages. Their common usecases merged into a single function. Want to sign a text and tired of forgetting how to do it right? You do not need to know everything about GPG or S/MIME, you do not have to bother with importing keys. Do not hassle with reconnecting SMTP server. Do not study various headers meanings to let your users unsubscribe via a URL.  
+You insert a message and attachments and receive signed and/or encrypted output to the file or to your recipients' e-mail.  
 Just single line of code. With the great help of the examples below.  
 
 ```python3
-envelope("my message").subject("hello world").to("example@example.com").sign().send()
+envelope("my message")
+    .subject("hello world")
+    .to("example@example.com")
+    .attach(file_contents, filename="attached-file.txt")
+    .smtp("localhost", 587, "user", "pass", "starttls")
+    .signature()
+    .send()
 ```
 
 - [Installation](#installation)
 - [Usage](#usage)
   * [CLI](#cli)
-  * [Module: one-liner function](#module--one-liner-function)
-  * [Module: fluent interface](#module--fluent-interface)
+  * [Module: one-liner function](#module-one-liner-function)
+  * [Module: fluent interface](#module-fluent-interface)
 - [Documentation](#documentation)
   * [Command list](#command-list)
-    + [Input / Output](#input---output)
+    + [Input / Output](#input--output)
     + [Cipher standard method](#cipher-standard-method)
     + [Signing](#signing)
     + [Encrypting](#encrypting)
@@ -29,6 +35,13 @@ envelope("my message").subject("hello world").to("example@example.com").sign().s
   * [Sending](#sending-1)
   * [Attachment](#attachment)
   * [Complex example](#complex-example)
+- [Related affairs](#related-affairs)
+  * [Configure your SMTP](#configure-your-smtp)
+  * [Configure your GPG](#configure-your-gpg)
+  * [DNS validation tools](#dns-validation-tools)
+    + [SPF](#spf)
+    + [DKIM](#dkim)
+    + [DMARC](#dmarc)
 
 
 # Installation
@@ -41,7 +54,9 @@ pip3 install envelope
 pip3 install git+https://github.com/CZ-NIC/envelope.git
 ```
 * Or just download the project and launch `./envelope.py`
-* If planning to sign/encrypt with GPG, install the corresponding package 
+* If planning to send e-mails, prepare SMTP credentials or visit [Configure your SMTP](#configure-your-smtp) tutorial.
+* If your e-mails are to be received outside your local domain, visit [DMARC](#dmarc) section.
+* If planning to sign/encrypt with GPG, install the corresponding package and possibly see [Configure your GPG](#configure-your-gpg) tutorial.
 ```bash
 sudo apt install gpg
 ```
@@ -106,14 +121,14 @@ Any fetchable content means plain text, bytes or stream (ex: from open()). In *m
     * **.message(text)**:  String or stream.
     * **.message(path=None)**: Path to the file.
     
-    Equivalents for setting a string.
+    Equivalents for setting a string (in *Python* and in *Bash*).
     ```python3
     envelope(message="hello") == envelope().message("hello")
     ```
     ```bash
     envelope --message "hello"
     ``` 
-    Equivalents for setting contents of a file.
+    Equivalents for setting contents of a file (in *Python* and in *Bash*).
     ```python3
     from pathlib import Path
     envelope(message=Path("file.txt")) == envelope(message=open("file.txt")) == envelope.message(path="file.txt") 
@@ -137,21 +152,23 @@ Note that if neither *gpg* nor *smime* is specified, we try to determine the met
     * **.smime()**
 ### Signing
   * **sign**: Sign the message.
-    * **--sign**: Blank for user default key or key-id.
+    * **--sign**: Blank for user default key or key ID/fingerprint.
     * **--passphrase**: Passphrase to the key if needed.
-    * **envelope(sign=)**: True for user default key or key-id.
+    * **--attach-key**: Blank for appending public key to the attachments when sending.
+    * **envelope(sign=)**: True for user default key or key ID/fingerprint.
     * **envelope(passphrase=)**: Passphrase to the key if needed.
-    * **.sign(key_id=, passphrase=)**: Sign now (and you may specify the parameters)
-    * **.signature(key_id=, passphrase=)**: Sign later (when launched with *.sign()*, *.encrypt()* or *.send()* functions
+    * **envelope(attach_key=)**: Append public key to the attachments when sending.
+    * **.sign(key=, passphrase=, attach_key=False)**: Sign now (and you may specify the parameters)        
+    * **.signature(key=, passphrase=, attach_key=False)**: Sign later (when launched with *.sign()*, *.encrypt()* or *.send()* functions
 ### Encrypting
 If the GPG encryption fails, it tries to determine which recipient misses the key.
 
   * **encrypt**:  Recipient GPG public key or S/MIME certificate to be encrypted with. 
-    * **--encrypt**: String for key-id or blank or 1/true/yes if the key should be in the ring from before. Put 0/false/no to disable `encrypt-file`.
+    * **--encrypt**: Key string or blank or 1/true/yes if the key should be in the ring from before. Put 0/false/no to disable `encrypt-file`.
     * **--encrypt-file** *(CLI only)*: Recipient public key stored in a file path. (Alternative to `--encrypt`.)  
     * **envelope(encrypt=)**: Any fetchable content
-    * **.encrypt(sign=, key_id=, key_path=, key=)**: With *sign*, you may specify boolean or default signing key-id. Put your key-id to *key-id*, path to the key file in *key_path* or key contents to *key*.
-    * **.encryption(key_id=, key_path=, key=)**: Encrypt later (when launched with *.sign()*, *.encrypt()* or *.send()* functions. 
+    * **.encrypt(sign=, key=, key_path=)**: With *sign*, you may specify boolean or default signing key ID/fingerprint. If import needed, put your encrypting key contents to *key* or path to the key contents file in *key_path*.
+    * **.encryption(key=, key_path=)**: Encrypt later (when launched with *.sign()*, *.encrypt()* or *.send()* functions. 
   * **to**: E-mail or list. When encrypting, we use keys of these identities.
     * **--to**: One or more e-mail addresses.
     * **envelope(to=)**: E-mail or their list.
@@ -162,6 +179,7 @@ If the GPG encryption fails, it tries to determine which recipient misses the ke
   * **sender**: E-mail – needed to choose our key if encrypting.
     * **--sender** E-mail
     * **--no-sender** Declare we want to encrypt and never decrypt back.
+    * **--from** Alias for *--sender*
     * **envelope(sender=)**: Sender e-mail or False to explicitly omit. When encrypting without sender, we do not use their key so that we will not be able to decipher again.
     * **.sender(email)**: E-mail or False.
     * **.from_(email)**: an alias for *.sender*
@@ -169,7 +187,25 @@ If the GPG encryption fails, it tries to determine which recipient misses the ke
   * **send**: Send the message to the recipients by e-mail. True (blank in *CLI*) to send now or False to print out debug information.
     * **--send**
     * **envelope(send=)**
-    * **.send(now=True)**
+    * **.send(send=True, sign=None, encrypt=None)**
+        * *send*: True to send now. False (or 0/false/no in *CLI*) to print debug information.
+    
+    ```bash
+    $ envelope --to "user@example.org" --message "Hello world" --send 0
+    ****************************************************************************************************
+    Have not been sent from  to user@example.org
+    
+    Content-Type: text/html; charset="utf-8"
+    Content-Transfer-Encoding: 7bit
+    MIME-Version: 1.0
+    Subject:
+    From:
+    To: user@example.org
+    Date: Mon, 07 Oct 2019 16:13:37 +0200
+    Message-ID: <157045761791.29779.5279828659897745855@...>
+    
+    Hello world
+    ```
   * **subject**: Mail subject. Gets encrypted with GPG, stays visible with S/MIME.
     * **--subject**
     * **envelope(subject=)**
@@ -190,6 +226,9 @@ If the GPG encryption fails, it tries to determine which recipient misses the ke
     * **--smtp**
     * **envelope(smtp=)**
     * **.smtp(host="localhost", port=25, user=, password=, security=)**
+    * Parameters:
+        * `host` may include hostname or any of the following input formats (ex: path to an INI file or a `dict`)
+        * `security` parameter may have "starttls" value for calling `smtp.starttls()` connection security
     * Input format may be in the following form:
         * `None` default localhost server used
         * `smtplib.SMTP` object
@@ -197,7 +236,13 @@ If the GPG encryption fails, it tries to determine which recipient misses the ke
             * ex: `envelope --smtp localhost 125 me@example.com` will set up host, port and username parameters
         * `dict` specifying {"host": ..., "port": ...}
             * ex: `envelope --smtp '{"host": "localhost"}'` will set up host parameter
-    * Parameters: `security` parameter may have "starttls" value for calling `smtp.starttls()` connection security        
+        * `str` hostname or path to an INI file (existing file, ending at `.ini`, with the section [SMTP])
+            ```ini
+            [SMTP]
+            host = example.com
+            port = 587
+            security = starttls
+            ```
     * Do not fear to pass the `smtp` in a loop, we make just a single connection to the server. If timed out, we attempt to reconnect once.
     ```python3
     smtp = localhost, 25
@@ -264,9 +309,19 @@ envelope().auto_submitted()  # mark message as automatic
 envelope().auto_submitted.no()  # mark message as human produced
 ```    
 ### Supportive
-  * **check**: Check SMTP connection and returns True/False
+  * **check**: Check SMTP connection and returns True/False if succeeded. Tries to find SPF, DKIM and DMARC DNS records depending on the sender's domain and print them out.
     * **--check**
     * **.check()**
+    
+    ```bash
+    $ envelope --smtp localhost 25 --sender me@example.com 
+    SPF found on the domain example.com: v=spf1 -all
+    See: dig -t SPF example.com && dig -t TXT example.com
+    DKIM found: ['v=DKIM1; g=*; k=rsa; p=...']
+    Could not spot DMARC.
+    Trying to connect to the SMTP...
+    Check succeeded.
+    ```
     
 ## Default values
 
@@ -382,7 +437,76 @@ envelope().attach(path="/tmp/file.txt",filename="filename.txt")
 ```
 
 ## Complex example
-Send an encrypted and signed message via the default SMTP server.
+Send an encrypted and signed message via the default SMTP server, via all three interfaces.
 ```bash
-envelope --message "Hello world" --to "user@example.org" --sender "me@example.org" --subject "Test" --send --sign --encrypt --attachment /tmp/file.txt --attach /tmp/file2 application/gzip zipped-file.zip
+# CLI interface
+envelope --message "Hello world" --to "user@example.org" --sender "me@example.org" --subject "Test" --sign --encrypt --attachment /tmp/file.txt --attach /tmp/file2 application/gzip zipped-file.zip --send
 ```
+```python3
+# one-liner interface
+from pathlib import Path
+envelope().message("Hello world").to("user@example.org").sender("me@example.org").subject("Test").signature().encryption().attach(path="/tmp/file.txt").attach(Path("/tmp/file2"), "application/gzip", "zipped-file.zip").send()
+
+# fluent interface
+envelope(message="Hello world", to="user@example.org", sender="me@example.org", subject="Test", sign=True, encrypt=True, attachments=[(Path("/tmp/file.txt"), (Path("/tmp/file2"), "application/gzip", "zipped-file.zip")], send=True)
+```
+
+# Related affairs
+Sending an e-mail does not mean it will be received. Sending it successfully through your local domain does not mean a public mailbox will accept it as well. If you are not trustworthy enough, your e-mail may not even appear at the recipient's spam bin, it can just be discarded without notice. 
+
+## Configure your SMTP
+It is always easier if you have an account on an SMTP server the application is able to send e-mails with. If it is not the case, various SMTP server exist but as a quick and non-secure solution, I've tested [bytemark/smtp](https://hub.docker.com/r/bytemark/smtp/) docker image that allows you to start up a SMTP server by a single line.
+
+```bash
+docker run --network=host --restart always -d bytemark/smtp   # starts open port 25 on localhost
+envelope --message "SMTP test" --from [your e-mail] --to [your e-mail] --smtp localhost 25 --send
+```
+
+
+## Configure your GPG
+In order to sign messages, you need a private key. Let's pretend a usecase when your application will run under `www-data` user and GPG sign messages through the keys located at: `/var/www/.gnupg`. You have got a SMTP server with an e-mail account the application may use.
+```bash 
+GNUPGHOME=/var/www/.gnupg sudo -H -u www-data gpg --full-generate-key  # put application e-mail your are able to send the e-mail from]
+# if the generation fails now because you are on a remote terminal, you may want to change temporarily the ownership of the terminal by the following command: 
+# sudo chown www-data $(tty)  # put it back afterwards
+GNUPGHOME=/var/www/.gnupg sudo -H -u www-data gpg --list-secret-keys  # get key ID
+GNUPGHOME=/var/www/.gnupg sudo -H -u www-data gpg --send-keys [key ID]  # now the world is able to pull the key from a global webserver when they receive an e-mail from you
+GNUPGHOME=/var/www/.gnupg sudo -H -u www-data envelope --message "Hello world" --subject "GPG signing test" --sign [key ID] --from [application e-mail] --to [your e-mail] --send  # you now receive e-mail and may import the key and set the trust to the key
+```
+
+It takes few hours to a key to propagate. If the key cannot be imported in your e-mail client because not found on the servers, try in the morning again or check the online search form at http://hkps.pool.sks-keyservers.net
+
+XXX vystavte KEY id na webu. Nebo jak se to doporučuje?
+
+## DNS validation tools
+This is just a short explanation on these anti-spam mechanisms so that you can take basic notion what is going on.
+
+Every time, the receiver should ask the sender's domain these questions over DNS.  
+
+### SPF
+The receiver asks the sender's domain: Do you allow the senders IP/domain to send the e-mail on your behalf?
+
+Check your domain on SPF:
+```bash
+dig -t TXT example.com
+``` 
+
+### DKIM
+The receiver asks the sender's domain: Give me the public key so that I may check the hash in the e-mail header that assert the message was composed by your private key. So that the e-mail comes trustworthy from you and nobody modified it on the way.
+
+Check your domain on DKIM:
+```bash
+dig -t TXT [selector]._domainkey.example.com
+``` 
+You can obtain the `selector` from an e-mail message you received. Check the line `DKIM-Signature` and the value of the param `s`.
+```
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/simple; d=example.com; s=default;
+```
+
+## DMARC
+What is your policy concerning SPF and DKIM? What abuse address do you have?
+
+Check your domain on DMARC:
+```bash
+dig -t TXT _dmarc.example.com
+``` 

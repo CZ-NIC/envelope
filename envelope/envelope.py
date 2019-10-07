@@ -4,11 +4,14 @@ import argparse
 import io
 import logging
 import smtplib
+import subprocess
 import sys
+from configparser import ConfigParser
 from copy import copy
 from email.message import EmailMessage
-from email.utils import make_msgid, formatdate
+from email.utils import make_msgid, formatdate, getaddresses
 from pathlib import Path
+from socket import gaierror
 
 try:
     import gnupg
@@ -111,6 +114,77 @@ class AutoSubmittedHeader:
         return self("auto-generated")
 
 
+class SMTP:
+    # cache of different smtp connections.
+    # Usecase: user passes smtp server info in dict in a loop but we do want it connects just once
+    _instances = {}
+
+    # def __init__(self):
+    #     self.instance = self.host = self.port = self.user = self.password = self.security = None
+
+    def __init__(self, host="localhost", port=25, user=None, password=None, security=None):
+        if isinstance(host, smtplib.SMTP):
+            self.instance = host
+        else:
+            self.instance = None
+            self.host = host
+            self.port = port
+            self.user = user
+            self.password = password
+            self.security = security
+        d = locals()
+        del d["self"]
+        self.key = repr(d)
+
+    def connect(self):
+        if self.instance:  # we received this instance as is so we suppose it is already connected
+            return self.instance
+        try:
+            smtp = smtplib.SMTP(self.host, self.port)
+            if self.security == "starttls":
+                smtp.starttls()
+            if self.user:
+                try:
+                    smtp.login(self.user, self.password)
+                except smtplib.SMTPAuthenticationError as e:
+                    logger.error(f"SMTP authentication failed: {self.key}.\n{e}")
+                    return False
+        except smtplib.SMTPException as e:
+            logger.error(f"SMTP connection failed: {self.key}.\n{e}")
+            return False
+        except (gaierror, ConnectionError):
+            logger.error(f"SMTP connection refused: {self.key}.")
+            return False
+        return smtp
+
+    def send_message(self, email, to_addrs):
+        for attempt in range(1, 3):  # an attempt to reconnect possible
+            # smtp = self._smtp
+            # if not smtp:
+            #     logger.error("No SMTP given")
+            #     return False
+            # key = repr(smtp)
+            try:
+                if self.key not in self._instances:
+                    self._instances[self.key] = self.connect()
+                smtp = self._instances[self.key]
+                if smtp is False:
+                    return False
+
+                # recipients cannot be taken from headers when encrypting, we have to re-list them again
+                return smtp.send_message(email, to_addrs=to_addrs)
+
+            except smtplib.SMTPSenderRefused as e:  # timeout
+                if attempt == 2:
+                    logger.warning(f"SMTP sender refused, unable to reconnect.\n{e}")
+                    return False
+                del self._instances[self.key]  # this connection is gone possibly due to a timeout, reconnect
+                continue
+            except smtplib.SMTPException as e:
+                logger.error(f"SMTP sending failed.\n{e}")
+                return False
+
+
 class Envelope:
     default: 'Envelope'
 
@@ -119,6 +193,7 @@ class Envelope:
     _gpg: gnupg.GPG = None
     _sign = None
     _passphrase = None
+    _attach_key = None
     _encrypt = None
     _to = []
     _sender = None
@@ -140,19 +215,30 @@ class Envelope:
         return self._status
 
     def __str__(self):
-        if self._result is None and (self._encrypt or self._sign):
-            self._start()
-        return assure_fetched(self._result, str)
+        if not self._result:
+            if self._encrypt or self._sign:
+                self._start()
+            else:
+                print("Nothing to do, let's assume this is a bone of an e-mail message "
+                      "by appending `--send False` flag to produce an output.\n")
+                self._start(send=False)
+        return self._get_result()
 
     def __bytes__(self):
-        return assure_fetched(self._result, bytes)
+        return assure_fetched(self._get_result(), bytes)
 
     def __eq__(self, other):
         if type(other) in [str, bytes]:
-            return assure_fetched(self._result, bytes) == assure_fetched(other, bytes)
+            return assure_fetched(self._get_result(), bytes) == assure_fetched(other, bytes)
+
+    def _get_result(self):
+        """ concatenate output string """
+        s = "\n".join(self._result)
+        self._result = [s]  # slightly quicker next time if ever containing huge amount of lines
+        return s
 
     def __init__(self, message=None, output=None, gpg=None, smime=None, headers=None,
-                 sign=None, passphrase=None,
+                 sign=None, passphrase=None, attach_key=None,
                  encrypt=None, to=None, sender=None,
                  subject=None, cc=None, bcc=None, reply_to=None, attachments=None,
                  smtp=None, send=None):
@@ -171,6 +257,7 @@ class Envelope:
         Signing
         :param sign: True or key id if the message is to be signed.
         :param passphrase: If signing key needs passphrase.
+        :param attach_key: If True, public key is appended as an attachment.
 
         Encrypting
         :param encrypt: Recipients public key string or file path or stream (ex: from open()).
@@ -181,7 +268,8 @@ class Envelope:
         Sending
         :param subject: E-mail subject
         :param reply_to: Reply to header
-        :param smtp: tuple or dict of these optional parameters: host, port, username, password, security ("tlsstart")
+        :param smtp: tuple or dict of these optional parameters: host, port, username, password, security ("tlsstart").
+            Or link to existing INI file with the SMTP section.
         :param send: True for sending the mail. False will just print the output.
         :param cc: E-mail or their list.
         :param bcc: E-mail or their list.
@@ -190,7 +278,9 @@ class Envelope:
         :param headers: List of headers which are tuples of name, value. Ex: [("X-Mailer", "my-cool-application"), ...]
         """
         self._status = False  # whether we successfully encrypted/signed/send
-        self._result = ""  # text output for str() conversion
+        self._processed = False  # prevent the user from mistakenly call .sign().send() instead of .signature().send()
+        self._result = []  # text output for str() conversion
+        self._smtp = SMTP()
         self.auto_submitted = AutoSubmittedHeader(self)  # allows fluent interface to set header
 
         # if a parameter is not set, use class defaults, else init with parameter
@@ -205,6 +295,8 @@ class Envelope:
                     v = copy(getattr(self.default, "_" + k))  # ex `v = copy(self.default._message)`
             elif k == "passphrase":
                 self.signature(passphrase=v)
+            elif k == "attach_key":
+                self.signature(attach_key=v)
             elif k == "to":
                 self.to(v)
             elif k == "attachments":
@@ -216,8 +308,6 @@ class Envelope:
                 self.signature(v)
             elif k == "encrypt":
                 self.encryption(v)
-            elif k == 'smtp':
-                self._smtp = v  # we do not use helper method because that one does not support ex. dict assignment
             elif v is not None:
                 getattr(self, k)(v)  # ex: self.message(message)
 
@@ -329,17 +419,42 @@ class Envelope:
         return self
 
     def smtp(self, host="localhost", port=25, user=None, password=None, security=None):
-        d = locals()
-        del d["self"]
-        # if isinstance(d, smtplib.SMTP):
-        self._smtp = d
+        # CLI interface returns always a list or dict, ex: host=["localhost"] or host=["ini file"] or host={}
+        # module one-liner interface fills host param, ex: host="localhost", host="ini file", host={"port": 123}, ["localhost", 123]
+        # fluent interface fills all locals, ex: {"host": "ini file", "port": default 25}
+        # Host can contain smtplib.SMTP or INI file path.
+
+        # check for the presence of an INI file
+        ini = None
+        if type(host) is str:
+            ini = host
+        elif type(host) is list and len(host) > 0:
+            ini = host[0]
+        elif type(host) is dict and "host" in host:
+            ini = host["host"]
+        if ini and ini.endswith("ini") and Path(ini).exists():  # existing INI file
+            config = ConfigParser()
+            config.read(ini)
+            try:
+                host = {k: v for k, v in config["SMTP"].items()}
+            except KeyError as e:
+                raise FileNotFoundError(f"INI file {ini} exists but section [SMTP] is missing") from e
+
+        if type(host) is dict:  # ex: {"host": "localhost", "port": 1234}
+            self._smtp = SMTP(**host)
+        elif type(host) is list:  # ex: ["localhost", 1234]
+            self._smtp = SMTP(*host)
+        else:
+            d = locals()
+            del d["self"]
+            self._smtp = SMTP(**d)
         return self
 
     def to(self, email_or_list):
         self._to += assure_list(email_or_list)
         return self
 
-    def attach(self, attachment_or_list=None, path=None, mimetype=None, filename=None):
+    def attach(self, attachment_or_list=None, mimetype=None, filename=None, *, path=None):
         # "path"/Path, [mimetype/filename], [mimetype/filename]
         if type(attachment_or_list) is list:
             if path or mimetype or filename:
@@ -351,38 +466,44 @@ class Envelope:
         self._attachments += assure_list(attachment_or_list)
         return self
 
-    def signature(self, key_id=True, passphrase=None):
-        if key_id is True and type(self._sign) is str:
+    def signature(self, key=True, passphrase=None, attach_key=False):
+        if key is True and type(self._sign) is str:
             # usecase envelope().signature(key=fingerprint).send(sign=True) should still have fingerprint in self._sign
             # (and not just "True")
             pass
         else:
-            self._sign = key_id if not None else True
+            self._sign = key
         if passphrase is not None:
             self._passphrase = passphrase
+        if attach_key is not None:
+            self._attach_key = attach_key
         return self
 
-    def sign(self, key_id=None, passphrase=None):
-        self.signature(key_id=key_id, passphrase=passphrase)
+    def sign(self, key=True, passphrase=None, attach_key=False):
+        self._processed = True
+        self.signature(key=key, passphrase=passphrase, attach_key=attach_key)
         return self._start(sign=True)
 
-    def encryption(self, key_id=None, *, key_path=None, key=None):
+    def encryption(self, key=True, *, key_path=None):
         if key_path:
             key = Path(key_path)
-        val = key_id or key
-        if val is True and type(self._encrypt) is str:
+        if key is True and type(self._encrypt) is str:
             # usecase envelope().encrypt(key="keystring").send(encrypt=True) should still have key in self._encrypt
             # (and not just "True")
             pass
         else:
-            self._encrypt = assure_fetched(val, bytes)
+            self._encrypt = assure_fetched(key, bytes)
         return self
 
-    def encrypt(self, sign=None, key_id=None, *, key_path=None, key=None):
-        self.encryption(key_id=key_id, key_path=key_path, key=key)
+    def encrypt(self, sign=None, key=True, *, key_path=None):
+        self._processed = True
+        self.encryption(key=key, key_path=key_path)
         return self._start(encrypt=True, sign=sign)
 
     def send(self, send=True, sign=None, encrypt=None):
+        if self._processed:
+            raise RuntimeError("Cannot call .send() after .sign()/.encrypt()."
+                               " You probably wanted to use .signature()/.encryption() instead.")
         if sign is not None:
             self.signature(sign)
         if encrypt is not None:
@@ -471,18 +592,22 @@ class Envelope:
 
         # output to file or display
         if email or data:
-            self._result += email.as_string() if email else assure_fetched(data, str)
+            self._result.append(email.as_string() if email else assure_fetched(data, str))
             if self._output:
                 with open(self._output, "wb") as f:
                     f.write(email.as_bytes() if email else data)
             self._status = True
+        return self
 
     def _get_gnupg_home(self, readable=False):
-        return self._gpg if type(self._gpg) is readable else ("default" if readable else None)
+        return self._gpg if type(self._gpg) is str else ("default" if readable else None)
 
     def _send_now(self, email, encrypt, encrypted_subject, send):
         try:
-            email["From"] = self._sender or ""
+            if not self._sender and send is True:
+                logger.error("You have to specify sender e-mail.")
+                return False
+            email["From"] = self._sender
             if self._to:
                 email["To"] = ",".join(self._to)
             if self._cc:
@@ -503,42 +628,19 @@ class Envelope:
             email[k] = v
 
         if send:
-            for attempt in range(1, 3):  # an attempt to reconnect possible
-                smtp = self._smtp
-                key = repr(smtp)
-                try:
-                    if not isinstance(smtp, smtplib.SMTP):
-                        if key not in Envelope._smtps:
-                            smtp = self._get_smtp(smtp)
-                            Envelope._smtps[key] = smtp
-                        else:
-                            smtp = Envelope._smtps[key]
-                        if smtp is False:
-                            return False
-
-                    # recipients cannot be taken from headers when encrypting, we have to re-list them again
-                    failures = smtp.send_message(email, to_addrs=list(set(self._to + self._cc + self._bcc)))
-                    if failures:
-                        logger.warning(f"Unable to send to all recipients: {repr(failures)}.")
-                except smtplib.SMTPSenderRefused as e:  # timeout
-                    if attempt == 2:
-                        logger.warning(f"SMTP sender {self._sender} refused, unable to reconnect.\n{e}")
-                        return False
-                    del Envelope._smtps[key]  # this connection is gone possibly due to a timeout, reconnect
-                    continue
-                except smtplib.SMTPException as e:
-                    logger.error(f"SMTP sending failed for the address {self._sender}.\n{e}")
-                    return False
-                else:
-                    break
+            failures = self._smtp.send_message(email, to_addrs=list(set(self._to + self._cc + self._bcc)))
+            if failures:
+                logger.warning(f"Unable to send to all recipients: {repr(failures)}.")
+            elif failures is False:
+                return False
         else:
-            self._result = "{}\nHave not been sent from {} to {}\n" \
-                .format("*" * 100, (self._sender or ""), ", ".join(set(self._to + self._cc + self._bcc)))
+            self._result.append("{}\nHave not been sent from {} to {}" \
+                                .format("*" * 100, (self._sender or ""), ", ".join(set(self._to + self._cc + self._bcc))))
             if encrypt:
                 if encrypted_subject:
-                    self._result += f"Encrypted subject: {self._subject}\n"
-                self._result += f"Encrypted message: {self._message}\n"
-            self._result += "\n"
+                    self._result.append(f"Encrypted subject: {self._subject}")
+                self._result.append(f"Encrypted message: {self._message}")
+            self._result.append("")
 
         return email
 
@@ -559,8 +661,11 @@ class Envelope:
                                9: "SHA384",
                                10: "SHA512",
                                11: "SHA224"}[int(status.hash_algo)].lower()
-        except KeyError:
+        except KeyError:  # alright, just unknown algorithm
             micalg = None
+        except TypeError:  # signature failed
+            logger.error(status.stderr)
+            return False, None
         return status.data, micalg
 
     def _encrypt_now(self, message, sign, encrypt):
@@ -646,13 +751,26 @@ class Envelope:
         # we'll send it later, transform the text to the e-mail first
         msg_text = EmailMessage()
         msg_text.set_content(text.decode("utf-8"), subtype="html")
+
+        if self._attach_key:  # send your public key as an attachment (so that it can be imported before it propagates on the server)
+            keyid = self._sign
+            if keyid is True:
+                for key in self._gnupg.list_keys(True):  # if no default key is given, pick the first secret as a default
+                    keyid = key["keyid"]
+                    break
+            if type(keyid) is str:
+                contents = self._gnupg.export_keys(keyid)
+                self.attach(contents, "public-key.asc")
+
         for contents in self._attachments:
             # get contents, user defined name and user defined mimetype
             # "path"/Path, [mimetype/filename], [mimetype/filename]
             name = mimetype = None
             if type(contents) is tuple:
                 for s in contents[1:]:
-                    if "/" in s:
+                    if not s:
+                        continue
+                    elif "/" in s:
                         mimetype = s
                     else:
                         name = s
@@ -673,9 +791,9 @@ class Envelope:
             email.set_param("protected-headers", "v1")
 
             msg_headers = EmailMessage()
-            msg_headers.set_type("text/rfc822-headers")
             msg_headers.set_param("protected-headers", "v1")
-            msg_headers["Subject"] = self._subject
+            msg_headers.set_content(f"Subject: {self._subject}")
+            msg_headers.set_type("text/rfc822-headers")  # must be set after set_content, otherwise reset to text/plain
 
             email.attach(msg_headers)
             email.attach(msg_text)
@@ -688,40 +806,64 @@ class Envelope:
                 email["Subject"] = self._subject
         return email
 
-    @staticmethod
-    def _smtp_connect(host="localhost", port=25, user=None, password=None, security=None):
-        try:
-            smtp = smtplib.SMTP(host, port)
-            if security == "starttls":
-                smtp.starttls()
-            if user:
-                try:
-                    smtp.login(user, password)
-                except smtplib.SMTPAuthenticationError as e:
-                    logger.error(f"SMTP authentication failed for user {user} at host {host}.\n{e}")
-                    return False
-        except smtplib.SMTPException as e:
-            logger.error(f"SMTP connection failed for user {user} at host {host}.\n{e}")
-            return False
-        except ConnectionError:
-            logger.error(f"SMTP connection refused: {locals()}.")
-            return False
-        return smtp
-
-    def _get_smtp(self, smtp):
-        if smtp is None:
-            return False
-        elif type(smtp) is dict:  # ex: {"host": "localhost", "port": 1234}
-            smtp = self._smtp_connect(**smtp)
-        elif type(smtp) is not str:  # ex: ["localhost", 1234]
-            smtp = self._smtp_connect(*smtp)
-        else:  # ex: "localhost" or None
-            smtp = self._smtp_connect(smtp)
-        return smtp
-
     def check(self) -> bool:
-        """ Check SMTP connection """
-        return bool(self._get_smtp(self._smtp))  # check SMTP
+        """
+        If sender specified, check if DMARC DNS records exist and prints out the information.
+        :rtype: bool SMTP connection worked
+        """
+        if self._sender:
+            try:
+                email = getaddresses([self._sender])[0][1]
+                domain = email.split("@")[1]
+            except IndexError:
+                logger.warning(f"Could not parse domain from the sender address '{self._sender}'")
+            else:
+                def dig(query_or_list, rr="TXT", search_start=None):
+                    if type(query_or_list) is not list:
+                        query_or_list = [query_or_list]
+                    for query in query_or_list:
+                        try:
+                            text = subprocess.check_output(["dig", "-t", rr, query]).decode("utf-8")
+                            text = text[text.find("ANSWER SECTION:"):]
+                            text = text[:text.find(";;")].split("\n")[1:-2]
+                            res = []
+                            for line in text:
+                                # Strip tabs and quotes `_dmarc.gmail.com.\t600\tIN\tTXT\t"v=DMARC1;"` → `v=DMARC1;`
+                                res.append(line.split("\t")[-1][1:-1])  #
+                        except IndexError:
+                            return []
+                        else:
+                            if res:
+                                return res
+
+                def search_start(list_, needle):
+                    if list_:
+                        for line in list_:
+                            if line.startswith(needle):
+                                return line
+
+                spf = search_start(dig(domain), "v=spf")
+                if not spf:
+                    spf = search_start(dig(domain, "SPF"), "v=spf")
+                if spf:
+                    print(f"SPF found on the domain {domain}: {spf}")
+                else:
+                    logger.warning(f"SPF not found on the domain {domain}")
+                print(f"See: dig -t SPF {domain} && dig -t TXT {domain}")
+
+                dkim = dig(["mx1._domainkey." + domain, "mx._domainkey." + domain, "default._domainkey." + domain])
+                if dkim:
+                    print(f"DKIM found: {dkim}")
+                else:
+                    print("Could not spot DKIM. (But I do not know the selector.)")
+
+                dmarc = dig("_dmarc." + domain)
+                if dmarc:
+                    print(f"DMARC found: {dmarc}")
+                else:
+                    print("Could not spot DMARC.")
+        print("Trying to connect to the SMTP...")
+        return bool(self._smtp.connect())  # check SMTP
 
 
 def _cli():
@@ -734,42 +876,44 @@ def _cli():
             setattr(namespace, self.dest, values)
 
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('--message', help='Plain text message.')
-    parser.add_argument('--input', help='Path to message file. (Alternative to `message` parameter.)')
+    parser.add_argument('--message', help='Plain text message.', metavar="TEXT")
+    parser.add_argument('--input', help='Path to message file. (Alternative to `message` parameter.)', metavar="FILE")
     parser.add_argument('--output',
-                        help='Path to file to be written to (else the contents is returned if ciphering or True if sending).')
+                        help='Path to file to be written to (else the contents is returned if ciphering or True if sending).',
+                        metavar="FILE")
     parser.add_argument('--gpg', help='Home path to GNUPG rings else default ~/.gnupg is used.'
-                                      'Leave blank for prefer GPG over S/MIME.', nargs="?", action=BlankTrue)
+                                      'Leave blank for prefer GPG over S/MIME.', nargs="?", action=BlankTrue,metavar="PATH")
     parser.add_argument('--smime', action="store_true", help='Leave blank for prefer S/MIME over GPG.')
     parser.add_argument('--check', action="store_true", help='Check SMTP server connection')
 
-    parser.add_argument('--sign', action="store_true", help='Sign the message. Blank for user default key or key-id.')
+    parser.add_argument('--sign', help='Sign the message. Blank for user default key or key ID/fingerprint.', nargs="?", action=BlankTrue, metavar="FINGERPRINT")
     parser.add_argument('--passphrase', help='If signing key needs passphrase.')
 
     parser.add_argument('--encrypt', help='Recipients public key string or 1 or true if the key should be in the ring from before.',
-                        nargs="?", action=BlankTrue)
-    parser.add_argument('--encrypt-file', help='Filename with the recipients public key. (Alternative to `encrypt` parameter.)')
-    parser.add_argument('--to', help="E-mail – needed to choose their key if encrypting", nargs="+")
-    parser.add_argument('--cc', help="E-mail or list", nargs="+")
-    parser.add_argument('--bcc', help="E-mail or list", nargs="+")
-    parser.add_argument('--reply-to', help="Header that states e-mail to be replied to. The field is not encrypted.")
-    parser.add_argument('--from', help="Alias of --sender")
-    parser.add_argument('--sender', help="E-mail – needed to choose our key if encrypting")
+                        nargs="?", action=BlankTrue, metavar="KEY-CONTENTS")
+    parser.add_argument('--encrypt-file', help='Filename with the recipients public key. (Alternative to `encrypt` parameter.)',metavar="PATH")
+    parser.add_argument('--to', help="E-mail – needed to choose their key if encrypting", nargs="+", metavar="E-MAIL")
+    parser.add_argument('--cc', help="E-mail or list", nargs="+", metavar="E-MAIL")
+    parser.add_argument('--bcc', help="E-mail or list", nargs="+", metavar="E-MAIL")
+    parser.add_argument('--reply-to', help="Header that states e-mail to be replied to. The field is not encrypted.", metavar="E-MAIL")
+    parser.add_argument('--from', help="Alias of --sender", metavar="E-MAIL")
+    parser.add_argument('--sender', help="E-mail – needed to choose our key if encrypting", metavar="E-MAIL")
     parser.add_argument('--no-sender', action="store_true",
                         help="We explicitly say we do not want to decipher later if encrypting.")
-    parser.add_argument('--attachment',
+    parser.add_argument('-a', '--attachment',
                         help="Path to the attachment, followed by optional file name to be used and/or mimetype."
                              " This parameter may be used multiple times.",
                         nargs="+", action="append")
+    parser.add_argument('--attach-key', help="Appending public key to the attachments when sending.", action="store_true")
 
     parser.add_argument('--send', help="Send e-mail. Blank to send now.", nargs="?", action=BlankTrue)
     parser.add_argument('--subject', help="E-mail subject")
     parser.add_argument('--smtp', help="SMTP server. List `host, [port, [username, password, [security]]]` or dict.\n"
                                        "Ex: '--smtp {\"host\": \"localhost\", \"port\": 25}'. Security may be 'starttls'.",
-                        nargs="*", action=BlankTrue)
+                        nargs="*", action=BlankTrue,metavar=("HOST", "PORT"))
     parser.add_argument('--header',
-                        help="Any e-mail header in the form `name value`",
-                        nargs="+", action="append")
+                        help="Any e-mail header in the form `name value`. Flag may be used multiple times.",
+                        nargs=2, action="append", metavar=("NAME", "VALUE"))
 
     # envelope = Envelope()
     args = vars(parser.parse_args())
@@ -806,8 +950,11 @@ def _cli():
         args["smtp"] = decode(" ".join(args["smtp"]))
 
     # send = False turns on debugging
-    if args["send"] and type(args["send"]) is not bool and args["send"].lower() in ["0", "false", "no"]:
-        args["send"] = False
+    if args["send"] and type(args["send"]) is not bool:
+        if args["send"].lower() in ["0", "false", "no"]:
+            args["send"] = False
+        elif args["send"].lower() in ["1", "true", "yes"]:
+            args["send"] = True
 
     # convert to the module-style attachments `/tmp/file.txt text/plain` → (Path("/tmp/file.txt"), "text/plain")
     args["attachments"] = []
@@ -821,6 +968,10 @@ def _cli():
     args["headers"] = args["header"]
     del args["header"]
 
+    if args["from"]:
+        args["sender"] = args["from"]
+    del args["from"]
+
     if args["check"]:
         del args["sign"]
         del args["encrypt"]
@@ -829,17 +980,17 @@ def _cli():
         o = Envelope(**args)
         if o.check():
             print("Check succeeded.")
+            sys.exit(0)
+        else:
+            print("Check failed.")
+            sys.exit(1)
     del args["check"]
 
-    if args["from"]:
-        args["sender"] = args["from"]
-    del args["from"]
-
-    if not (args["sign"] or args["encrypt"] or args["send"]):
+    if not any([args["sign"], args["encrypt"], args["send"]]):
         # if there is anything to do, pretend the input parameters are a bone of a message
-        print("Nothing to do, let's assume this is a bone of an e-mail message "
-              "by appending `--send False` flag to produce an output.\n")
-        args["send"] = False
+        print(str(Envelope(**args)))
+        sys.exit(0)
+
     res = Envelope(**args)
     if res:
         print(res)
