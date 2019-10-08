@@ -440,7 +440,7 @@ envelope().attach(path="/tmp/file.txt",filename="filename.txt")
 Send an encrypted and signed message via the default SMTP server, via all three interfaces.
 ```bash
 # CLI interface
-envelope --message "Hello world" --to "user@example.org" --sender "me@example.org" --subject "Test" --sign --encrypt --attachment /tmp/file.txt --attach /tmp/file2 application/gzip zipped-file.zip --send
+envelope --message "Hello world" --to "user@example.org" --sender "me@example.org" --subject "Test" --sign --encrypt -a /tmp/file.txt -a /tmp/file2 application/gzip zipped-file.zip --send
 ```
 ```python3
 # one-liner interface
@@ -449,6 +449,42 @@ envelope().message("Hello world").to("user@example.org").sender("me@example.org"
 
 # fluent interface
 envelope(message="Hello world", to="user@example.org", sender="me@example.org", subject="Test", sign=True, encrypt=True, attachments=[(Path("/tmp/file.txt"), (Path("/tmp/file2"), "application/gzip", "zipped-file.zip")], send=True)
+```
+
+In the condition *me@example.com* private key for signing, *user@example.com* public key for encrypting and open SMTP server on *localhost:25* are available, change `--send` to `--send 0` (or `.send()` to `.send(False)` or `send=True` to `send=False`) to investigate the generated message that may be similar to the following output:
+```bash
+****************************************************************************************************
+Have not been sent from me@example.org to user@example.org
+Encrypted subject: Test
+Encrypted message: b'Hello world'
+
+Subject: Encrypted message
+MIME-Version: 1.0
+Content-Type: multipart/encrypted; protocol="application/pgp-encrypted";
+ boundary="===============8462917939563016793=="
+From: me@example.org
+To: user@example.org
+Date: Tue, 08 Oct 2019 16:16:18 +0200
+Message-ID: <157054417817.4405.938581433237601455@promyka>
+
+--===============8462917939563016793==
+Content-Type: application/pgp-encrypted
+
+Version: 1
+--===============8462917939563016793==
+Content-Type: application/octet-stream; name="encrypted.asc"
+Content-Description: OpenPGP encrypted message
+Content-Disposition: inline; filename="encrypted.asc"
+
+-----BEGIN PGP MESSAGE-----
+
+hQMOAyx1c9zl1h4wEAv+PmtwjQDt+4XCn8YQJ6d7kyrp2R7xzS3PQwOZ7e+HWJjY
+(...)
+RQ8QtLLEza+rs+1lgcPgdBZEHFpYpgDb0AUvYg9d
+=YuqI
+-----END PGP MESSAGE-----
+
+--===============8462917939563016793==--
 ```
 
 # Related affairs
@@ -474,9 +510,8 @@ GNUPGHOME=/var/www/.gnupg sudo -H -u www-data gpg --send-keys [key ID]  # now th
 GNUPGHOME=/var/www/.gnupg sudo -H -u www-data envelope --message "Hello world" --subject "GPG signing test" --sign [key ID] --from [application e-mail] --to [your e-mail] --send  # you now receive e-mail and may import the key and set the trust to the key
 ```
 
-It takes few hours to a key to propagate. If the key cannot be imported in your e-mail client because not found on the servers, try in the morning again or check the online search form at http://hkps.pool.sks-keyservers.net
-
-XXX vystavte KEY id na webu. Nebo jak se to doporučuje?
+It takes few hours to a key to propagate. If the key cannot be imported in your e-mail client because not found on the servers, try in the morning again or check the online search form at http://hkps.pool.sks-keyservers.net.  
+Put your fingerprint on the web or on the business card then so that everybody can check your signature is valid.
 
 ## DNS validation tools
 This is just a short explanation on these anti-spam mechanisms so that you can take basic notion what is going on.

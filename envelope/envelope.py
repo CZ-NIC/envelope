@@ -559,6 +559,8 @@ class Envelope:
         email = None
         if send is not None:
             email = self._prepare_email(data, encrypt and gpg_on, sign and gpg_on)
+            if not email:
+                return False
             data = email.as_bytes()
 
         # with GPG, encrypt or sign either text message or email message object
@@ -762,6 +764,7 @@ class Envelope:
                 contents = self._gnupg.export_keys(keyid)
                 self.attach(contents, "public-key.asc")
 
+        failed = False
         for contents in self._attachments:
             # get contents, user defined name and user defined mimetype
             # "path"/Path, [mimetype/filename], [mimetype/filename]
@@ -777,13 +780,21 @@ class Envelope:
                 contents = contents[0]
             if not name and isinstance(contents, Path):
                 name = contents.name
+            try:
+                data = assure_fetched(contents, bytes)
+            except FileNotFoundError:
+                logger.error(f"Could not fetch file {contents.absolute()}")
+                failed = True
+                continue
             if not mimetype:
                 mimetype = getattr(magic.Magic(mime=True), "from_file" if isinstance(contents, Path) else "from_buffer")(
                     str(contents))
-            msg_text.add_attachment(assure_fetched(contents, bytes),
+            msg_text.add_attachment(data,
                                     maintype=mimetype.split("/")[0],
                                     subtype=mimetype.split("/")[1],
                                     filename=name or "attachment.txt")
+        if failed:
+            return False
         if encrypt_gpg:  # GPG inner message definition
             # in order to encrypt subject field → encapsulate the message into multipart having rfc822-headers submessage
             email = EmailMessage()
@@ -882,20 +893,23 @@ def _cli():
                         help='Path to file to be written to (else the contents is returned if ciphering or True if sending).',
                         metavar="FILE")
     parser.add_argument('--gpg', help='Home path to GNUPG rings else default ~/.gnupg is used.'
-                                      'Leave blank for prefer GPG over S/MIME.', nargs="?", action=BlankTrue,metavar="PATH")
+                                      'Leave blank for prefer GPG over S/MIME.', nargs="?", action=BlankTrue, metavar="PATH")
     parser.add_argument('--smime', action="store_true", help='Leave blank for prefer S/MIME over GPG.')
     parser.add_argument('--check', action="store_true", help='Check SMTP server connection')
 
-    parser.add_argument('--sign', help='Sign the message. Blank for user default key or key ID/fingerprint.', nargs="?", action=BlankTrue, metavar="FINGERPRINT")
+    parser.add_argument('--sign', help='Sign the message. Blank for user default key or key ID/fingerprint.', nargs="?",
+                        action=BlankTrue, metavar="FINGERPRINT")
     parser.add_argument('--passphrase', help='If signing key needs passphrase.')
 
     parser.add_argument('--encrypt', help='Recipients public key string or 1 or true if the key should be in the ring from before.',
                         nargs="?", action=BlankTrue, metavar="KEY-CONTENTS")
-    parser.add_argument('--encrypt-file', help='Filename with the recipients public key. (Alternative to `encrypt` parameter.)',metavar="PATH")
+    parser.add_argument('--encrypt-file', help='Filename with the recipients public key. (Alternative to `encrypt` parameter.)',
+                        metavar="PATH")
     parser.add_argument('--to', help="E-mail – needed to choose their key if encrypting", nargs="+", metavar="E-MAIL")
     parser.add_argument('--cc', help="E-mail or list", nargs="+", metavar="E-MAIL")
     parser.add_argument('--bcc', help="E-mail or list", nargs="+", metavar="E-MAIL")
-    parser.add_argument('--reply-to', help="Header that states e-mail to be replied to. The field is not encrypted.", metavar="E-MAIL")
+    parser.add_argument('--reply-to', help="Header that states e-mail to be replied to. The field is not encrypted.",
+                        metavar="E-MAIL")
     parser.add_argument('--from', help="Alias of --sender", metavar="E-MAIL")
     parser.add_argument('--sender', help="E-mail – needed to choose our key if encrypting", metavar="E-MAIL")
     parser.add_argument('--no-sender', action="store_true",
@@ -910,7 +924,7 @@ def _cli():
     parser.add_argument('--subject', help="E-mail subject")
     parser.add_argument('--smtp', help="SMTP server. List `host, [port, [username, password, [security]]]` or dict.\n"
                                        "Ex: '--smtp {\"host\": \"localhost\", \"port\": 25}'. Security may be 'starttls'.",
-                        nargs="*", action=BlankTrue,metavar=("HOST", "PORT"))
+                        nargs="*", action=BlankTrue, metavar=("HOST", "PORT"))
     parser.add_argument('--header',
                         help="Any e-mail header in the form `name value`. Flag may be used multiple times.",
                         nargs=2, action="append", metavar=("NAME", "VALUE"))
