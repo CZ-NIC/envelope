@@ -1,6 +1,6 @@
 # Envelope
 
-Quick layer over [python-gnupg](https://bitbucket.org/vinay.sajip/python-gnupg/src), [smime](https://pypi.org/project/smime/), [smtplib](https://docs.python.org/3/library/smtplib.html) and [email](https://docs.python.org/3/library/email.html?highlight=email#module-email) handling packages. Their common usecases merged into a single function. Want to sign a text and tired of forgetting how to do it right? You do not need to know everything about GPG or S/MIME, you do not have to bother with importing keys. Do not hassle with reconnecting SMTP server. Do not study various headers meanings to let your users unsubscribe via a URL.  
+Quick layer over [python-gnupg](https://bitbucket.org/vinay.sajip/python-gnupg/src), [smime](https://pypi.org/project/smime/), [smtplib](https://docs.python.org/3/library/smtplib.html), [magic](https://pypi.org/project/python-magic/) and [email](https://docs.python.org/3/library/email.html?highlight=email#module-email) handling packages. Their common usecases merged into a single function. Want to sign a text and tired of forgetting how to do it right? You do not need to know everything about GPG or S/MIME, you do not have to bother with importing keys. Do not hassle with reconnecting SMTP server. Do not study various headers meanings to let your users unsubscribe via a URL.  
 You insert a message and attachments and receive signed and/or encrypted output to the file or to your recipients' e-mail.  
 Just single line of code. With the great help of the examples below.  
 
@@ -314,7 +314,7 @@ envelope().auto_submitted.no()  # mark message as human produced
     * **.check()**
     
     ```bash
-    $ envelope --smtp localhost 25 --sender me@example.com 
+    $ envelope --smtp localhost 25 --sender me@example.com --check 
     SPF found on the domain example.com: v=spf1 -all
     See: dig -t SPF example.com && dig -t TXT example.com
     DKIM found: ['v=DKIM1; g=*; k=rsa; p=...']
