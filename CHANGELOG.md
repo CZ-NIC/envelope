@@ -1,8 +1,9 @@
 # CHANGELOG
 
-## next (unreleased)
+## 0.9.3 (unreleased)
 - attachment file not found caught
 - output attached to the complex example in the README
+- fix launched in a loop
 
 ## 0.9.2
 - CLI: if nothing to do, assume parameters are a bone of an e-mail message to produce output

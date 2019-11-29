@@ -12,6 +12,7 @@ from email.message import EmailMessage
 from email.utils import make_msgid, formatdate, getaddresses
 from pathlib import Path
 from socket import gaierror
+from typing import Union
 
 try:
     import gnupg
@@ -188,26 +189,6 @@ class SMTP:
 class Envelope:
     default: 'Envelope'
 
-    _message = None
-    _output = None
-    _gpg: gnupg.GPG = None
-    _sign = None
-    _passphrase = None
-    _attach_key = None
-    _encrypt = None
-    _to = []
-    _sender = None
-    _cc = []
-    _bcc = []
-    _subject = None
-    _smtp = None
-    _attachments = []
-    _reply_to = None
-    _headers = {}
-
-    # cache of different smtp connections.
-    # Usecase: user passes smtp server info in dict in a loop but we do want it connects just once
-    _smtps = {}
     _encrypts_cache = {}  # cache
     _gnupg: gnupg.GPG
 
@@ -277,6 +258,23 @@ class Envelope:
             optionally in tuple with the file name in the e-mail and/or mimetype.
         :param headers: List of headers which are tuples of name, value. Ex: [("X-Mailer", "my-cool-application"), ...]
         """
+        self._message = None
+        self._output = None
+        self._gpg: Union[str, bool] = None
+        self._sign = None
+        self._passphrase = None
+        self._attach_key = None
+        self._encrypt = None
+        self._to = []
+        self._sender = None
+        self._cc = []
+        self._bcc = []
+        self._subject = None
+        self._smtp = None
+        self._attachments = []
+        self._reply_to = None
+        self._headers = {}
+
         self._status = False  # whether we successfully encrypted/signed/send
         self._processed = False  # prevent the user from mistakenly call .sign().send() instead of .signature().send()
         self._result = []  # text output for str() conversion
@@ -419,11 +417,20 @@ class Envelope:
         return self
 
     def smtp(self, host="localhost", port=25, user=None, password=None, security=None):
+        """
+        Obtain SMTP server connection.
+        Note that you may safely call this in a loop,
+            envelope will remember the settings and connect only once (without reconnecting every iteration).
+        :param host: hostname, smtplib.SMTP or INI file path.
+        :param port:
+        :param user:
+        :param password:
+        :param security: Ex: tlsstart
+        :return:
+        """
         # CLI interface returns always a list or dict, ex: host=["localhost"] or host=["ini file"] or host={}
         # module one-liner interface fills host param, ex: host="localhost", host="ini file", host={"port": 123}, ["localhost", 123]
         # fluent interface fills all locals, ex: {"host": "ini file", "port": default 25}
-        # Host can contain smtplib.SMTP or INI file path.
-
         # check for the presence of an INI file
         ini = None
         if type(host) is str:
@@ -444,10 +451,10 @@ class Envelope:
             self._smtp = SMTP(**host)
         elif type(host) is list:  # ex: ["localhost", 1234]
             self._smtp = SMTP(*host)
+        elif isinstance(host, smtplib.SMTP):
+            self._smtp = SMTP(host)
         else:
-            d = locals()
-            del d["self"]
-            self._smtp = SMTP(**d)
+            self._smtp = SMTP(host, port, user, password, security)
         return self
 
     def to(self, email_or_list):
@@ -501,6 +508,13 @@ class Envelope:
         return self._start(encrypt=True, sign=sign)
 
     def send(self, send=True, sign=None, encrypt=None):
+        """
+        Send e-mail contents. To check e-mail was succesfully sent, cast the returned object to bool.
+        :param send: True – send, False print debug information
+        :param sign:
+        :param encrypt:
+        :return:
+        """
         if self._processed:
             raise RuntimeError("Cannot call .send() after .sign()/.encrypt()."
                                " You probably wanted to use .signature()/.encryption() instead.")
