@@ -45,6 +45,10 @@ envelope("my message")
 
 
 # Installation
+* Since M2Crypto used for S/MIME has some dependencies, you may want to ensure them
+```bash
+sudo apt install build-essential python3-dev swig
+```
 * Install with a single command from [PyPi](https://pypi.org/project/envelope/)
 ```bash 
 pip3 install envelope
@@ -155,6 +159,7 @@ Note that if neither *gpg* nor *smime* is specified, we try to determine the met
     * **--sign**: Blank for user default key or key ID/fingerprint.
     * **--passphrase**: Passphrase to the key if needed.
     * **--attach-key**: Blank for appending public key to the attachments when sending.
+    * **--cert
     * **envelope(sign=)**: True for user default key or key ID/fingerprint.
     * **envelope(passphrase=)**: Passphrase to the key if needed.
     * **envelope(attach_key=)**: Append public key to the attachments when sending.
@@ -164,8 +169,8 @@ Note that if neither *gpg* nor *smime* is specified, we try to determine the met
 If the GPG encryption fails, it tries to determine which recipient misses the key.
 
   * **encrypt**:  Recipient GPG public key or S/MIME certificate to be encrypted with. 
-    * **--encrypt**: Key string or blank or 1/true/yes if the key should be in the ring from before. Put 0/false/no to disable `encrypt-file`.
-    * **--encrypt-file** *(CLI only)*: Recipient public key stored in a file path. (Alternative to `--encrypt`.)  
+    * **--encrypt**: Key string or blank or 1/true/yes if the key should be in the ring from before. Put 0/false/no to disable `encrypt-path`.
+    * **--encrypt-path** *(CLI only)*: Recipient public key stored in a file path. (Alternative to `--encrypt`.)  
     * **envelope(encrypt=)**: Any fetchable content
     * **.encrypt(sign=, key=, key_path=)**: With *sign*, you may specify boolean or default signing key ID/fingerprint. If import needed, put your encrypting key contents to *key* or path to the key contents file in *key_path*.
     * **.encryption(key=, key_path=)**: Encrypt later (when launched with *.sign()*, *.encrypt()* or *.send()* functions. 
@@ -228,7 +233,7 @@ If the GPG encryption fails, it tries to determine which recipient misses the ke
     * **.smtp(host="localhost", port=25, user=, password=, security=)**
     * Parameters:
         * `host` may include hostname or any of the following input formats (ex: path to an INI file or a `dict`)
-        * `security` parameter may have "starttls" value for calling `smtp.starttls()` connection security
+        * `security` if not set, automatically set to `starttls` for port *587* and to `tls` for port *465*
     * Input format may be in the following form:
         * `None` default localhost server used
         * `smtplib.SMTP` object
@@ -240,8 +245,7 @@ If the GPG encryption fails, it tries to determine which recipient misses the ke
             ```ini
             [SMTP]
             host = example.com
-            port = 587
-            security = starttls
+            port = 587            
             ```
     * Do not fear to pass the `smtp` in a loop, we make just a single connection to the server. If timed out, we attempt to reconnect once.
     ```python3

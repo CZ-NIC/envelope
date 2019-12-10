@@ -1,6 +1,17 @@
 # CHANGELOG
 
-## 0.9.3 (unreleased)
+## 0.9.5 (unreleased)
+- CHANGE: `encrypt-file` changed to `encrypt-path` (to match the `encrypt_path` parameter of the `encrypt` method)
+- S\MIME signing (`M2Crypto` instead of `smime` package)
+- SMTP
+    * if SMTP/INI file is given as a relative path and not found at CWD, we try program directory (useful when importing envelope as a library from another program)
+    * TLS security supported
+    * if security not defined, determined by port
+
+## 0.9.4 (2019-12-03)
+- fix launching with no flags (bare message erroneously tried to be GPG-signed by default)
+
+## 0.9.3 (2019-11-30)
 - attachment file not found caught
 - output attached to the complex example in the README
 - fix launched in a loop
