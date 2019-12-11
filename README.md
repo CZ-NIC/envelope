@@ -1,6 +1,8 @@
 # Envelope
 
-Quick layer over [python-gnupg](https://bitbucket.org/vinay.sajip/python-gnupg/src), [smime](https://pypi.org/project/smime/), [smtplib](https://docs.python.org/3/library/smtplib.html), [magic](https://pypi.org/project/python-magic/) and [email](https://docs.python.org/3/library/email.html?highlight=email#module-email) handling packages. Their common usecases merged into a single function. Want to sign a text and tired of forgetting how to do it right? You do not need to know everything about GPG or S/MIME, you do not have to bother with importing keys. Do not hassle with reconnecting SMTP server. Do not study various headers meanings to let your users unsubscribe via a URL.  
+[![Build Status](https://travis-ci.org/CZ-NIC/envelope.svg?branch=master)](https://travis-ci.org/CZ-NIC/envelope)
+
+Quick layer over [python-gnupg](https://bitbucket.org/vinay.sajip/python-gnupg/src), [M2Crypto](https://m2crypto.readthedocs.io/), [smtplib](https://docs.python.org/3/library/smtplib.html), [magic](https://pypi.org/project/python-magic/) and [email](https://docs.python.org/3/library/email.html?highlight=email#module-email) handling packages. Their common usecases merged into a single function. Want to sign a text and tired of forgetting how to do it right? You do not need to know everything about GPG or S/MIME, you do not have to bother with importing keys. Do not hassle with reconnecting SMTP server. Do not study various headers meanings to let your users unsubscribe via a URL.  
 You insert a message and attachments and receive signed and/or encrypted output to the file or to your recipients' e-mail.  
 Just single line of code. With the great help of the examples below.  
 
@@ -37,7 +39,9 @@ envelope("my message")
   * [Complex example](#complex-example)
 - [Related affairs](#related-affairs)
   * [Configure your SMTP](#configure-your-smtp)
-  * [Configure your GPG](#configure-your-gpg)
+  * [Choose ciphering method](#choose-ciphering-method)
+    + [Configure your GPG](#configure-your-gpg)
+    + [Configure your S/MIME](#configure-your-smime)
   * [DNS validation tools](#dns-validation-tools)
     + [SPF](#spf)
     + [DKIM](#dkim)
@@ -115,13 +119,13 @@ All parameters are optional.
 * **.param(value)** denotes a positional argument
 * **.param(value=)** denotes a keyword argument
  
-Any fetchable content means plain text, bytes or stream (ex: from open()). In *module interface*, you may use Path object to the file. In *CLI interface*, additional flags are provided.         
+Any fetchable contents means plain text, bytes or stream (ex: from open()). In *module interface*, you may use Path object to the file. In *CLI interface*, additional flags are provided.         
 
 ### Input / Output
   * **message**: Message / body text.
     * **--message**: String
     * **--input**: *(CLI only)* Path to the message file. (Alternative to `--message` parameter.)
-    * **envelope(message=)**: Any fetchable content
+    * **envelope(message=)**: Any fetchable contents
     * **.message(text)**:  String or stream.
     * **.message(path=None)**: Path to the file.
     
@@ -156,24 +160,31 @@ Note that if neither *gpg* nor *smime* is specified, we try to determine the met
     * **.smime()**
 ### Signing
   * **sign**: Sign the message.
-    * **--sign**: Blank for user default key or key ID/fingerprint.
+    * **--sign**:
+        * GPG: Blank for user default key or key ID/fingerprint.
+        * S/MIME: Any fetchable contents with key.
+    * **--sign-path**: S/MIME: Filename with the sender\'s private key. (Alternative to `sign` parameter.)
     * **--passphrase**: Passphrase to the key if needed.
     * **--attach-key**: Blank for appending public key to the attachments when sending.
-    * **--cert
-    * **envelope(sign=)**: True for user default key or key ID/fingerprint.
+    * **--cert**: S/MIME: Certificate contents if not included in the key.
+    * **--cert-path**: S/MIME: Filename with the sender's private cert if cert not included in the key. (Alternative to `cert` parameter.)
+    * **envelope(sign=)**:
+        * GPG: True for user default key or key ID/fingerprint.
+        * S/MIME: Key contents.
     * **envelope(passphrase=)**: Passphrase to the key if needed.
     * **envelope(attach_key=)**: Append public key to the attachments when sending.
-    * **.sign(key=, passphrase=, attach_key=False)**: Sign now (and you may specify the parameters)        
-    * **.signature(key=, passphrase=, attach_key=False)**: Sign later (when launched with *.sign()*, *.encrypt()* or *.send()* functions
+    * **envelope(cert=)**: S/MIME: Any fetchable contents.
+    * **.sign(key=, passphrase=, attach_key=False, cert=None)**: Sign now (and you may specify the parameters)        
+    * **.signature(key=, passphrase=, attach_key=False, cert=)**: Sign later (when launched with *.sign()*, *.encrypt()* or *.send()* functions
 ### Encrypting
 If the GPG encryption fails, it tries to determine which recipient misses the key.
 
   * **encrypt**:  Recipient GPG public key or S/MIME certificate to be encrypted with. 
     * **--encrypt**: Key string or blank or 1/true/yes if the key should be in the ring from before. Put 0/false/no to disable `encrypt-path`.
     * **--encrypt-path** *(CLI only)*: Recipient public key stored in a file path. (Alternative to `--encrypt`.)  
-    * **envelope(encrypt=)**: Any fetchable content
-    * **.encrypt(sign=, key=, key_path=)**: With *sign*, you may specify boolean or default signing key ID/fingerprint. If import needed, put your encrypting key contents to *key* or path to the key contents file in *key_path*.
-    * **.encryption(key=, key_path=)**: Encrypt later (when launched with *.sign()*, *.encrypt()* or *.send()* functions. 
+    * **envelope(encrypt=)**: Any fetchable contents
+    * **.encrypt(key=, sign=, key_path=)**: With *sign*, you may specify boolean or default signing key ID/fingerprint for GPG or Any fetchable contents with S/MIME key + signing certificate. If import needed, put your encrypting GPG key contents or S/MIME certificate to *key* or path to the key/certificate contents file in *key_path*.
+    * **.encryption(key=True, key_path=)**: Encrypt later (when launched with *.sign()*, *.encrypt()* or *.send()* functions. If needed, in the parameters specify Any fetchable contents with GPG encryption key or S/MIME encryption certificate. 
   * **to**: E-mail or list. When encrypting, we use keys of these identities.
     * **--to**: One or more e-mail addresses.
     * **envelope(to=)**: E-mail or their list.
@@ -258,12 +269,12 @@ If the GPG encryption fails, it tries to determine which recipient misses the ke
     ```bash
     envelope --attachment "/tmp/file.txt" "displayed-name.txt" "text/plain" --attachment "/tmp/another-file.txt"
     ```
-    * **gpggp(attachments=)**: Attachment or their list. Attachment is defined by any fetchable content, optionally in tuple with the file name to be used in the e-mail and/or mime type: `content [,name] [,mimetype]`
+    * **gpggp(attachments=)**: Attachment or their list. Attachment is defined by any fetchable contents, optionally in tuple with the file name to be used in the e-mail and/or mime type: `content [,name] [,mimetype]`
     ```python3
     envelope(attachments=[(Path("/tmp/file.txt"), "displayed-name.txt", "text/plain"), Path("/tmp/another-file.txt"])
     ```    
     * **.attach(attachment_or_list=, path=, mimetype=, filename=)**: Three different usages.
-        * **.attach(attachment_or_list=, mimetype=, filename=)**: You can put any fetchable content in *attachment_or_list* and optionally mimetype or displayed filename.
+        * **.attach(attachment_or_list=, mimetype=, filename=)**: You can put Any fetchable contents in *attachment_or_list* and optionally mimetype or displayed filename.
         * **.attach(path=, mimetype=, filename=)**: You can specify path and optionally mimetype or displayed filename.
         * **.attach(attachment_or_list=)**: You can put a list of attachments.
     ```python3
@@ -502,11 +513,12 @@ docker run --network=host --restart always -d bytemark/smtp   # starts open port
 envelope --message "SMTP test" --from [your e-mail] --to [your e-mail] --smtp localhost 25 --send
 ```
 
+## Choose ciphering method
 
-## Configure your GPG
+### Configure your GPG
 In order to sign messages, you need a private key. Let's pretend a usecase when your application will run under `www-data` user and GPG sign messages through the keys located at: `/var/www/.gnupg`. You have got a SMTP server with an e-mail account the application may use.
 ```bash 
-GNUPGHOME=/var/www/.gnupg sudo -H -u www-data gpg --full-generate-key  # put application e-mail your are able to send the e-mail from]
+GNUPGHOME=/var/www/.gnupg sudo -H -u www-data gpg --full-generate-key  # put application e-mail your are able to send the e-mail from
 # if the generation fails now because you are on a remote terminal, you may want to change temporarily the ownership of the terminal by the following command: 
 # sudo chown www-data $(tty)  # put it back afterwards
 GNUPGHOME=/var/www/.gnupg sudo -H -u www-data gpg --list-secret-keys  # get key ID
@@ -516,6 +528,15 @@ GNUPGHOME=/var/www/.gnupg sudo -H -u www-data envelope --message "Hello world" -
 
 It takes few hours to a key to propagate. If the key cannot be imported in your e-mail client because not found on the servers, try in the morning again or check the online search form at http://hkps.pool.sks-keyservers.net.  
 Put your fingerprint on the web or on the business card then so that everybody can check your signature is valid.
+
+### Configure your S/MIME
+If you are supposed to use S/MIME, you would probably be told where to take your key and certificate from. If planning to try it all by yourself, generate your `certificate.pem` by this command – and `privkey.pem` will be generated alongside.
+
+```bash
+openssl req -newkey rsa:1024 -nodes -x509 -days 365 -out certificate.pem  # will generate privkey.pem alongside
+```
+
+Now, you may sign a message with your key and certificate. Give your friend the certificate so that they might verify the message comes from you. Receive a certificate from a friend to encrypt them a message with.
 
 ## DNS validation tools
 This is just a short explanation on these anti-spam mechanisms so that you can take basic notion what is going on.

@@ -6,6 +6,8 @@ import logging
 import smtplib
 import subprocess
 import sys
+import tempfile
+import warnings
 from collections import defaultdict
 from configparser import ConfigParser
 from copy import copy
@@ -225,35 +227,34 @@ class Envelope:
     def _get_result(self):
         """ concatenate output string """
         s = "\n".join(self._result)
-        self._result = [s]  # slightly quicker next time if ever containing huge amount of lines
+        self._result = [s]  # slightly quicker next time if ever containing a huge amount of lines
         return s
 
-    #XXXcert = None
     def __init__(self, message=None, output=None, gpg=None, smime=None, headers=None,
-                 sign=None, passphrase=None, attach_key=None,
+                 sign=None, passphrase=None, attach_key=None, cert=None,
                  encrypt=None, to=None, sender=None,
                  subject=None, cc=None, bcc=None, reply_to=None, attachments=None,
                  smtp=None, send=None):
         """
         :rtype: object If output not set, return output bytes, else True/False if output file was correctly written to.
 
-        Any fetchable content means plain text, bytes or stream (ex: from open()).
+        Any fetchable contents means plain text, bytes or stream (ex: from open()).
         In *module interface*, you may use Path object to the file.
         In *CLI interface*, additional flags are provided.
 
         Input / Output
-        :param message: Any fetchable content.
+        :param message: Any fetchable contents.
         :param output: Path to file to be written to (else the contents is returned).
         :param gpg: Home folder of GNUPG rings else default ~/.gnupg is used. Put True for prefer GPG over SMIME.
 
         Signing
-        :param sign: True or key id if the message is to be signed.
+        :param sign: True or key id if the message is to be signed. S/MIME certificate key or Path or stream (ex: from open()).
         :param passphrase: If signing key needs passphrase.
         :param attach_key: If True, public key is appended as an attachment.
-        XXX:param cert: Certificate contents or file path or stream (ex: from open()).
+        :param cert: S/MIME certificate contents or Path or stream (ex: from open()) if certificate not included in the key.
 
         Encrypting
-        :param encrypt: Recipients public key string or file path or stream (ex: from open()).
+        :param encrypt: Recipients public key string or Path or stream (ex: from open()).
         :param to: E-mail or list. If encrypting used so that we choose the key they will be able to decipher with.
         :param sender: E-mail. If encrypting used so that we choose our key to be still able to decipher the message later with.
                         If False, we explicitly declare to give up on deciphering later.
@@ -276,7 +277,7 @@ class Envelope:
         self._sign = None
         self._passphrase = None
         self._attach_key = None
-        #XXXself._cert = None
+        self._cert = None
         self._encrypt = None
         self._to = []
         self._sender = None
@@ -309,6 +310,8 @@ class Envelope:
             elif k == "attach_key":
                 if v is True:
                     self.signature(attach_key=v)
+            elif k == "cert":
+                self.signature(cert=v)
             elif k == "to":
                 self.to(v)
             elif k == "attachments":
@@ -497,30 +500,55 @@ class Envelope:
         self._attachments += assure_list(attachment_or_list)
         return self
 
-    def signature(self, key=True, passphrase=None, attach_key=False):#XXXcert=None
-        if key is True and type(self._sign) is str:
+    def signature(self, key=True, passphrase=None, attach_key=False, cert=None):
+        """
+        Turn signing on.
+        :param key: Signing key
+            * GPG: Blank for user default key or key ID/fingerprint.
+            * S/MIME: Any fetchable contents with key to be signed with. May contain signing certificate as well.
+        :param passphrase: Passphrase to the key if needed.
+        :param attach_key: GPG: Append public key to the attachments when sending.
+        :param cert: S/MIME: Any fetchable contents with certificate to be signed with.
+        """
+        if key is True and self._sign not in [None, False]:
             # usecase envelope().signature(key=fingerprint).send(sign=True) should still have fingerprint in self._sign
             # (and not just "True")
             pass
         else:
+            # GPG: string, S/MIME: fetchable bytes
+            # Do not call assure_fetched(bytes) because in GPG we need key fingerprint string.
             self._sign = key
         if passphrase is not None:
             self._passphrase = passphrase
         if attach_key is not None:
             self._attach_key = attach_key
-        # if cert is not None: XXX
-        #     self._cert = cert
+        if cert is not None:
+            self._cert = assure_fetched(cert, bytes)
         return self
 
-    def sign(self, key=True, passphrase=None, attach_key=False): # XXX cert=None
+    def sign(self, key=True, passphrase=None, attach_key=False, cert=None):
+        """
+        Sign now.
+        :param key: Signing key
+            * GPG: Blank for user default key or key ID/fingerprint.
+            * S/MIME: Any fetchable contents with key to be signed with. May contain signing certificate as well.
+        :param passphrase: Passphrase to the key if needed.
+        :param attach_key: GPG: Append public key to the attachments when sending.
+        :param cert: S/MIME: Any fetchable contents with certificate to be signed with.
+        """
         self._processed = True
-        self.signature(key=key, passphrase=passphrase, attach_key=attach_key) # XXX cert=cert
+        self.signature(key=key, passphrase=passphrase, attach_key=attach_key, cert=cert)
         return self._start(sign=True)
 
     def encryption(self, key=True, *, key_path=None):
+        """
+        Turn encrypting on.
+        :param key: Any fetchable contents with recipient GPG public key or S/MIME certificate to be encrypted with.
+        :param key_path: Path to a file with `key`.
+        """
         if key_path:
             key = Path(key_path)
-        if key is True and type(self._encrypt) is str:
+        if key is True and self._encrypt not in [None, False]:
             # usecase envelope().encrypt(key="keystring").send(encrypt=True) should still have key in self._encrypt
             # (and not just "True")
             pass
@@ -528,42 +556,53 @@ class Envelope:
             self._encrypt = assure_fetched(key, bytes)
         return self
 
-    def encrypt(self, sign=None, key=True, *, key_path=None):
+    def encrypt(self, key=True, sign=None, *, key_path=None):
+        """
+        Encrypt now.
+        :param key: True (for default GPG key) or any fetchable contents with recipient GPG public key or S/MIME certificate
+                    to be encrypted with.
+        :param sign: Turn signing on.
+            * GPG: True or default signing key ID/fingerprint.
+            * S/MIME: Any fetchable contents having the key + signing certificate combined in a single file.
+              (If not in a single file, use .signature() method.)
+        :param key_path: Path to a file with `key`.
+        """
         self._processed = True
         self.encryption(key=key, key_path=key_path)
         return self._start(encrypt=True, sign=sign)
 
     def send(self, send=True, sign=None, encrypt=None):
         """
-        Send e-mail contents. To check e-mail was succesfully sent, cast the returned object to bool.
-        :param send: True – send, False print debug information
-        :param sign:
-        :param encrypt:
+        Send e-mail contents. To check e-mail was successfully sent, cast the returned object to bool.
+        :param send: True to send now, False to print debug information.
+        :param sign: Turn signing on.
+            * GPG: True or default signing key ID/fingerprint.
+            * S/MIME: Any fetchable contents having the key + signing certificate combined in a single file.
+              (If not in a single file, use .signature() method.)
+        :param encrypt: Any fetchable contents with recipient GPG public key or S/MIME certificate to be encrypted with.
         :return:
         """
         if self._processed:
             raise RuntimeError("Cannot call .send() after .sign()/.encrypt()."
                                " You probably wanted to use .signature()/.encryption() instead.")
+        return self._start(sign=sign, encrypt=encrypt, send=send)
+
+    def _start(self, sign=None, encrypt=None, send=None):
+        """ Start processing. Either sign, encrypt or send the message and possibly set bool status of the object to True. """
         if sign is not None:
             self.signature(sign)
         if encrypt is not None:
             self.encryption(encrypt)
-        return self._start(sign=sign, encrypt=encrypt, send=send)
 
-    def _start(self, sign=False, encrypt=False, send=None):
-        """ Start processing. Either sign, encrypt or send the message and possibly set bool status of the object to True. """
         # check if there is something to do
-        if self._sign is not None:
-            sign = self._sign
-        if self._encrypt is not None:
-            encrypt = self._encrypt
-        if sign is not True and encrypt is None and send is None:
+        sign = self._sign
+        encrypt = self._encrypt
+        if sign is None and encrypt is None and send is None:
             logger.warning("There is nothing to do – no signing, no encrypting, no sending.")
             return
 
         # assure streams are fetched and files are read from their paths
         data = self._message
-        encrypt = self._encrypt
         # we need a message
         if data is None:
             logger.error("Missing message")
@@ -612,28 +651,19 @@ class Envelope:
                 elif sign:
                     data, micalg = self._sign_gpg_now(data, sign, send)
             else:
-                d = self._encrypt_smime_now(email.as_bytes(), sign, encrypt)
-                data = BytesParser().parsebytes(d.strip())
-
-                if 0:  # XXX delete when working
-                    if encrypt:
-                        d = self._encrypt_smime_now(email.as_bytes(), sign, encrypt)  # XXX
-                        data = BytesParser().parsebytes(d.strip())
-                    elif sign:
-                        raise NotImplementedError("S/MIME signing not yet implemented.")
-            if not data:
+                d = self._encrypt_smime_now(data, sign, encrypt)
+                email = BytesParser().parsebytes(d.strip())  # smime always produces a Message object, not raw data
+            if (gpg_on and not data) or (not gpg_on and not email):
                 logger.error("Signing/encrypting failed.")
                 return
 
         # sending email message object
         if send is not None:
-            if gpg_on:
+            if gpg_on:  # smime does not need additional EmailMessage to be included in
                 if encrypt:
                     email = self._compose_gpg_encrypted(data)
                 elif sign:  # gpg
                     email = self._compose_gpg_signed(email, data, micalg)
-            else:  # smime does not need additional EmailMessage to be included in
-                email = data
             email = self._send_now(email, encrypt, gpg_on, send)
             if not email:
                 return
@@ -725,7 +755,8 @@ class Envelope:
         if exc:
             raise RuntimeError("Encrypt key present. " + ", ".join(exc))
         if type(encrypt) is str:  # when True all keys are supposed to be in the keyring
-            # XX what if this is a key-id?
+            # XX it should be possible to pass a key-id too, not only the key-data
+            # XXX multiple recipients allowed
             self._gnupg.import_keys(encrypt)
         deciphering = set(self._to + self._cc + self._bcc + ([self._sender] if self._sender else []))
         status = self._gnupg.encrypt(
@@ -760,46 +791,50 @@ class Envelope:
             return False
 
     def _encrypt_smime_now(self, email, sign, encrypt):
-        # XXX encrypt může mít key a cert zvlášť, umožni dva parametry!
-        # XXX potřebuje GPG taky někdy dva fily?
-        from M2Crypto import BIO, Rand, SMIME, X509, EVP  # it is quicker to import the files here than at the beginning XXX yes?
+        with warnings.catch_warnings():
+            # m2crypto.py:13: DeprecationWarning: the imp module is deprecated in favour of importlib;
+            # see the module's documentation for alternative uses import imp
+            warnings.simplefilter("ignore", category=DeprecationWarning)
+            from M2Crypto import BIO, Rand, SMIME, X509, EVP  # we save up to 30 - 120 ms to load it here
         output_buffer = BIO.MemoryBuffer()
         signed_buffer = BIO.MemoryBuffer()
         content_buffer = BIO.MemoryBuffer(email)
 
         # Seed the PRNG.
-        Rand.load_file('randpool.dat', -1)  # XXX open this on memory or at least at temp
+        temp = str(Path(tempfile.gettempdir(), 'envelope-randpool.dat'))
+        Rand.load_file(temp, -1)
 
         # Instantiate an SMIME object.
-        s = SMIME.SMIME()
+        smime = SMIME.SMIME()
 
         if sign:
             # Since s.load_key shall not accept file contents, we have to set the variables manually
-            sign = Path(sign).read_bytes()  # XXX tohle dej pryč, jakmile --sign bude umět udělat taky fetchable content
-            # s.load_key("/tmp/ram/key.pem", callback=lambda x: bytes(unix_getpass(), 'ascii'))
+            sign = assure_fetched(sign, bytes)
             # XX remove getpass conversion to bytes callback when https://gitlab.com/m2crypto/m2crypto/issues/260 is resolved
-            # XXX test:ať to zvládne podepsaný i nepodepsaný sign file
-            cb = (lambda x: self._passphrase) if self._passphrase else (lambda x: bytes(getpass(), 'ascii'))
-            s.pkey = EVP.load_key_string(sign, callback=cb)
-            cert = Path("/tmp/ram/cert.pem").read_bytes()  # XXX certifikát může a nemusí být v sign
-            s.x509 = X509.load_cert_string(cert)
-            p7 = s.sign(content_buffer, SMIME.PKCS7_DETACHED)
-            if not encrypt:
-                s.write(output_buffer, p7, content_buffer)
+            cb = (lambda x: bytes(self._passphrase, 'ascii')) if self._passphrase else (lambda x: bytes(getpass(), 'ascii'))
+            smime.pkey = EVP.load_key_string(sign, callback=cb)
+            if self._cert:
+                cert = self._cert
             else:
-                s.write(signed_buffer, p7)
+                cert = sign
+            smime.x509 = X509.load_cert_string(cert)
+            p7 = smime.sign(content_buffer, SMIME.PKCS7_DETACHED)
+            if not encrypt:
+                smime.write(output_buffer, p7, content_buffer)
+            else:
+                smime.write(signed_buffer, p7)
                 content_buffer = signed_buffer
         if encrypt:
             sk = X509.X509_Stack()
-            sk.push(X509.load_cert_string(encrypt))  # XXX multiple recipients
-            s.set_x509_stack(sk)
-            s.set_cipher(SMIME.Cipher('des_ede3_cbc'))  # Set cipher: 3-key triple-DES in CBC mode.
+            sk.push(X509.load_cert_string(encrypt))  # XXX multiple recipients - may be loaded from a directory by from, to, sender?
+            smime.set_x509_stack(sk)
+            smime.set_cipher(SMIME.Cipher('des_ede3_cbc'))  # Set cipher: 3-key triple-DES in CBC mode.
 
             # Encrypt the buffer.
-            p7 = s.encrypt(content_buffer)
-            s.write(output_buffer, p7)
+            p7 = smime.encrypt(content_buffer)
+            smime.write(output_buffer, p7)
 
-        Rand.save_file('randpool.dat')
+        Rand.save_file(temp)
         return output_buffer.read()
 
     def _compose_gpg_signed(self, email, text, micalg=None):
@@ -989,11 +1024,18 @@ def _cli():
     parser.add_argument('--smime', action="store_true", help='Leave blank for prefer S/MIME over GPG.')
     parser.add_argument('--check', action="store_true", help='Check SMTP server connection')
 
-    parser.add_argument('--sign', help='Sign the message. Blank for user default key or key ID/fingerprint.', nargs="?",
-                        action=BlankTrue, metavar="FINGERPRINT")
+    parser.add_argument('--sign', help='Sign the message.'
+                                       ' GPG: Blank for user default key or key ID/fingerprint.'
+                                       ' S/MIME: Key data.', nargs="?",
+                        action=BlankTrue, metavar="FINGERPRINT|CONTENTS")
+    parser.add_argument('--cert', help='S/MIME: Certificate contents if not included in the key.',
+                        action=BlankTrue, metavar="CONTENTS")
     parser.add_argument('--passphrase', help='If signing key needs passphrase.')
-    parser.add_argument('--sign-path', help='Filename with the sender\'s S\MIME private key. (Alternative to `sign` parameter.)',
-                        metavar="KEY-PATH [CERT-PATH]")  # XXX
+    parser.add_argument('--sign-path', help='S/MIME: Filename with the sender\'s private key. (Alternative to `sign` parameter.)',
+                        metavar="KEY-PATH")
+    parser.add_argument('--cert-path', help='S/MIME: Filename with the sender\'s S/MIME private cert'
+                                            ' if cert not included in the key. (Alternative to `cert` parameter.)',
+                        metavar="CERT-PATH")
 
     parser.add_argument('--encrypt', help='Recipients public key string or 1 or true if the key should be in the ring from before.',
                         nargs="?", action=BlankTrue, metavar="GPG-KEY/SMIME-CERTIFICATE-CONTENTS")
@@ -1050,16 +1092,22 @@ def _cli():
     # user specified encrypt key in a path. And did not disabled encryption
     if args["encrypt_path"] and args["encrypt"] is not False:
         if args["encrypt"] not in [True, None]:  # user has specified both path and the key
-            raise RuntimeError("Cannot define both encrypt key contents and encrypt key path.")
+            raise RuntimeError("Cannot define both encrypt key data and encrypt key path.")
         args["encrypt"] = Path(args["encrypt_path"])
     del args["encrypt_path"]
 
     # user specified sign key in a path. And did not disabled signing
     if args["sign_path"] and args["sign"] is not False:
         if args["sign"] not in [True, None]:  # user has specified both path and the key
-            raise RuntimeError("Cannot define both sign key contents and sign key path.")
+            raise RuntimeError("Cannot define both sign key data and sign key path.")
         args["sign"] = Path(args["sign_path"])
-    del args["sign_path"]  # XXX optional cert key path A PAK JESTE DOKUMENTOVAT
+    del args["sign_path"]
+
+    if args["cert_path"]:
+        if args["cert"] is not None:
+            raise RuntimeError("Cannot define both cert and cert-path.")
+        args["cert"] = Path(args["cert_path"])
+    del args["cert_path"]
 
     # smtp can be a dict
     if args["smtp"] and args["smtp"][0].startswith("{"):
