@@ -17,6 +17,7 @@ envelope("my message")
 ```
 
 - [Installation](#installation)
+  * [Bash completion](#bash-completion)
 - [Usage](#usage)
   * [CLI](#cli)
   * [Module: one-liner function](#module-one-liner-function)
@@ -68,6 +69,11 @@ pip3 install git+https://github.com/CZ-NIC/envelope.git
 ```bash
 sudo apt install gpg
 ```
+
+## Bash completion
+1. Run: apt-get install bash-completion jq
+2. Copy: extra/convey-autocompletion.bash to /etc/bash_completion.d/
+3. Restart terminal
 
 # Usage
 As an example, let's produce in three equal ways an `output_file` with the GPG-encrypted "Hello world" content.
@@ -153,7 +159,7 @@ Note that if neither *gpg* nor *smime* is specified, we try to determine the met
   * **gpg**: True to prefer GPG over S/MIME or home path to GNUPG rings (otherwise default ~/.gnupg is used)
     * **--gpg [path]**
     * **envelope(gpg=True)**
-    * **.gpg(path=True)**
+    * **.gpg(gnugp_home=True)**
   * **.smime**: Prefer S/MIME over GPG
     * **--smime**
     * **envelope(smime=True)**
@@ -165,17 +171,17 @@ Note that if neither *gpg* nor *smime* is specified, we try to determine the met
         * S/MIME: Any fetchable contents with key.
     * **--sign-path**: S/MIME: Filename with the sender\'s private key. (Alternative to `sign` parameter.)
     * **--passphrase**: Passphrase to the key if needed.
-    * **--attach-key**: Blank for appending public key to the attachments when sending.
+    * **--attach-key**: GPG: Blank for appending public key to the attachments when sending.
     * **--cert**: S/MIME: Certificate contents if not included in the key.
     * **--cert-path**: S/MIME: Filename with the sender's private cert if cert not included in the key. (Alternative to `cert` parameter.)
     * **envelope(sign=)**:
         * GPG: True for user default key or key ID/fingerprint.
         * S/MIME: Key contents.
     * **envelope(passphrase=)**: Passphrase to the key if needed.
-    * **envelope(attach_key=)**: Append public key to the attachments when sending.
+    * **envelope(attach_key=)**: GPG: Append public key to the attachments when sending.
     * **envelope(cert=)**: S/MIME: Any fetchable contents.
-    * **.sign(key=, passphrase=, attach_key=False, cert=None)**: Sign now (and you may specify the parameters)        
-    * **.signature(key=, passphrase=, attach_key=False, cert=)**: Sign later (when launched with *.sign()*, *.encrypt()* or *.send()* functions
+    * **.sign(key=, passphrase=, attach_key=False, cert=None, key_path=None)**: Sign now (and you may specify the parameters)         
+    * **.signature(key=, passphrase=, attach_key=False, cert=None, key_path=None)**: Sign later (when launched with *.sign()*, *.encrypt()* or *.send()* functions
 ### Encrypting
 If the GPG encryption fails, it tries to determine which recipient misses the key.
 
@@ -183,7 +189,7 @@ If the GPG encryption fails, it tries to determine which recipient misses the ke
     * **--encrypt**: Key string or blank or 1/true/yes if the key should be in the ring from before. Put 0/false/no to disable `encrypt-path`.
     * **--encrypt-path** *(CLI only)*: Recipient public key stored in a file path. (Alternative to `--encrypt`.)  
     * **envelope(encrypt=)**: Any fetchable contents
-    * **.encrypt(key=, sign=, key_path=)**: With *sign*, you may specify boolean or default signing key ID/fingerprint for GPG or Any fetchable contents with S/MIME key + signing certificate. If import needed, put your encrypting GPG key contents or S/MIME certificate to *key* or path to the key/certificate contents file in *key_path*.
+    * **.encrypt(key=True, sign=, key_path=)**: With *sign*, you may specify boolean or default signing key ID/fingerprint for GPG or Any fetchable contents with S/MIME key + signing certificate. If import needed, put your encrypting GPG key contents or S/MIME certificate to *key* or path to the key/certificate contents file in *key_path*.
     * **.encryption(key=True, key_path=)**: Encrypt later (when launched with *.sign()*, *.encrypt()* or *.send()* functions. If needed, in the parameters specify Any fetchable contents with GPG encryption key or S/MIME encryption certificate. 
   * **to**: E-mail or list. When encrypting, we use keys of these identities.
     * **--to**: One or more e-mail addresses.
@@ -530,13 +536,22 @@ It takes few hours to a key to propagate. If the key cannot be imported in your 
 Put your fingerprint on the web or on the business card then so that everybody can check your signature is valid.
 
 ### Configure your S/MIME
-If you are supposed to use S/MIME, you would probably be told where to take your key and certificate from. If planning to try it all by yourself, generate your `certificate.pem` by this command – and `privkey.pem` will be generated alongside.
-
+If you are supposed to use S/MIME, you would probably be told where to take your key and certificate from. If planning to try it all by yourself, generate your `certificate.pem`.
+ 
+* Either: Do you have private key?
+```bash
+openssl req -key YOUR-KEY.pem -nodes -x509 -days 365 -out certificate.pem  # will generate privkey.pem alongside
+```
+ 
+* Or: Do not you have private key? 
 ```bash
 openssl req -newkey rsa:1024 -nodes -x509 -days 365 -out certificate.pem  # will generate privkey.pem alongside
 ```
 
-Now, you may sign a message with your key and certificate. Give your friend the certificate so that they might verify the message comes from you. Receive a certificate from a friend to encrypt them a message with.
+Now, you may sign a message with your key and certificate. (However, the messages **will not be trustworthy** because no authority signed the certificate.) Give your friend the certificate so that they might verify the message comes from you. Receive a certificate from a friend to encrypt them a message with.
+```
+envelope --message "Hello world" --subject "S/MIME signing test" --sign-path [key file] --cert-path [certificate file] --from [application e-mail] --to [your e-mail] --send # you now receive e-mail
+```
 
 ## DNS validation tools
 This is just a short explanation on these anti-spam mechanisms so that you can take basic notion what is going on.

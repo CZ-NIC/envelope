@@ -34,7 +34,7 @@ class TestSmime(TestEnvelope):
         #
         # ------DD291FCCF0F9F19D858D1A9200251EA5
         #
-        #
+        # dumb message
         # ------DD291FCCF0F9F19D858D1A9200251EA5
         # Content-Type: application/x-pkcs7-signature; name="smime.p7s"
         # Content-Transfer-Encoding: base64
@@ -43,15 +43,16 @@ class TestSmime(TestEnvelope):
         # MIIEggYJKoZIhvcNAQcCoIIEczCCBG8CAQExCzAJBgUrDgMCGgUAMAsGCSqGSIb3
         # DQEHAaCCAmwwggJoMIIB0aADAgECAhROmwkIH63oarp3NpQqFoKTy1Q3tTANBgkq
         # ... other lines changes every time
-        self._check_lines(envelope("message")
+        self._check_lines(envelope("dumb message")
                           .smime()
                           .signature(Path("tests/smime/key.pem"), cert=Path("tests/smime/cert.pem"))
                           .sign(),
                           ('Content-Disposition: attachment; filename="smime.p7s"',
-                           "MIIEggYJKoZIhvcNAQcCoIIEczCCBG8CAQExCzAJBgUrDgMCGgUAMAsGCSqGSIb3"))
+                           "MIIEggYJKoZIhvcNAQcCoIIEczCCBG8CAQExCzAJBgUrDgMCGgUAMAsGCSqGSIb3",
+                           "dumb message"), 10)
 
     def test_smime_key_cert_together(self):
-        self._check_lines(envelope("message")
+        self._check_lines(envelope("dumb message")
                           .smime()
                           .signature(Path("tests/smime/key-cert-together.pem"))
                           .sign(),
@@ -59,7 +60,7 @@ class TestSmime(TestEnvelope):
                            "MIIEggYJKoZIhvcNAQcCoIIEczCCBG8CAQExCzAJBgUrDgMCGgUAMAsGCSqGSIb3"))
 
     def test_smime_key_cert_together_passphrase(self):
-        self._check_lines(envelope("message")
+        self._check_lines(envelope("dumb message")
                           .smime()
                           .signature(Path("tests/smime/key-cert-together-passphrase.pem"), passphrase="test")
                           .sign(),
@@ -81,11 +82,13 @@ class TestSmime(TestEnvelope):
         # jBl/v6gDTRoEEjnb8RAkyvDJ7d6OOokgFOfCfTAUOBoZhZrqMCsGCSqGSIb3DQEH
         # ATAUBggqhkiG9w0DBwQIt4seJLnZZW+ACBRKsu4Go7lm
 
-        self._check_lines(envelope("message")
+        self._check_lines(envelope("dumb message")
                           .smime()
                           .encrypt(Path("tests/smime/cert.pem")),
                           ('Content-Type: application/x-pkcs7-mime; smime-type=enveloped-data; name="smime.p7m"',
                            "Z2l0cyBQdHkgTHRkAhROmwkIH63oarp3NpQqFoKTy1Q3tTANBgkqhkiG9w0BAQEF"))
+
+        # XX decrypt test https://m2crypto.readthedocs.io/en/latest/howto.smime.html#decrypt
 
 
 class TestGPG(TestEnvelope):
@@ -102,7 +105,7 @@ class TestGPG(TestEnvelope):
         # -----BEGIN PGP SIGNED MESSAGE-----
         # Hash: SHA512
         #
-        # message
+        # dumb message
         # -----BEGIN PGP SIGNATURE-----
         #
         # iQGzBAEBCgAdFiEE8U8ugJfgzN6TxOhx9KTyZ3n6A7sFAl3xGeEACgkQ9KTyZ3n6
@@ -113,12 +116,12 @@ class TestGPG(TestEnvelope):
         # =qCHO
         # -----END PGP SIGNATURE-----
 
-        self._check_lines(envelope("message")
+        self._check_lines(envelope("dumb message")
                           .gpg("tests/gpg_ring/")
                           .sign(),
-                          ('-----BEGIN PGP SIGNATURE-----',
-                           '-----END PGP SIGNATURE-----',))
-        pass
+                          ('dumb message',
+                           '-----BEGIN PGP SIGNATURE-----',
+                           '-----END PGP SIGNATURE-----',), 10)
 
     def test_gpg_encrypt_message(self):
         # Message will look like this:
@@ -131,7 +134,7 @@ class TestGPG(TestEnvelope):
         # =rK+/
         # -----END PGP MESSAGE-----
 
-        self._check_lines(envelope("message")
+        self._check_lines(envelope("dumb message")
                           .gpg("tests/gpg_ring/")
                           .from_("envelope-example-identity@example.com")
                           .to("envelope-example-identity-2@example.com")
@@ -169,20 +172,23 @@ class TestGPG(TestEnvelope):
         #
         # --===============1001129828818615570==--
 
-        self._check_lines(envelope("message")
+        self._check_lines(envelope("dumb message")
                           .to("envelope-example-identity-2@example.com")
                           .gpg("tests/gpg_ring/")
                           .from_("envelope-example-identity@example.com")
+                          .subject("dumb subject")
                           .encryption()
                           .send(False),
-                          ("Encrypted message: b'message'",
+                          ("Encrypted message: b'dumb message'",
+                           "Encrypted subject: dumb subject",
+                           "Subject: Encrypted message",
                            "To: envelope-example-identity-2@example.com",
                            "From: envelope-example-identity@example.com",
-                           'Content-Type: multipart/encrypted; protocol="application/pgp-encrypted";',
-                           "Encrypted message: b'message'"), 10)
+                           'Content-Type: multipart/encrypted; protocol="application/pgp-encrypted";'
+                           ), 10)
 
     def test_gpg_sign_passphrase(self):
-        self._check_lines(envelope("message")
+        self._check_lines(envelope("dumb message")
                           .to("envelope-example-identity-2@example.com")
                           .gpg("tests/gpg_ring/")
                           .from_("envelope-example-identity@example.com")

@@ -4,12 +4,16 @@
 - CHANGED:
     * `encrypt-file` changed to `encrypt-path` (to match the `encrypt_path` parameter of the `encrypt` method)
     * parameter swap from `.encrypt(sign=None, key=True)` to `.encrypt(key=True, sign=None)` due to S/MIME that does not take the key from the GPG keyring but needs the certificate to be specified every time. 
-- S\MIME signing (`M2Crypto` instead of `smime` package)
+- S\MIME
+    * signing (`M2Crypto` instead of `smime` package)
+    * insert subject while encrypting
 - unit tests + travis build status
 - SMTP
     * if SMTP/INI file is given as a relative path and not found at CWD, we try program directory (useful when importing envelope as a library from another program)
     * TLS security supported
     * if security not defined, determined by port
+- bash completion
+- --quiet flag
 
 ## 0.9.4 (2019-12-03)
 - fix launching with no flags (bare message erroneously tried to be GPG-signed by default)

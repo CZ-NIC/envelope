@@ -311,7 +311,7 @@ class Envelope:
                 if v is True:
                     self.signature(attach_key=v)
             elif k == "cert":
-                self.signature(cert=v)
+                self.signature(None,cert=v)
             elif k == "to":
                 self.to(v)
             elif k == "attachments":
@@ -500,7 +500,7 @@ class Envelope:
         self._attachments += assure_list(attachment_or_list)
         return self
 
-    def signature(self, key=True, passphrase=None, attach_key=False, cert=None):
+    def signature(self, key=True, passphrase=None, attach_key=False, cert=None, *, key_path=None):
         """
         Turn signing on.
         :param key: Signing key
@@ -509,12 +509,15 @@ class Envelope:
         :param passphrase: Passphrase to the key if needed.
         :param attach_key: GPG: Append public key to the attachments when sending.
         :param cert: S/MIME: Any fetchable contents with certificate to be signed with.
+        :param key_path: Path to a file with the `key`.
         """
+        if key_path:
+            key = Path(key_path)
         if key is True and self._sign not in [None, False]:
             # usecase envelope().signature(key=fingerprint).send(sign=True) should still have fingerprint in self._sign
             # (and not just "True")
             pass
-        else:
+        elif key is not None:
             # GPG: string, S/MIME: fetchable bytes
             # Do not call assure_fetched(bytes) because in GPG we need key fingerprint string.
             self._sign = key
@@ -523,10 +526,13 @@ class Envelope:
         if attach_key is not None:
             self._attach_key = attach_key
         if cert is not None:
+            if self._gpg is None:  # since cert is only for S/MIME, set S/MIME signing
+                self.smime()
+                self._gpg = False
             self._cert = assure_fetched(cert, bytes)
         return self
 
-    def sign(self, key=True, passphrase=None, attach_key=False, cert=None):
+    def sign(self, key=True, passphrase=None, attach_key=False, cert=None, *, key_path=None):
         """
         Sign now.
         :param key: Signing key
@@ -535,16 +541,17 @@ class Envelope:
         :param passphrase: Passphrase to the key if needed.
         :param attach_key: GPG: Append public key to the attachments when sending.
         :param cert: S/MIME: Any fetchable contents with certificate to be signed with.
+        :param key_path: Path to a file with the `key`.
         """
         self._processed = True
-        self.signature(key=key, passphrase=passphrase, attach_key=attach_key, cert=cert)
+        self.signature(key=key, passphrase=passphrase, attach_key=attach_key, cert=cert, key_path=key_path)
         return self._start(sign=True)
 
     def encryption(self, key=True, *, key_path=None):
         """
         Turn encrypting on.
         :param key: Any fetchable contents with recipient GPG public key or S/MIME certificate to be encrypted with.
-        :param key_path: Path to a file with `key`.
+        :param key_path: Path to a file with the `key`.
         """
         if key_path:
             key = Path(key_path)
@@ -552,7 +559,7 @@ class Envelope:
             # usecase envelope().encrypt(key="keystring").send(encrypt=True) should still have key in self._encrypt
             # (and not just "True")
             pass
-        else:
+        elif key is not None:
             self._encrypt = assure_fetched(key, bytes)
         return self
 
@@ -565,7 +572,7 @@ class Envelope:
             * GPG: True or default signing key ID/fingerprint.
             * S/MIME: Any fetchable contents having the key + signing certificate combined in a single file.
               (If not in a single file, use .signature() method.)
-        :param key_path: Path to a file with `key`.
+        :param key_path: Path to a file with the `key`.
         """
         self._processed = True
         self.encryption(key=key, key_path=key_path)
@@ -659,11 +666,13 @@ class Envelope:
 
         # sending email message object
         if send is not None:
-            if gpg_on:  # smime does not need additional EmailMessage to be included in
+            if gpg_on:
                 if encrypt:
                     email = self._compose_gpg_encrypted(data)
                 elif sign:  # gpg
                     email = self._compose_gpg_signed(email, data, micalg)
+            else:  # smime does not need additional EmailMessage to be included in
+                email["Subject"] = self._subject
             email = self._send_now(email, encrypt, gpg_on, send)
             if not email:
                 return
@@ -818,10 +827,12 @@ class Envelope:
             else:
                 cert = sign
             smime.x509 = X509.load_cert_string(cert)
-            p7 = smime.sign(content_buffer, SMIME.PKCS7_DETACHED)
             if not encrypt:
+                p7 = smime.sign(content_buffer, SMIME.PKCS7_DETACHED)
+                content_buffer = BIO.MemoryBuffer(email)  # we have to recreate it because it was sucked out
                 smime.write(output_buffer, p7, content_buffer)
             else:
+                p7 = smime.sign(content_buffer)
                 smime.write(signed_buffer, p7)
                 content_buffer = signed_buffer
         if encrypt:
@@ -1041,12 +1052,12 @@ def _cli():
                         nargs="?", action=BlankTrue, metavar="GPG-KEY/SMIME-CERTIFICATE-CONTENTS")
     parser.add_argument('--encrypt-path', help='Filename with the recipient\'s public key. (Alternative to `encrypt` parameter.)',
                         metavar="PATH")
-    parser.add_argument('--to', help="E-mail – needed to choose their key if encrypting", nargs="+", metavar="E-MAIL")
+    parser.add_argument('-t', '--to', help="E-mail – needed to choose their key if encrypting", nargs="+", metavar="E-MAIL")
     parser.add_argument('--cc', help="E-mail or list", nargs="+", metavar="E-MAIL")
     parser.add_argument('--bcc', help="E-mail or list", nargs="+", metavar="E-MAIL")
     parser.add_argument('--reply-to', help="Header that states e-mail to be replied to. The field is not encrypted.",
                         metavar="E-MAIL")
-    parser.add_argument('--from', help="Alias of --sender", metavar="E-MAIL")
+    parser.add_argument('-f', '--from', help="Alias of --sender", metavar="E-MAIL")
     parser.add_argument('--sender', help="E-mail – needed to choose our key if encrypting", metavar="E-MAIL")
     parser.add_argument('--no-sender', action="store_true",
                         help="We explicitly say we do not want to decipher later if encrypting.")
@@ -1057,7 +1068,7 @@ def _cli():
     parser.add_argument('--attach-key', help="Appending public key to the attachments when sending.", action="store_true")
 
     parser.add_argument('--send', help="Send e-mail. Blank to send now.", nargs="?", action=BlankTrue)
-    parser.add_argument('--subject', help="E-mail subject")
+    parser.add_argument('-s', '--subject', help="E-mail subject")
     parser.add_argument('--smtp', help="SMTP server. List `host, [port, [username, password, [security]]]` or dict.\n"
                                        "Ex: '--smtp {\"host\": \"localhost\", \"port\": 25}'."
                                        " Security may be explicitly set to 'starttls', 'tls' or automatically determined by port.",
@@ -1065,9 +1076,13 @@ def _cli():
     parser.add_argument('--header',
                         help="Any e-mail header in the form `name value`. Flag may be used multiple times.",
                         nargs=2, action="append", metavar=("NAME", "VALUE"))
+    parser.add_argument('-q', '--quiet', help="Quiet output", action="store_true")
 
     # envelope = Envelope()
     args = vars(parser.parse_args())
+
+    # cli arguments
+    quiet = args.pop("quiet")
 
     # in command line, we may specify input message by path (in module we would rather call message=Path("path"))
     if args["input"]:
@@ -1157,7 +1172,8 @@ def _cli():
 
     res = Envelope(**args)
     if res:
-        print(res)
+        if not quiet:
+            print(res)
     else:
         sys.exit(1)
 
