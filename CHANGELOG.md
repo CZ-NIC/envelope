@@ -1,6 +1,9 @@
 # CHANGELOG
 
-## 0.9.5 (unreleased)
+## 0.9.6 (2020-01-14)
+- fix: Subject tried to be re-set when no GPG neither S/MIME used
+
+## 0.9.5 (2019-12-12)
 - CHANGED:
     * `encrypt-file` changed to `encrypt-path` (to match the `encrypt_path` parameter of the `encrypt` method)
     * parameter swap from `.encrypt(sign=None, key=True)` to `.encrypt(key=True, sign=None)` due to S/MIME that does not take the key from the GPG keyring but needs the certificate to be specified every time. 

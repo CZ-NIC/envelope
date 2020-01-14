@@ -9,7 +9,7 @@ from envelope import envelope
 logging.basicConfig(stream=sys.stderr, level=logging.WARNING)
 
 
-class TestEnvelope(unittest.TestCase):
+class TestAbstract(unittest.TestCase):
     def _check_lines(self, o, lines: Tuple[str, ...], longer=None, print_=False):
         """ Converts Envelope objects to str and asserts that lines are present. """
         output = str(o).splitlines()
@@ -21,7 +21,16 @@ class TestEnvelope(unittest.TestCase):
             self.assertGreater(len(output), longer)
 
 
-class TestSmime(TestEnvelope):
+class TestEnvelope(TestAbstract):
+    def test_message_generating(self):
+        self._check_lines(envelope("dumb message")
+                          .subject("my subject")
+                          .send(False),
+                          ("Subject: my subject",
+                           "dumb message",), 10)
+
+
+class TestSmime(TestAbstract):
     # create a key and its certificate valid for 100 years
     # openssl req -newkey rsa:1024 -nodes -x509 -days 36500 -out certificate.pem
 
@@ -45,11 +54,15 @@ class TestSmime(TestEnvelope):
         # ... other lines changes every time
         self._check_lines(envelope("dumb message")
                           .smime()
+                          .subject("my subject")
+                          .reply_to("test-reply@example.com")
                           .signature(Path("tests/smime/key.pem"), cert=Path("tests/smime/cert.pem"))
-                          .sign(),
+                          .send(False),
                           ('Content-Disposition: attachment; filename="smime.p7s"',
                            "MIIEggYJKoZIhvcNAQcCoIIEczCCBG8CAQExCzAJBgUrDgMCGgUAMAsGCSqGSIb3",
-                           "dumb message"), 10)
+                           "dumb message",
+                           "Subject: my subject",
+                           "Reply-To: test-reply@example.com"), 10)
 
     def test_smime_key_cert_together(self):
         self._check_lines(envelope("dumb message")
@@ -65,7 +78,7 @@ class TestSmime(TestEnvelope):
                           .signature(Path("tests/smime/key-cert-together-passphrase.pem"), passphrase="test")
                           .sign(),
                           ('Content-Disposition: attachment; filename="smime.p7s"',
-                           "MIIEggYJKoZIhvcNAQcCoIIEczCCBG8CAQExCzAJBgUrDgMCGgUAMAsGCSqGSIb3"), 20)
+                           "MIIEggYJKoZIhvcNAQcCoIIEczCCBG8CAQExCzAJBgUrDgMCGgUAMAsGCSqGSIb3"), 10)
 
     def test_smime_encrypt(self):
         # Message will look that way:
@@ -81,17 +94,21 @@ class TestSmime(TestEnvelope):
         # nnXprxG2Q+/0GHJw48R1/B2d4Ln1sYJe5BXl3LVr7QWpwPb+62AZ1TN8793jSic6
         # jBl/v6gDTRoEEjnb8RAkyvDJ7d6OOokgFOfCfTAUOBoZhZrqMCsGCSqGSIb3DQEH
         # ATAUBggqhkiG9w0DBwQIt4seJLnZZW+ACBRKsu4Go7lm
-
         self._check_lines(envelope("dumb message")
                           .smime()
-                          .encrypt(Path("tests/smime/cert.pem")),
+                          .reply_to("test-reply@example.com")
+                          .subject("my message")
+                          .encryption(Path("tests/smime/cert.pem"))
+                          .send(False),
                           ('Content-Type: application/x-pkcs7-mime; smime-type=enveloped-data; name="smime.p7m"',
-                           "Z2l0cyBQdHkgTHRkAhROmwkIH63oarp3NpQqFoKTy1Q3tTANBgkqhkiG9w0BAQEF"))
+                           "Z2l0cyBQdHkgTHRkAhROmwkIH63oarp3NpQqFoKTy1Q3tTANBgkqhkiG9w0BAQEF",
+                           "Subject: my message",
+                           "Reply-To: test-reply@example.com"), 10)
 
         # XX decrypt test https://m2crypto.readthedocs.io/en/latest/howto.smime.html#decrypt
 
 
-class TestGPG(TestEnvelope):
+class TestGPG(TestAbstract):
     # Example identity
     #   envelope-example-identity@example.com
     #   no passphrase

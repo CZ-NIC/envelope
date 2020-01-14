@@ -311,7 +311,7 @@ class Envelope:
                 if v is True:
                     self.signature(attach_key=v)
             elif k == "cert":
-                self.signature(None,cert=v)
+                self.signature(None, cert=v)
             elif k == "to":
                 self.to(v)
             elif k == "attachments":
@@ -671,7 +671,9 @@ class Envelope:
                     email = self._compose_gpg_encrypted(data)
                 elif sign:  # gpg
                     email = self._compose_gpg_signed(email, data, micalg)
-            else:  # smime does not need additional EmailMessage to be included in
+            elif encrypt or sign:  # smime
+                # smime does not need additional EmailMessage to be included in, just restore Subject that has been
+                # consumed in _encrypt_smime_now. It's interesting that I.E. "Reply-To" is not consumed there.
                 email["Subject"] = self._subject
             email = self._send_now(email, encrypt, gpg_on, send)
             if not email:
@@ -887,6 +889,7 @@ class Envelope:
     def _prepare_email(self, text, encrypt_gpg, sign_gpg):
         # we'll send it later, transform the text to the e-mail first
         msg_text = EmailMessage()
+        # XX make it possible to be "plain" here + to have "plain" as the automatically generated html for older browsers
         msg_text.set_content(text.decode("utf-8"), subtype="html")
 
         if self._attach_key:  # send your public key as an attachment (so that it can be imported before it propagates on the server)
