@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## 0.9.7 (unreleased)
+- choose mime subtype (html or plain) + conditional conversion of line breaks to <br> #4
+- experimental load function to create e-mail object from text templates
+- fix: possibility to include own "Content-Type" into headers
+
 ## 0.9.6 (2020-01-14)
 - fix: Subject tried to be re-set when no GPG neither S/MIME used
 

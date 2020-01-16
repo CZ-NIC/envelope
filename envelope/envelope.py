@@ -3,6 +3,7 @@
 import argparse
 import io
 import logging
+import re
 import smtplib
 import subprocess
 import sys
@@ -55,6 +56,7 @@ gpg(message="Hello world",
 
 logger = logging.getLogger(__name__)
 _cli_invoked = False
+CRLF = '\r\n'
 
 
 def assure_fetched(message, retyped=str):
@@ -98,7 +100,7 @@ def assure_list(l):
 class AutoSubmittedHeader:
     """  "auto-replied": direct response to another message by an automatic process """
 
-    def __init__(self, parent: 'Envelope'):
+    def __init__(self, parent: 'envelope'):
         self._parent = parent
 
     def __call__(self, val="auto-replied"):
@@ -198,8 +200,8 @@ class SMTP:
                 return False
 
 
-class Envelope:
-    default: 'Envelope'
+class envelope:
+    default: 'envelope'
 
     _encrypts_cache = {}  # cache
     _gnupg: gnupg.GPG
@@ -212,9 +214,8 @@ class Envelope:
             if self._encrypt or self._sign:
                 self._start()
             else:
-                print("Nothing to do, let's assume this is a bone of an e-mail message "
-                      "by appending `--send False` flag to produce an output.\n")
-                self._start(send=False)
+                # nothing to do, let's assume this is a bone of an e-mail by appending `--send False` flag to produce an output
+                self._start(send="test")
         return self._get_result()
 
     def __bytes__(self):
@@ -230,10 +231,63 @@ class Envelope:
         self._result = [s]  # slightly quicker next time if ever containing a huge amount of lines
         return s
 
+    @staticmethod
+    def load(message):
+        """ This is still an experimental undocumented function.
+        XX When finished, put to documentation
+        XX make this available from CLI, through pipe cat "email.eml" | envelope # implicit --send 0
+        XX make it capable to decrypt and verify signatures?
+        XX make it capable to read an "attachment" - now it's a mere part of the body
+        XX write some tests
+
+        Note that if you will send this reconstructed message, you might not probably receive it due to the Message-ID duplication.
+        Delete at least Message-ID header prior to sending.
+        @type message: Parse any fetchable contents to build an Envelope object.
+        """
+        header_row = re.compile(r"([^\t:]+):(.*)")
+        text = assure_fetched(message)
+        is_header = True
+        header = []
+        body = []
+        for line in text.splitlines():
+            if is_header:  # we are parsing e-mail template header first
+                # are we still parsing the header?
+                m = header_row.match(line)
+                if m:
+                    header.append([line, m.group(1).strip(), m.group(2).strip()])
+                    continue
+                else:
+                    if line.startswith("\t") and header:  # this is not end of header, just line continuation
+                        header[-1][0] += " " + line.strip()
+                        header[-1][2] += " " + line.strip()
+                        continue
+                    is_header = False
+                    if line.strip() == "":  # next line will be body
+                        continue
+                    else:  # header is missing or incorrect, there is body only
+                        body = [l[0] for l in header]
+                        header = []
+            if not is_header:
+                body.append(line)
+
+        e = envelope().message(CRLF.join(body))
+        specific_interface = {"to": e.to, "cc": e.cc, "bcc": e.bcc,
+                              "reply_to": e.reply_to, "from": e.from_,
+                              "sender": lambda x: e.header("Sender", x),
+                              "subject": e.subject
+                              }
+        for _, key, val in header:
+            k = key.lower()
+            if k in specific_interface:
+                specific_interface[k](val)
+            else:
+                e.header(key, val)
+        return e
+
     def __init__(self, message=None, output=None, gpg=None, smime=None, headers=None,
                  sign=None, passphrase=None, attach_key=None, cert=None,
                  encrypt=None, to=None, sender=None,
-                 subject=None, cc=None, bcc=None, reply_to=None, attachments=None,
+                 subject=None, cc=None, bcc=None, reply_to=None, mime=None, attachments=None,
                  smtp=None, send=None):
         """
         :rtype: object If output not set, return output bytes, else True/False if output file was correctly written to.
@@ -262,6 +316,7 @@ class Envelope:
         Sending
         :param subject: E-mail subject
         :param reply_to: Reply to header
+        :param mime: Set contents mime subtype: "html" (default) or "plain" for plain text
         :param smtp: tuple or dict of these optional parameters: host, port, username, password, security ("tlsstart").
             Or link to existing INI file with the SMTP section.
         :param send: True for sending the mail. False will just print the output.
@@ -271,7 +326,7 @@ class Envelope:
             optionally in tuple with the file name in the e-mail and/or mimetype.
         :param headers: List of headers which are tuples of name, value. Ex: [("X-Mailer", "my-cool-application"), ...]
         """
-        self._message = None
+        self._message = None  # bytes
         self._output = None
         self._gpg: Union[str, bool] = None
         self._sign = None
@@ -279,14 +334,16 @@ class Envelope:
         self._attach_key = None
         self._cert = None
         self._encrypt = None
-        self._to = []
         self._sender = None
+        self._to = []
         self._cc = []
         self._bcc = []
-        self._subject = None
+        self._subject = None # string
         self._smtp = None
         self._attachments = []
         self._reply_to = None
+        self._mime = "html"
+        self._nl2br = True
         self._headers = {}
 
         self._status = False  # whether we successfully encrypted/signed/send
@@ -344,6 +401,7 @@ class Envelope:
         return self
 
     def reply_to(self, email):
+        # XX I think this might be just an alias to self.header("Reply-To", email)
         self._reply_to = email
         return self
 
@@ -376,6 +434,17 @@ class Envelope:
 
     def subject(self, subject):
         self._subject = subject
+        return self
+
+    def mime(self, html_or_plain="html", nl2br=True):
+        """
+        @type html_or_plain: str Set contents mime subtype: "html" (default) or "plain" for plain text.
+        @param nl2br: If True, note that if you are using "html" subtype and there is no `<br` or `<p` in the message,
+            envelope will append `<br>` to every line break.
+            Ignored if you put `Content-Type` header to the message.
+        """
+        self._mime = html_or_plain
+        self._nl2br = nl2br
         return self
 
     def list_unsubscribe(self, uri=None, one_click=False, *, web=None, email=None):
@@ -433,6 +502,8 @@ class Envelope:
         :param key: Header name
         :param val: Header value
         :return:
+
+        XX Will not allow pasting a header multiple times. Which is usual for .load(). Ex: eml files have multiple Received header.
         """
         self._headers[key] = val
         return self
@@ -595,7 +666,9 @@ class Envelope:
         return self._start(sign=sign, encrypt=encrypt, send=send)
 
     def _start(self, sign=None, encrypt=None, send=None):
-        """ Start processing. Either sign, encrypt or send the message and possibly set bool status of the object to True. """
+        """ Start processing. Either sign, encrypt or send the message and possibly set bool status of the object to True.
+        * send == "test" is the same as send == False but the message "have not been sent" will not be produced
+        """
         if sign is not None:
             self.signature(sign)
         if encrypt is not None:
@@ -620,8 +693,8 @@ class Envelope:
         if encrypt or sign:
             if self._gpg is not None:
                 gpg_on = bool(self._gpg)
-            elif encrypt in Envelope._encrypts_cache:
-                gpg_on = Envelope._encrypts_cache
+            elif encrypt in envelope._encrypts_cache:
+                gpg_on = envelope._encrypts_cache
             elif not gnupg and not smime:
                 raise ImportError("Cannot import neither gnupg, neither smime.")
             elif not gnupg or not smime:
@@ -634,7 +707,7 @@ class Envelope:
                 else:
                     gpg_on = False
                 finally:
-                    Envelope._encrypts_cache[encrypt] = gpg_on
+                    envelope._encrypts_cache[encrypt] = gpg_on
 
             if gpg_on:
                 self._gnupg = gnupg.GPG(gnupghome=self._get_gnupg_home(), options=["--trust-model=always"],
@@ -665,6 +738,7 @@ class Envelope:
                 return
 
         # sending email message object
+        self._result.clear()
         if send is not None:
             if gpg_on:
                 if encrypt:
@@ -711,25 +785,32 @@ class Envelope:
                 s.add(self._sender)
             logger.error(f"An e-mail address seem to be malformed.\nAll addresses: {s}\n{e}")
             return
-        email["Date"] = formatdate(localtime=True)
-        email["Message-ID"] = make_msgid()
         for k, v in self._headers.items():
+            # these headers have already been inserted in _prepare_email
+            if k in ["Content-Type", "Content-Transfer-Encoding", "MIME-Version"]:
+                continue
             email[k] = v
+        if "Date" not in email:
+            email["Date"] = formatdate(localtime=True)
+        if "Message-ID" not in email and send != "test":  # we omit this field when testing
+            email["Message-ID"] = make_msgid()
 
-        if send:
+        if send and send != "test":
             failures = self._smtp.send_message(email, to_addrs=list(set(self._to + self._cc + self._bcc)))
             if failures:
                 logger.warning(f"Unable to send to all recipients: {repr(failures)}.")
             elif failures is False:
                 return False
         else:
-            self._result.append("{}\nHave not been sent from {} to {}" \
-                                .format("*" * 100, (self._sender or ""), ", ".join(set(self._to + self._cc + self._bcc))))
+            if send != "test":
+                self._result.append(f"{'*' * 100}\nHave not been sent from {(self._sender or '')}"
+                                    f" to {', '.join(set(self._to + self._cc + self._bcc))}")
             if encrypt:
                 if encrypted_subject:
                     self._result.append(f"Encrypted subject: {self._subject}")
                 self._result.append(f"Encrypted message: {self._message}")
-            self._result.append("")
+            if len(self._result):  # put an empty line only if some important content was already placed
+                self._result.append("")
 
         return email
 
@@ -890,7 +971,20 @@ class Envelope:
         # we'll send it later, transform the text to the e-mail first
         msg_text = EmailMessage()
         # XX make it possible to be "plain" here + to have "plain" as the automatically generated html for older browsers
-        msg_text.set_content(text.decode("utf-8"), subtype="html")
+        # XX Should we assure it ends on CRLF? b"\r\n".join(text.splitlines()).decode("utf-8")
+        if "MIME-Version" in self._headers:
+            msg_text["MIME-Version"] = self._headers["MIME-Version"]
+        if "Content-Type" not in self._headers and "Content-Transfer-Encoding" not in self._headers:
+            # We may fail here if only one from Content-Type or Content-Transfer-Encoding is set in self._headers.
+            # XX I do not know whether it happens.
+            t = text.decode("utf-8")
+            if self._nl2br and self._mime == "html" and "<br" not in t and "<br" not in t:
+                t = (f"<br>{CRLF}").join(t.splitlines())
+            msg_text.set_content(t, subtype=self._mime)
+        else:
+            msg_text["Content-Type"] = self._headers["Content-Type"]
+            msg_text["Content-Transfer-Encoding"] = self._headers["Content-Transfer-Encoding"]
+            msg_text.set_payload(text, "utf-8")
 
         if self._attach_key:  # send your public key as an attachment (so that it can be imported before it propagates on the server)
             keyid = self._sign
@@ -1076,6 +1170,8 @@ def _cli():
                                        "Ex: '--smtp {\"host\": \"localhost\", \"port\": 25}'."
                                        " Security may be explicitly set to 'starttls', 'tls' or automatically determined by port.",
                         nargs="*", action=BlankTrue, metavar=("HOST", "PORT"))
+    parser.add_argument('--mime', help="Set contents mime subtype: 'html' (default) or 'plain' for plain text",
+                        metavar="SUBTYPE")
     parser.add_argument('--header',
                         help="Any e-mail header in the form `name value`. Flag may be used multiple times.",
                         nargs=2, action="append", metavar=("NAME", "VALUE"))
@@ -1159,7 +1255,7 @@ def _cli():
         del args["encrypt"]
         del args["send"]
         del args["check"]
-        o = Envelope(**args)
+        o = envelope(**args)
         if o.check():
             print("Check succeeded.")
             sys.exit(0)
@@ -1170,10 +1266,10 @@ def _cli():
 
     if not any([args["sign"], args["encrypt"], args["send"]]):
         # if there is anything to do, pretend the input parameters are a bone of a message
-        print(str(Envelope(**args)))
+        print(str(envelope(**args)))
         sys.exit(0)
 
-    res = Envelope(**args)
+    res = envelope(**args)
     if res:
         if not quiet:
             print(res)
@@ -1184,5 +1280,5 @@ def _cli():
 if __name__ == "__main__":
     _cli()
 else:
-    Envelope._cli = _cli
-    Envelope.default = Envelope()
+    envelope._cli = _cli
+    envelope.default = envelope()
