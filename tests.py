@@ -2,7 +2,7 @@ import logging
 import sys
 import unittest
 from pathlib import Path
-from typing import Tuple
+from typing import Tuple, Union
 
 from envelope import envelope
 
@@ -10,8 +10,10 @@ logging.basicConfig(stream=sys.stderr, level=logging.WARNING)
 
 
 class TestAbstract(unittest.TestCase):
-    def _check_lines(self, o, lines: Tuple[str, ...], longer=None, print_=False):
+    def _check_lines(self, o, lines: Union[str, Tuple[str, ...]], longer=None, print_=False):
         """ Converts Envelope objects to str and asserts that lines are present. """
+        if type(lines) is str:
+            lines = lines,
         output = str(o).splitlines()
         if print_:
             print(o)
@@ -211,6 +213,49 @@ class TestGPG(TestAbstract):
                           .from_("envelope-example-identity@example.com")
                           .signature("3C8124A8245618D286CF871E94CE2905DB00CDB7", "test"),  # passphrase needed
                           ("-----BEGIN PGP SIGNATURE-----",), 10)
+
+
+class TestMime(TestAbstract):
+    plain = """First
+Second
+Third
+    """
+
+    html = """First<br>
+Second
+Third
+    """
+
+    html_without_line_break = """<b>First</b>
+Second
+Third
+    """
+
+    mime_plain = 'Content-Type: text/plain; charset="utf-8"'
+    mime_html = 'Content-Type: text/html; charset="utf-8"'
+
+    def test_plain(self):
+        pl = self.mime_plain
+        self._check_lines(envelope().message(self.plain).mime("plain", "auto"), pl)
+        self._check_lines(envelope().message(self.plain), pl)
+        self._check_lines(envelope().message(self.html).mime("plain"), pl)
+
+    def test_html(self):
+        m = self.mime_html
+        self._check_lines(envelope().message(self.plain).mime("html", "auto"), m)
+        self._check_lines(envelope().message(self.html), m)
+        self._check_lines(envelope().message(self.html_without_line_break), m)
+
+    def test_nl2br(self):
+        nobr = "Second"
+        br = "Second<br>"
+        self._check_lines(envelope().message(self.html), nobr)  # there already is a <br> tag so nl2br "auto" should not convert it
+        self._check_lines(envelope().message(self.html).mime(nl2br=True), br)
+
+        self._check_lines(envelope().message(self.html_without_line_break), br)
+        self._check_lines(envelope().message(self.html_without_line_break).mime("plain", True), nobr)  # nl2br disabled in "plain"
+        self._check_lines(envelope().message(self.html_without_line_break).mime(nl2br=False), nobr)
+
 
 
 if __name__ == '__main__':

@@ -338,12 +338,12 @@ class envelope:
         self._to = []
         self._cc = []
         self._bcc = []
-        self._subject = None # string
+        self._subject = None  # string
         self._smtp = None
         self._attachments = []
         self._reply_to = None
-        self._mime = "html"
-        self._nl2br = True
+        self._mime = "auto"
+        self._nl2br = "auto"
         self._headers = {}
 
         self._status = False  # whether we successfully encrypted/signed/send
@@ -410,6 +410,7 @@ class envelope:
         # Is there a usecase Sender is useful to be set?
         # def envelope(**kw): l(**{"from": "me@example.com", "subject": "my e-mail"}) Or make 'from' at least possible?
         # Or method from_to?
+        # !!WHAT IF: both sender a from defined, we allow sender header; otherwise sender is From header. Will I ever need to send an e-mail with Sender and without FROM???
         self._sender = email
         return self
 
@@ -436,14 +437,14 @@ class envelope:
         self._subject = subject
         return self
 
-    def mime(self, html_or_plain="html", nl2br=True):
+    def mime(self, subtype="auto", nl2br="auto"):
         """
-        @type html_or_plain: str Set contents mime subtype: "html" (default) or "plain" for plain text.
-        @param nl2br: If True, note that if you are using "html" subtype and there is no `<br` or `<p` in the message,
-            envelope will append `<br>` to every line break.
-            Ignored if you put `Content-Type` header to the message.
+        Ignored if `Content-Type` header put to the message.
+        @type subtype: str Set contents mime subtype: "auto" (default), "html" or "plain" for plain text.
+        @param nl2br: True: envelope will append `<br>` to every line break in the HTML message.
+                      "auto": line breaks are changed only if there is no `<br` or `<p` in the HTML message,
         """
-        self._mime = html_or_plain
+        self._mime = subtype
         self._nl2br = nl2br
         return self
 
@@ -978,9 +979,23 @@ class envelope:
             # We may fail here if only one from Content-Type or Content-Transfer-Encoding is set in self._headers.
             # XX I do not know whether it happens.
             t = text.decode("utf-8")
-            if self._nl2br and self._mime == "html" and "<br" not in t and "<br" not in t:
-                t = (f"<br>{CRLF}").join(t.splitlines())
-            msg_text.set_content(t, subtype=self._mime)
+            # determime mime subtype and maybe do nl2br
+            mime, nl2br = self._mime, self._nl2br
+            if mime == "auto":
+                tags = [x for x in ("<br", "<b>", "<i>", "<p", "<img") if x in t]
+                if magic.Magic(mime=True).from_buffer(t) == "text/html" or len(tags):
+                    # magic will determine a short text is HTML if there is '<a href=' but a mere '<br>' is not sufficient.
+                    mime = "html"
+                else:
+                    mime = "plain"
+            if mime == "html":
+                #import ipdb; ipdb.set_trace()
+                if nl2br == "auto" and not len([x for x in ("<br", "<p") if x in t]):
+                    nl2br = True
+                if nl2br is True:
+                    t = f"<br>{CRLF}".join(t.splitlines())
+            #if self._nl2br and self._mime == "html" and "<br" not in t and "<br" not in t:
+            msg_text.set_content(t, subtype=mime)
         else:
             msg_text["Content-Type"] = self._headers["Content-Type"]
             msg_text["Content-Transfer-Encoding"] = self._headers["Content-Transfer-Encoding"]

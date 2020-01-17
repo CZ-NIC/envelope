@@ -286,10 +286,11 @@ If the GPG encryption fails, it tries to determine which recipient misses the ke
     ```python3
     envelope().attach(path="/tmp/file.txt").attach(path="/tmp/another-file.txt")
     ```
-    * **mime**: Set contents mime subtype: "html" (default) or "plain" for plain text. Note that if you are using "html" subtype and there is no `<br` or `<p` in the message, envelope will append `<br>` to every line break (may be disabled by putting `nl2br=False`). Ignored if you put `Content-Type` header to the message.
+    * **mime**: Set contents mime subtype: "auto" (default), "html" or "plain" for plain text. Ignored if `Content-Type` header put to the message.         
         * **--mime SUBTYPE**
         * **envelope(mime=)**
-        * **.mime(html_or_plain="html", nl2br=True)**
+        * **.mime(subtype="auto", nl2br="auto")**
+            * nl2br: True: envelope will append `<br>` to every line break in the HTML message. "auto": line breaks are changed only if there is no `<br` or `<p` in the HTML message,
     * **headers**: Any custom headers (these will not be encrypted with GPG nor S/MIME)
         * **--header name value** (may be used multiple times)
         * **envelope(headers=[(name, value)])**
