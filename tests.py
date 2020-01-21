@@ -142,6 +142,41 @@ class TestGPG(TestAbstract):
                            '-----BEGIN PGP SIGNATURE-----',
                            '-----END PGP SIGNATURE-----',), 10)
 
+    def test_gpg_auto_sign(self):
+        # mail from "envelope-example-identity@example.com" is in ring
+        self._check_lines(envelope("dumb message")
+                          .gpg("tests/gpg_ring/")
+                          .from_("envelope-example-identity@example.com")
+                          .sign("auto"),
+                          ('dumb message',
+                           '-----BEGIN PGP SIGNATURE-----',
+                           '-----END PGP SIGNATURE-----',), 10)
+
+        # mail from "envelope-example-identity-not-stated-in-ring@example.com" should not be signed
+        output = str(envelope("dumb message")
+                          .gpg("tests/gpg_ring/")
+                          .from_("envelope-example-identity-not-stated-in-ring@example.com")
+                          .sign("auto")).splitlines()
+        self.assertNotIn('-----BEGIN PGP SIGNATURE-----', output)
+
+        # force-signing without specifying a key nor sending address shuold produce a message signed with a first-found key
+        output = str(envelope("dumb message")
+                     .gpg("tests/gpg_ring/")
+                     .sign(True)).splitlines()
+        self.assertIn('-----BEGIN PGP SIGNATURE-----', output)
+
+        # force-signing without specifying a key and with sending from an e-mail which is not in the keyring must fail
+        raised = False
+        try:
+            envelope("dumb message")\
+                     .gpg("tests/gpg_ring/")\
+                     .from_("envelope-example-identity-not-stated-in-ring@example.com")\
+                     .sign(True)
+        except RuntimeError:
+            raised = True
+        finally:
+            self.assertTrue(raised)
+
     def test_gpg_encrypt_message(self):
         # Message will look like this:
         # -----BEGIN PGP MESSAGE-----

@@ -57,6 +57,7 @@ gpg(message="Hello world",
 logger = logging.getLogger(__name__)
 _cli_invoked = False
 CRLF = '\r\n'
+AUTO = "auto"
 
 
 def assure_fetched(message, retyped=str):
@@ -271,17 +272,8 @@ class envelope:
                 body.append(line)
 
         e = envelope().message(CRLF.join(body))
-        specific_interface = {"to": e.to, "cc": e.cc, "bcc": e.bcc,
-                              "reply_to": e.reply_to, "from": e.from_,
-                              "sender": lambda x: e.header("Sender", x),
-                              "subject": e.subject
-                              }
         for _, key, val in header:
-            k = key.lower()
-            if k in specific_interface:
-                specific_interface[k](val)
-            else:
-                e.header(key, val)
+            e.header(key, val)
         return e
 
     def __init__(self, message=None, output=None, gpg=None, smime=None, headers=None,
@@ -326,6 +318,7 @@ class envelope:
             optionally in tuple with the file name in the e-mail and/or mimetype.
         :param headers: List of headers which are tuples of name, value. Ex: [("X-Mailer", "my-cool-application"), ...]
         """
+        # user defined variables
         self._message = None  # bytes
         self._output = None
         self._gpg: Union[str, bool] = None
@@ -342,10 +335,11 @@ class envelope:
         self._smtp = None
         self._attachments = []
         self._reply_to = None
-        self._mime = "auto"
-        self._nl2br = "auto"
+        self._mime = AUTO
+        self._nl2br = AUTO
         self._headers = {}
 
+        # variables defined while processing
         self._status = False  # whether we successfully encrypted/signed/send
         self._processed = False  # prevent the user from mistakenly call .sign().send() instead of .signature().send()
         self._result = []  # text output for str() conversion
@@ -437,7 +431,7 @@ class envelope:
         self._subject = subject
         return self
 
-    def mime(self, subtype="auto", nl2br="auto"):
+    def mime(self, subtype=AUTO, nl2br=AUTO):
         """
         Ignored if `Content-Type` header put to the message.
         @type subtype: str Set contents mime subtype: "auto" (default), "html" or "plain" for plain text.
@@ -506,7 +500,17 @@ class envelope:
 
         XX Will not allow pasting a header multiple times. Which is usual for .load(). Ex: eml files have multiple Received header.
         """
-        self._headers[key] = val
+        specific_interface = {"to": self.to, "cc": self.cc, "bcc": self.bcc,
+                              "reply_to": self.reply_to, "from": self.from_,
+                              "sender": lambda x: self.header("Sender", x),
+                              "subject": self.subject
+                              }
+
+        k = key.lower()
+        if k in specific_interface:
+            specific_interface[k](val)
+        else:
+            self._headers[key] = val
         return self
 
     def smtp(self, host="localhost", port=25, user=None, password=None, security=None):
@@ -576,6 +580,7 @@ class envelope:
         """
         Turn signing on.
         :param key: Signing key
+            * "auto" for turning on signing if there is a key matching to the "from" header
             * GPG: Blank for user default key or key ID/fingerprint.
             * S/MIME: Any fetchable contents with key to be signed with. May contain signing certificate as well.
         :param passphrase: Passphrase to the key if needed.
@@ -608,6 +613,7 @@ class envelope:
         """
         Sign now.
         :param key: Signing key
+            * "auto" for turning on signing if there is a key matching to the "from" header
             * GPG: Blank for user default key or key ID/fingerprint.
             * S/MIME: Any fetchable contents with key to be signed with. May contain signing certificate as well.
         :param passphrase: Passphrase to the key if needed.
@@ -676,6 +682,8 @@ class envelope:
             self.encryption(encrypt)
 
         # check if there is something to do
+        # sign: if sign key=True, we will put here a keyid matched by "From" header,
+        # else it will take user defined value (which is either keyid or fingerprint)
         sign = self._sign
         encrypt = self._encrypt
         if sign is None and encrypt is None and send is None:
@@ -714,11 +722,30 @@ class envelope:
                 self._gnupg = gnupg.GPG(gnupghome=self._get_gnupg_home(), options=["--trust-model=always"],
                                         # XX trust model might be optional
                                         verbose=False) if sign or encrypt else None
+                if sign in [True, AUTO]:  # try to determine sign based on the "From" header
+                    fallback_sign = sign = None
+                    try:
+                        address_searched = getaddresses([self._sender])[0][1]
+                    except (TypeError, IndexError):
+                        # there is no "From" header and no default key is given, pick the first secret as a default
+                        for key in self._gnupg.list_keys(True):
+                            fallback_sign = key["keyid"]
+                            break
+                    else:
+                        for keyid in [key["keyid"] for key in self._gnupg.list_keys(True) for _, address in
+                                      getaddresses(key["uids"]) if address_searched == address]:
+                            sign = keyid
+                            break
+                    if not sign and self._sign != AUTO:
+                        if fallback_sign:
+                            sign = fallback_sign
+                        else:
+                            raise RuntimeError("No GPG sign key found")
 
         # if we plan to send later, convert text message to the email message object
         email = None
         if send is not None:
-            email = self._prepare_email(data, encrypt and gpg_on, sign and gpg_on)
+            email = self._prepare_email(data, encrypt and gpg_on, sign and gpg_on, sign)
             if not email:
                 return False
             data = email.as_bytes()
@@ -787,10 +814,10 @@ class envelope:
             logger.error(f"An e-mail address seem to be malformed.\nAll addresses: {s}\n{e}")
             return
         for k, v in self._headers.items():
-            # these headers have already been inserted in _prepare_email
             if k in ["Content-Type", "Content-Transfer-Encoding", "MIME-Version"]:
+                # skip headers already inserted in _prepare_email
                 continue
-            email[k] = v
+            email[k] = v  # XX do not we want to encrypt these headers with GPG/SMIME?
         if "Date" not in email:
             email["Date"] = formatdate(localtime=True)
         if "Message-ID" not in email and send != "test":  # we omit this field when testing
@@ -820,7 +847,7 @@ class envelope:
             message,
             extra_args=["--textmode"],
             # textmode: Enigmail had troubles to validate even though signature worked in CLI https://superuser.com/questions/933333
-            keyid=sign if sign and sign is not True else None,
+            keyid=sign,
             passphrase=self._passphrase if self._passphrase else None,
             detach=True if send is not None else None,
         )
@@ -968,7 +995,7 @@ class envelope:
         email.attach(msg_text)
         return email
 
-    def _prepare_email(self, text, encrypt_gpg, sign_gpg):
+    def _prepare_email(self, text, encrypt_gpg, sign_gpg, sign):
         # we'll send it later, transform the text to the e-mail first
         msg_text = EmailMessage()
         # XX make it possible to be "plain" here + to have "plain" as the automatically generated html for older browsers
@@ -979,9 +1006,9 @@ class envelope:
             # We may fail here if only one from Content-Type or Content-Transfer-Encoding is set in self._headers.
             # XX I do not know whether it happens.
             t = text.decode("utf-8")
-            # determime mime subtype and maybe do nl2br
+            # determine mime subtype and maybe do nl2br
             mime, nl2br = self._mime, self._nl2br
-            if mime == "auto":
+            if mime == AUTO:
                 tags = [x for x in ("<br", "<b>", "<i>", "<p", "<img") if x in t]
                 if magic.Magic(mime=True).from_buffer(t) == "text/html" or len(tags):
                     # magic will determine a short text is HTML if there is '<a href=' but a mere '<br>' is not sufficient.
@@ -989,27 +1016,22 @@ class envelope:
                 else:
                     mime = "plain"
             if mime == "html":
-                #import ipdb; ipdb.set_trace()
-                if nl2br == "auto" and not len([x for x in ("<br", "<p") if x in t]):
+                if nl2br == AUTO and not len([x for x in ("<br", "<p") if x in t]):
                     nl2br = True
                 if nl2br is True:
                     t = f"<br>{CRLF}".join(t.splitlines())
-            #if self._nl2br and self._mime == "html" and "<br" not in t and "<br" not in t:
             msg_text.set_content(t, subtype=mime)
         else:
             msg_text["Content-Type"] = self._headers["Content-Type"]
             msg_text["Content-Transfer-Encoding"] = self._headers["Content-Transfer-Encoding"]
             msg_text.set_payload(text, "utf-8")
-
-        if self._attach_key:  # send your public key as an attachment (so that it can be imported before it propagates on the server)
-            keyid = self._sign
-            if keyid is True:
-                for key in self._gnupg.list_keys(True):  # if no default key is given, pick the first secret as a default
-                    keyid = key["keyid"]
-                    break
-            if type(keyid) is str:
-                contents = self._gnupg.export_keys(keyid)
-                self.attach(contents, "public-key.asc")
+        
+        if self._attach_key:
+            # send your public key as an attachment (so that it can be imported before it propagates on the server)
+            contents = self._gnupg.export_keys(sign)
+            if not contents:
+                raise RuntimeError("Cannot attach GPG sign key, not found.")
+            self.attach(contents, "public-key.asc")
 
         failed = False
         for contents in self._attachments:
@@ -1128,6 +1150,13 @@ def _cli():
     global _cli_invoked
     _cli_invoked = True
 
+    class SmartFormatter(argparse.HelpFormatter):
+
+        def _split_lines(self, text, width):
+            if text.startswith('R|'):
+                return text[2:].splitlines()
+            return argparse.HelpFormatter._split_lines(self, text, width)
+
     class BlankTrue(argparse.Action):
         """ When left blank, this flag produces True. (Normal behaviour is to produce None which I use for not being set."""
 
@@ -1136,7 +1165,7 @@ def _cli():
                 values = True
             setattr(namespace, self.dest, values)
 
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=SmartFormatter)
     parser.add_argument('--message', help='Plain text message.', metavar="TEXT")
     parser.add_argument('--input', help='Path to message file. (Alternative to `message` parameter.)', metavar="FILE")
     parser.add_argument('--output',
@@ -1147,9 +1176,10 @@ def _cli():
     parser.add_argument('--smime', action="store_true", help='Leave blank for prefer S/MIME over GPG.')
     parser.add_argument('--check', action="store_true", help='Check SMTP server connection')
 
-    parser.add_argument('--sign', help='Sign the message.'
-                                       ' GPG: Blank for user default key or key ID/fingerprint.'
-                                       ' S/MIME: Key data.', nargs="?",
+    parser.add_argument('--sign', help='R|Sign the message.'
+                                       '\n * "auto" for turning on signing if there is a key matching to the "from" header'
+                                       '\n * GPG: Blank for user default key or key ID/fingerprint.'
+                                       '\n * S/MIME: Key data.', nargs="?",
                         action=BlankTrue, metavar="FINGERPRINT|CONTENTS")
     parser.add_argument('--cert', help='S/MIME: Certificate contents if not included in the key.',
                         action=BlankTrue, metavar="CONTENTS")

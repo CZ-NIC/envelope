@@ -1,6 +1,9 @@
 # CHANGELOG
 
-## 0.9.7 (unreleased)
+## 0.9.8 (unreleased)
+- set signing to "auto" for signing if there is a key matching to the "from" header
+
+## 0.9.7 (2020-01-17)
 - choose mime subtype (html or plain) + conditional conversion of line breaks to <br> #4
 - experimental load function to create e-mail object from text templates
 - fix: possibility to include own "Content-Type" into headers

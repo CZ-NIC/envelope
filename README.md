@@ -167,6 +167,7 @@ Note that if neither *gpg* nor *smime* is specified, we try to determine the met
 ### Signing
   * **sign**: Sign the message.
     * **--sign**:
+        * "auto" for turning on signing if there is a key matching to the "from" header
         * GPG: Blank for user default key or key ID/fingerprint.
         * S/MIME: Any fetchable contents with key.
     * **--sign-path**: S/MIME: Filename with the sender\'s private key. (Alternative to `sign` parameter.)
@@ -180,8 +181,8 @@ Note that if neither *gpg* nor *smime* is specified, we try to determine the met
     * **envelope(passphrase=)**: Passphrase to the key if needed.
     * **envelope(attach_key=)**: GPG: Append public key to the attachments when sending.
     * **envelope(cert=)**: S/MIME: Any fetchable contents.
-    * **.sign(key=, passphrase=, attach_key=False, cert=None, key_path=None)**: Sign now (and you may specify the parameters)         
-    * **.signature(key=, passphrase=, attach_key=False, cert=None, key_path=None)**: Sign later (when launched with *.sign()*, *.encrypt()* or *.send()* functions
+    * **.sign(key=True, passphrase=, attach_key=False, cert=None, key_path=None)**: Sign now (and you may specify the parameters)         
+    * **.signature(key=True, passphrase=, attach_key=False, cert=None, key_path=None)**: Sign later (when launched with *.sign()*, *.encrypt()* or *.send()* functions
 ### Encrypting
 If the GPG encryption fails, it tries to determine which recipient misses the key.
 
