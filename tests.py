@@ -233,7 +233,7 @@ class TestGPG(TestAbstract):
                           .subject("dumb subject")
                           .encryption()
                           .send(False),
-                          ("Encrypted message: b'dumb message'",
+                          ("Encrypted message: dumb message",
                            "Encrypted subject: dumb subject",
                            "Subject: Encrypted message",
                            "To: envelope-example-identity-2@example.com",
