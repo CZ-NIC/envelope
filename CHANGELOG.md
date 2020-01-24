@@ -2,6 +2,8 @@
 
 ## 0.9.8 (unreleased)
 - set signing to "auto" for signing if there is a key matching to the "from" header
+- preview method
+- get_recipients method
 
 ## 0.9.7 (2020-01-17)
 - choose mime subtype (html or plain) + conditional conversion of line breaks to <br> #4

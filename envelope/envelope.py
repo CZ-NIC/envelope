@@ -213,7 +213,11 @@ class envelope:
     def __str__(self):
         if not self._result:
             if self._encrypt or self._sign:
-                self._start()
+                # if subject is not set, we suppose this is just a data blob to be encrypted, no an e-mail message
+                # and a ciphered blob will get output. However if subject is set, we put send="test"
+                # in order to display all e-mail headers etc.
+                is_email = "test" if bool(self._subject) else False
+                self._start(send=is_email)
             else:
                 # nothing to do, let's assume this is a bone of an e-mail by appending `--send False` flag to produce an output
                 self._start(send="test")
@@ -226,11 +230,45 @@ class envelope:
         if type(other) in [str, bytes]:
             return assure_fetched(self._get_result(), bytes) == assure_fetched(other, bytes)
 
+    def preview(self):
+        """ Returns the string of the message or data with the readable text.
+            Ex: whilst we have to use quoted-printable (as seen in __str__), here the output will be plain text.
+
+            # XX is ciphering info seen?
+        # XX is Bcc header seen?
+        """
+        # XXX document me
+        if not self._result:
+            str(self)
+        result = []
+
+        for a in self._attachments:  # include attachments info as they are removed with the payload later
+            result.append("Attachment: " + ", ".join(str(s) for s in a))
+
+        if self._bcc:  # as bcc is not included as an e-mail header, we explicitly states it here
+            result.append("Bcc: " + ", ".join(self._bcc))
+
+        for i, r in enumerate(self._result):
+            if isinstance(r, EmailMessage):
+                # remove body from the message because it may have become unreadable
+                # I cannot use r.set_payload(""), since it would change the headers like Content-Transfer-Encoding
+                for line in r.as_string().splitlines():
+                    result.append(line)
+                    if not line.strip():
+                        break
+                continue
+            result.append(r)
+
+        result.append(self._message)
+
+        return "\n".join(result)
+
     def _get_result(self):
         """ concatenate output string """
-        s = "\n".join(self._result)
-        self._result = [s]  # slightly quicker next time if ever containing a huge amount of lines
-        return s
+        if not self._result_cache:
+            s = "\n".join(str(r) for r in self._result)
+            self._result_cache = s  # slightly quicker next time if ever containing a huge amount of lines
+        return self._result_cache
 
     @staticmethod
     def load(message):
@@ -343,6 +381,7 @@ class envelope:
         self._status = False  # whether we successfully encrypted/signed/send
         self._processed = False  # prevent the user from mistakenly call .sign().send() instead of .signature().send()
         self._result = []  # text output for str() conversion
+        self._result_cache = None
         self._smtp = SMTP()
         self.auto_submitted = AutoSubmittedHeader(self)  # allows fluent interface to set header
 
@@ -391,7 +430,7 @@ class envelope:
     def message(self, text=None, *, path=None):
         if path:
             text = Path(path)
-        self._message = assure_fetched(text, bytes)
+        self._message = text
         return self
 
     def reply_to(self, email):
@@ -691,7 +730,7 @@ class envelope:
             return
 
         # assure streams are fetched and files are read from their paths
-        data = self._message
+        data = assure_fetched(self._message, bytes)
         # we need a message
         if data is None:
             logger.error("Missing message")
@@ -767,6 +806,7 @@ class envelope:
 
         # sending email message object
         self._result.clear()
+        self._result_cache = None
         if send is not None:
             if gpg_on:
                 if encrypt:
@@ -783,7 +823,7 @@ class envelope:
 
         # output to file or display
         if email or data:
-            self._result.append(email.as_string() if email else assure_fetched(data, str))
+            self._result.append(email if email else assure_fetched(data, str))
             if self._output:
                 with open(self._output, "wb") as f:
                     f.write(email.as_bytes() if email else data)
@@ -995,16 +1035,14 @@ class envelope:
         email.attach(msg_text)
         return email
 
-    def _prepare_email(self, text, encrypt_gpg, sign_gpg, sign):
+    def _prepare_email(self, text: bytes, encrypt_gpg, sign_gpg, sign):
         # we'll send it later, transform the text to the e-mail first
         msg_text = EmailMessage()
         # XX make it possible to be "plain" here + to have "plain" as the automatically generated html for older browsers
         # XX Should we assure it ends on CRLF? b"\r\n".join(text.splitlines()).decode("utf-8")
         if "MIME-Version" in self._headers:
             msg_text["MIME-Version"] = self._headers["MIME-Version"]
-        if "Content-Type" not in self._headers and "Content-Transfer-Encoding" not in self._headers:
-            # We may fail here if only one from Content-Type or Content-Transfer-Encoding is set in self._headers.
-            # XX I do not know whether it happens.
+        if "Content-Type" not in self._headers:
             t = text.decode("utf-8")
             # determine mime subtype and maybe do nl2br
             mime, nl2br = self._mime, self._nl2br
@@ -1023,9 +1061,10 @@ class envelope:
             msg_text.set_content(t, subtype=mime)
         else:
             msg_text["Content-Type"] = self._headers["Content-Type"]
-            msg_text["Content-Transfer-Encoding"] = self._headers["Content-Transfer-Encoding"]
+            if "Content-Transfer-Encoding" not in self._headers:
+                msg_text["Content-Transfer-Encoding"] = self._headers["Content-Transfer-Encoding"]
             msg_text.set_payload(text, "utf-8")
-        
+
         if self._attach_key:
             # send your public key as an attachment (so that it can be imported before it propagates on the server)
             contents = self._gnupg.export_keys(sign)
@@ -1085,6 +1124,10 @@ class envelope:
                 # in inner message when GPG signing
                 email["Subject"] = self._subject
         return email
+
+    def get_recipients(self):
+        """ Return set of all recipients – To, Cc, Bcc """
+        return set(self._to + self._cc + self._bcc)
 
     def check(self) -> bool:
         """
