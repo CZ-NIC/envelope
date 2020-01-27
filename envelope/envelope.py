@@ -237,7 +237,6 @@ class envelope:
             # XX is ciphering info seen?
         # XX is Bcc header seen?
         """
-        # XXX document me
         if not self._result:
             str(self)
         result = []
@@ -272,15 +271,14 @@ class envelope:
 
     @staticmethod
     def load(message):
-        """ This is still an experimental undocumented function.
-        XX When finished, put to documentation
+        """ This is still an experimental function.
         XX make this available from CLI, through pipe cat "email.eml" | envelope # implicit --send 0
         XX make it capable to decrypt and verify signatures?
         XX make it capable to read an "attachment" - now it's a mere part of the body
         XX write some tests
 
         Note that if you will send this reconstructed message, you might not probably receive it due to the Message-ID duplication.
-        Delete at least Message-ID header prior to sending.
+        Delete at least Message-ID header prior to re-sending.
         @type message: Parse any fetchable contents to build an Envelope object.
         """
         header_row = re.compile(r"([^\t:]+):(.*)")
@@ -428,6 +426,8 @@ class envelope:
         return self
 
     def message(self, text=None, *, path=None):
+        if text is path is None:
+            return self._message
         if path:
             text = Path(path)
         self._message = text
@@ -466,7 +466,9 @@ class envelope:
         self._gpg = False
         return self
 
-    def subject(self, subject):
+    def subject(self, subject=None):
+        if subject is None:
+            return self._subject
         self._subject = subject
         return self
 
@@ -1125,8 +1127,15 @@ class envelope:
                 email["Subject"] = self._subject
         return email
 
-    def get_recipients(self):
-        """ Return set of all recipients – To, Cc, Bcc """
+    def recipients(self, *, clear=False):
+        """ Return set of all recipients – To, Cc, Bcc
+            :param: clear If true, all To, Cc and Bcc recipients are removed and the object is returned.
+        """
+        if clear:
+            self._to.clear()
+            self._cc.clear()
+            self._bcc.clear()
+            return self
         return set(self._to + self._cc + self._bcc)
 
     def check(self) -> bool:

@@ -232,7 +232,7 @@ If the GPG encryption fails, it tries to determine which recipient misses the ke
   * **subject**: Mail subject. Gets encrypted with GPG, stays visible with S/MIME.
     * **--subject**
     * **envelope(subject=)**
-    * **.subject(text)**
+    * **.subject(text)**     
   * **cc**: E-mail or their list
     * **--cc**
     * **envelope(cc=)**
@@ -297,7 +297,7 @@ If the GPG encryption fails, it tries to determine which recipient misses the ke
         * **envelope(headers=[(name, value)])**
         * **.header(name, value)**
         
-        Equivalent headers:
+        Equivalent headers: 
         ```bash
         envelope --header X-Mailer my-app
         ```
@@ -336,6 +336,11 @@ envelope().auto_submitted()  # mark message as automatic
 envelope().auto_submitted.no()  # mark message as human produced
 ```    
 ### Supportive
+  * **.recipients()**: Return set of all recipients – To, Cc, Bcc
+    * **.recipients(clear=True)**: All To, Cc and Bcc recipients are removed and the object is returned.
+  * Read message and subject by **.message()** and **.subject()**
+  * **.preview()**: Returns the string of the message or data with the readable text.
+            Ex: whilst we have to use quoted-printable (as seen in __str__), here the output will be plain text.
   * **check**: Check SMTP connection and returns True/False if succeeded. Tries to find SPF, DKIM and DMARC DNS records depending on the sender's domain and print them out.
     * **--check**
     * **.check()**
@@ -348,6 +353,13 @@ envelope().auto_submitted.no()  # mark message as human produced
     Could not spot DMARC.
     Trying to connect to the SMTP...
     Check succeeded.
+    ```
+ * *static* **.load(message)** **(experimental)**: Parse any fetchable contents like an EML file to build an Envelope object.
+    * Still considered experimental: it cannot read an attachment which stays a mere part of the body, it cannot decrypt.
+    * Note that if you will send this reconstructed message, you might not probably receive it due to the Message-ID duplication.
+        Delete at least Message-ID header prior to re-sending. 
+    ```python3
+   envelope.load("Subject: testing message").subject()  # "testing message"
     ```
     
 ## Default values
