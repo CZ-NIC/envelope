@@ -7,5 +7,6 @@ python:
 before_install:
   - sudo apt update
   - sudo apt install swig  # needed to install M2Crypto on bionic
+  - pip3 install M2Crypto
 script:
   - python3 tests.py
