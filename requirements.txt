@@ -1,4 +1,3 @@
 jsonpickle
 python-magic
 python-gnupg
-M2Crypto

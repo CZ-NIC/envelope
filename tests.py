@@ -239,7 +239,7 @@ class TestGPG(TestAbstract):
                            "To: envelope-example-identity-2@example.com",
                            "From: envelope-example-identity@example.com",
                            'Content-Type: multipart/encrypted; protocol="application/pgp-encrypted";'
-                           ), 10)
+                           ), 10, True)
 
     def test_gpg_sign_passphrase(self):
         self._check_lines(envelope("dumb message")
@@ -247,7 +247,7 @@ class TestGPG(TestAbstract):
                           .gpg("tests/gpg_ring/")
                           .from_("envelope-example-identity@example.com")
                           .signature("3C8124A8245618D286CF871E94CE2905DB00CDB7", "test"),  # passphrase needed
-                          ("-----BEGIN PGP SIGNATURE-----",), 10)
+                          ("-----BEGIN PGP SIGNATURE-----",), 10, 1)
 
 
 class TestMime(TestAbstract):

@@ -50,19 +50,20 @@ envelope("my message")
 
 
 # Installation
-* Since M2Crypto used for S/MIME has some dependencies, you may want to ensure them
+* If planning to use S/MIME, you should ensure some prerequisites:
 ```bash
-sudo apt install build-essential python3-dev swig
+sudo apt install swig
+pip3 install M2Crypto
 ```
 * Install with a single command from [PyPi](https://pypi.org/project/envelope/)
-```bash 
-pip3 install envelope
-```
-* Or install current GitHub master
-```bash
-pip3 install git+https://github.com/CZ-NIC/envelope.git
-```
-* Or just download the project and launch `./envelope.py`
+    ```bash 
+    pip3 install envelope
+    ```
+    * Or install current GitHub master
+    ```bash
+    pip3 install git+https://github.com/CZ-NIC/envelope.git
+    ```
+    * Or just download the project and launch `./envelope.py`
 * If planning to send e-mails, prepare SMTP credentials or visit [Configure your SMTP](#configure-your-smtp) tutorial.
 * If your e-mails are to be received outside your local domain, visit [DMARC](#dmarc) section.
 * If planning to sign/encrypt with GPG, install the corresponding package and possibly see [Configure your GPG](#configure-your-gpg) tutorial.

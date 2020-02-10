@@ -1,6 +1,9 @@
 # CHANGELOG
 
-## 0.9.8 (unreleased)
+## 0.9.9 (2020-02-10)
+- smime dependency is optional – thus package can be installed directly without having swig library 
+
+## 0.9.8 (2020-01-27)
 - set signing to "auto" for signing if there is a key matching to the "from" header
 - preview method
 - recipients method

@@ -24,10 +24,6 @@ try:
     import gnupg
 except ImportError:
     gnupg = None
-try:
-    import smime
-except ImportError:
-    smime = None
 import magic
 from jsonpickle import decode
 
@@ -204,7 +200,6 @@ class SMTP:
 class envelope:
     default: 'envelope'
 
-    _encrypts_cache = {}  # cache
     _gnupg: gnupg.GPG
 
     def __bool__(self):
@@ -743,21 +738,8 @@ class envelope:
         if encrypt or sign:
             if self._gpg is not None:
                 gpg_on = bool(self._gpg)
-            elif encrypt in envelope._encrypts_cache:
-                gpg_on = envelope._encrypts_cache
-            elif not gnupg and not smime:
-                raise ImportError("Cannot import neither gnupg, neither smime.")
-            elif not gnupg or not smime:
-                gpg_on = bool(gnupg)
             else:
-                try:
-                    smime.encrypt("test", encrypt)  # XX will this work when smime signing implemented?
-                except (ValueError, TypeError):
-                    gpg_on = True
-                else:
-                    gpg_on = False
-                finally:
-                    envelope._encrypts_cache[encrypt] = gpg_on
+                gpg_on = True
 
             if gpg_on:
                 self._gnupg = gnupg.GPG(gnupghome=self._get_gnupg_home(), options=["--trust-model=always"],
@@ -957,7 +939,10 @@ class envelope:
             # m2crypto.py:13: DeprecationWarning: the imp module is deprecated in favour of importlib;
             # see the module's documentation for alternative uses import imp
             warnings.simplefilter("ignore", category=DeprecationWarning)
-            from M2Crypto import BIO, Rand, SMIME, X509, EVP  # we save up to 30 - 120 ms to load it here
+            try:
+                from M2Crypto import BIO, Rand, SMIME, X509, EVP  # we save up to 30 - 120 ms to load it here
+            except ImportError:
+                raise ImportError("Cannot import M2Crypto. Run: `sudo apt install swig && pip3 install M2Crypto`")
         output_buffer = BIO.MemoryBuffer()
         signed_buffer = BIO.MemoryBuffer()
         content_buffer = BIO.MemoryBuffer(email)
@@ -974,7 +959,10 @@ class envelope:
             sign = assure_fetched(sign, bytes)
             # XX remove getpass conversion to bytes callback when https://gitlab.com/m2crypto/m2crypto/issues/260 is resolved
             cb = (lambda x: bytes(self._passphrase, 'ascii')) if self._passphrase else (lambda x: bytes(getpass(), 'ascii'))
-            smime.pkey = EVP.load_key_string(sign, callback=cb)
+            try:
+                smime.pkey = EVP.load_key_string(sign, callback=cb)
+            except TypeError:
+                raise TypeError("Invalid key")
             if self._cert:
                 cert = self._cert
             else:
