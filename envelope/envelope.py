@@ -612,7 +612,7 @@ class envelope:
         self._attachments += assure_list(attachment_or_list)
         return self
 
-    def signature(self, key=True, passphrase=None, attach_key=False, cert=None, *, key_path=None):
+    def signature(self, key=True, passphrase=None, attach_key=None, cert=None, *, key_path=None):
         """
         Turn signing on.
         :param key: Signing key

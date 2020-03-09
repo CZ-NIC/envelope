@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 0.9.10 (unreleased)
+- fix: --attach-key flag in CLI did not work
+
 ## 0.9.9 (2020-02-10)
 - smime dependency is optional – thus package can be installed directly without having swig library 
 
