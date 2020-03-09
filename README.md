@@ -171,7 +171,7 @@ Note that if neither *gpg* nor *smime* is specified, we try to determine the met
         * "auto" for turning on signing if there is a key matching to the "from" header
         * GPG: Blank for user default key or key ID/fingerprint.
         * S/MIME: Any fetchable contents with key.
-    * **--sign-path**: S/MIME: Filename with the sender\'s private key. (Alternative to `sign` parameter.)
+    * **--sign-path**: Filename with the sender\'s private key. (Alternative to `sign` parameter.)
     * **--passphrase**: Passphrase to the key if needed.
     * **--attach-key**: GPG: Blank for appending public key to the attachments when sending.
     * **--cert**: S/MIME: Certificate contents if not included in the key.
@@ -182,13 +182,20 @@ Note that if neither *gpg* nor *smime* is specified, we try to determine the met
     * **envelope(passphrase=)**: Passphrase to the key if needed.
     * **envelope(attach_key=)**: GPG: Append public key to the attachments when sending.
     * **envelope(cert=)**: S/MIME: Any fetchable contents.
-    * **.sign(key=True, passphrase=, attach_key=False, cert=None, key_path=None)**: Sign now (and you may specify the parameters)         
+    * **.sign(key=True, passphrase=, attach_key=False, cert=None, key_path=None)**: Sign now (and you may specify the parameters).
+        * **key**
+            * GPG:
+                * True (blank) for user default key
+                * key ID/fingerprint
+                * pathlib.Path object of the file with the key (will be imported into keyring)
+                * "auto" for turning on signing if there is a key matching to the "from" header
+            * S/MIME: Any fetchable contents with key to be signed with. May contain signing certificate as well.
     * **.signature(key=True, passphrase=, attach_key=False, cert=None, key_path=None)**: Sign later (when launched with *.sign()*, *.encrypt()* or *.send()* functions
 ### Encrypting
 If the GPG encryption fails, it tries to determine which recipient misses the key.
 
   * **encrypt**:  Recipient GPG public key or S/MIME certificate to be encrypted with. 
-    * **--encrypt**: Key string or blank or 1/true/yes if the key should be in the ring from before. Put 0/false/no to disable `encrypt-path`.
+    * **--encrypt**: Key string or blank or 1/true/yes if the key has already been in the ring. Put 0/false/no to disable `encrypt-path`.
     * **--encrypt-path** *(CLI only)*: Recipient public key stored in a file path. (Alternative to `--encrypt`.)  
     * **envelope(encrypt=)**: Any fetchable contents
     * **.encrypt(key=True, sign=, key_path=)**: With *sign*, you may specify boolean or default signing key ID/fingerprint for GPG or Any fetchable contents with S/MIME key + signing certificate. If import needed, put your encrypting GPG key contents or S/MIME certificate to *key* or path to the key/certificate contents file in *key_path*.

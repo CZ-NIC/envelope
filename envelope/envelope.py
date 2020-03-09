@@ -616,8 +616,11 @@ class envelope:
         """
         Turn signing on.
         :param key: Signing key
-            * "auto" for turning on signing if there is a key matching to the "from" header
-            * GPG: Blank for user default key or key ID/fingerprint.
+            * GPG:
+                * True (blank) for user default key
+                * key ID/fingerprint
+                * pathlib.Path object of the file with the key (will be imported into keyring)
+                * "auto" for turning on signing if there is a key matching to the "from" header
             * S/MIME: Any fetchable contents with key to be signed with. May contain signing certificate as well.
         :param passphrase: Passphrase to the key if needed.
         :param attach_key: GPG: Append public key to the attachments when sending.
@@ -649,8 +652,11 @@ class envelope:
         """
         Sign now.
         :param key: Signing key
-            * "auto" for turning on signing if there is a key matching to the "from" header
-            * GPG: Blank for user default key or key ID/fingerprint.
+            * GPG:
+                * True (blank) for user default key
+                * key ID/fingerprint
+                * pathlib.Path object of the file with the key (will be imported into keyring)
+                * "auto" for turning on signing if there is a key matching to the "from" header
             * S/MIME: Any fetchable contents with key to be signed with. May contain signing certificate as well.
         :param passphrase: Passphrase to the key if needed.
         :param attach_key: GPG: Append public key to the attachments when sending.
@@ -664,7 +670,8 @@ class envelope:
     def encryption(self, key=True, *, key_path=None):
         """
         Turn encrypting on.
-        :param key: Any fetchable contents with recipient GPG public key or S/MIME certificate to be encrypted with.
+        :param key: True (for default GPG key) or any fetchable contents with recipient GPG public key or S/MIME certificate
+                    to be encrypted with.
         :param key_path: Path to a file with the `key`.
         """
         if key_path:
@@ -717,12 +724,12 @@ class envelope:
         if encrypt is not None:
             self.encryption(encrypt)
 
-        # check if there is something to do
         # sign: if sign key=True, we will put here a keyid matched by "From" header,
+        # if sign key=Path, we will import it and put here its keyid
         # else it will take user defined value (which is either keyid or fingerprint)
         sign = self._sign
         encrypt = self._encrypt
-        if sign is None and encrypt is None and send is None:
+        if sign is None and encrypt is None and send is None:  # check if there is something to do
             logger.warning("There is nothing to do – no signing, no encrypting, no sending.")
             return
 
@@ -745,6 +752,9 @@ class envelope:
                 self._gnupg = gnupg.GPG(gnupghome=self._get_gnupg_home(), options=["--trust-model=always"],
                                         # XX trust model might be optional
                                         verbose=False) if sign or encrypt else None
+                if isinstance(sign, Path):  # user included Path object as the sign key, import it and get its fingerprint
+                    result = self._gnupg.import_keys(assure_fetched(sign))
+                    sign = result.fingerprints[0]
                 if sign in [True, AUTO]:  # try to determine sign based on the "From" header
                     fallback_sign = sign = None
                     try:
@@ -900,7 +910,7 @@ class envelope:
             raise RuntimeError("Encrypt key present. " + ", ".join(exc))
         if type(encrypt) is str:  # when True all keys are supposed to be in the keyring
             # XX it should be possible to pass a key-id too, not only the key-data
-            # XXX multiple recipients allowed
+            # XXX multiple recipients allowed (list of keys)
             self._gnupg.import_keys(encrypt)
         deciphering = set(self._to + self._cc + self._bcc + ([self._sender] if self._sender else []))
         status = self._gnupg.encrypt(
@@ -1026,6 +1036,9 @@ class envelope:
         return email
 
     def _prepare_email(self, text: bytes, encrypt_gpg, sign_gpg, sign):
+        """
+        :type sign: If GPG, this should be the key fingerprint.
+        """
         # we'll send it later, transform the text to the e-mail first
         msg_text = EmailMessage()
         # XX make it possible to be "plain" here + to have "plain" as the automatically generated html for older browsers
@@ -1224,7 +1237,7 @@ def _cli():
     parser.add_argument('--cert', help='S/MIME: Certificate contents if not included in the key.',
                         action=BlankTrue, metavar="CONTENTS")
     parser.add_argument('--passphrase', help='If signing key needs passphrase.')
-    parser.add_argument('--sign-path', help='S/MIME: Filename with the sender\'s private key. (Alternative to `sign` parameter.)',
+    parser.add_argument('--sign-path', help='Filename with the sender\'s private key. (Alternative to `sign` parameter.)',
                         metavar="KEY-PATH")
     parser.add_argument('--cert-path', help='S/MIME: Filename with the sender\'s S/MIME private cert'
                                             ' if cert not included in the key. (Alternative to `cert` parameter.)',
