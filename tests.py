@@ -1,19 +1,18 @@
-import contextlib
 import logging
 import sys
 import unittest
-from io import StringIO
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import Tuple, Union
 
 from envelope import envelope
 
 logging.basicConfig(stream=sys.stderr, level=logging.WARNING)
-
+GPG_PASSPHRASE = "test"
 
 class TestAbstract(unittest.TestCase):
     def _check_lines(self, o, lines: Union[str, Tuple[str, ...]] = (), longer: Union[int, Tuple[int, int]] = None,
-                     print_=False, not_in: Union[str, Tuple[str, ...]] = (), raises=()):
+                     print_=False, not_in: Union[str, Tuple[str, ...]] = (), raises=(), result=None):
         """ Converts Envelope objects to str and asserts that lines are present.
         :type lines: Assert in.
         :type not_in: Assert not in.
@@ -30,13 +29,16 @@ class TestAbstract(unittest.TestCase):
         else:
             output = str(o).splitlines()
 
-
         if print_:
             print(o)
         for line in lines:
             self.assertIn(line, output)
         for line in not_in:
             self.assertNotIn(line, output)
+
+        # result state
+        if result is not None:
+            self.assertIs(bool(o), result)
 
         # result line count range
         if type(longer) is tuple:
@@ -100,7 +102,7 @@ class TestSmime(TestAbstract):
     def test_smime_key_cert_together_passphrase(self):
         self._check_lines(envelope("dumb message")
                           .smime()
-                          .signature(Path("tests/smime/key-cert-together-passphrase.pem"), passphrase="test")
+                          .signature(Path("tests/smime/key-cert-together-passphrase.pem"), passphrase=GPG_PASSPHRASE)
                           .sign(),
                           ('Content-Disposition: attachment; filename="smime.p7s"',
                            "MIIEggYJKoZIhvcNAQcCoIIEczCCBG8CAQExCzAJBgUrDgMCGgUAMAsGCSqGSIb3"), 10)
@@ -299,15 +301,79 @@ class TestGPG(TestAbstract):
                           .gpg("tests/gpg_ring/")
                           .from_("envelope-example-identity@example.com")
                           .to("envelope-unknown@example.com")
-                          .encryption(True), longer=(0, 1))
+                          .encryption(True), longer=(0, 1), result=False)
 
     def test_gpg_sign_passphrase(self):
         self._check_lines(envelope("dumb message")
                           .to("envelope-example-identity-2@example.com")
                           .gpg("tests/gpg_ring/")
                           .from_("envelope-example-identity@example.com")
-                          .signature("3C8124A8245618D286CF871E94CE2905DB00CDB7", "test"),  # passphrase needed
+                          .signature("3C8124A8245618D286CF871E94CE2905DB00CDB7", GPG_PASSPHRASE),  # passphrase needed
                           ("-----BEGIN PGP SIGNATURE-----",), 10)
+
+    def test_auto_import(self):
+        temp = TemporaryDirectory()
+
+        # no signature - empty ring
+        self._check_lines(envelope("dumb message")
+                          .gpg(temp.name)
+                          .signature(),
+                          raises=RuntimeError)
+
+        # import key to the ring
+        self._check_lines(envelope("dumb message")
+                          .gpg(temp.name)
+                          .sign(Path("tests/gpg_keys/envelope-example-identity@example.com.key")),
+                          ('dumb message',
+                           '-----BEGIN PGP SIGNATURE-----',
+                           '-----END PGP SIGNATURE-----',), 10)
+
+        # key in the ring from last time
+        self._check_lines(envelope("dumb message")
+                          .gpg(temp.name)
+                          .signature(),
+                          ('dumb message',
+                           '-----BEGIN PGP SIGNATURE-----',
+                           '-----END PGP SIGNATURE-----',), 10)
+
+        # cannot encrypt for identity-2
+        self._check_lines(envelope("dumb message")
+                          .gpg(temp.name)
+                          .from_("envelope-example-identity@example.com")
+                          .to("envelope-example-identity-2@example.com")
+                          .encryption(),
+                          result=False)
+
+        # signing should fail since we have not imported key for identity-2
+        self._check_lines(envelope("dumb message")
+                          .gpg(temp.name)
+                          .from_("envelope-example-identity-2@example.com")
+                          .signature(),
+                          raises=RuntimeError)
+
+        # import encryption key - no passphrase needed while importing or using public key
+        self._check_lines(envelope("dumb message")
+                          .gpg(temp.name)
+                          .from_("envelope-example-identity@example.com")
+                          .to("envelope-example-identity-2@example.com")
+                          .encryption(Path("tests/gpg_keys/envelope-example-identity-2@example.com.key")),
+                          result=True)
+
+        # signing with an invalid passphrase should fail for identity-2
+        self._check_lines(envelope("dumb message")
+                          .gpg(temp.name)
+                          .from_("envelope-example-identity-2@example.com")
+                          .signature(passphrase="INVALID PASSPHRASE"),
+                          result=False)
+
+        # signing with a valid passphrase should pass
+        self._check_lines(envelope("dumb message")
+                          .gpg(temp.name)
+                          .from_("envelope-example-identity-2@example.com")
+                          .signature(passphrase=GPG_PASSPHRASE),
+                          result=True)
+
+        temp.cleanup()
 
 
 class TestMime(TestAbstract):
