@@ -126,13 +126,13 @@ All parameters are optional.
 * **.param(value)** denotes a positional argument
 * **.param(value=)** denotes a keyword argument
  
-Any fetchable contents means plain text, bytes or stream (ex: from open()). In *module interface*, you may use Path object to the file. In *CLI interface*, additional flags are provided.         
+Any attainable contents means plain text, bytes or stream (ex: from open()). In *module interface*, you may use Path object to the file. In *CLI interface*, additional flags are provided.         
 
 ### Input / Output
   * **message**: Message / body text.
     * **--message**: String
     * **--input**: *(CLI only)* Path to the message file. (Alternative to `--message` parameter.)
-    * **envelope(message=)**: Any fetchable contents
+    * **envelope(message=)**: Any attainable contents
     * **.message(text)**:  String or stream.
     * **.message(path=None)**: Path to the file.
     
@@ -167,39 +167,43 @@ Note that if neither *gpg* nor *smime* is specified, we try to determine the met
     * **.smime()**
 ### Signing
   * **sign**: Sign the message.
-    * **--sign**:
-        * "auto" for turning on signing if there is a key matching to the "from" header
-        * GPG: Blank for user default key or key ID/fingerprint.
-        * S/MIME: Any fetchable contents with key.
+    * **`key`** parameter
+        * GPG: 
+            * Blank (*CLI*) or True (*module*) for user default key
+            * key ID/fingerprint
+            * Any attainable contents with the key to be signed with (will be imported into keyring)
+            * "auto" for turning on signing if there is a key matching to the "from" header
+        * S/MIME: Any attainable contents with key to be signed with. May contain signing certificate as well.            
+    * **--sign key**: (for `key` see above)
     * **--sign-path**: Filename with the sender\'s private key. (Alternative to `sign` parameter.)
     * **--passphrase**: Passphrase to the key if needed.
     * **--attach-key**: GPG: Blank for appending public key to the attachments when sending.
     * **--cert**: S/MIME: Certificate contents if not included in the key.
     * **--cert-path**: S/MIME: Filename with the sender's private cert if cert not included in the key. (Alternative to `cert` parameter.)
-    * **envelope(sign=)**:
-        * GPG: True for user default key or key ID/fingerprint.
-        * S/MIME: Key contents.
+    * **envelope(sign=key)**: (for `key` see above)        
     * **envelope(passphrase=)**: Passphrase to the key if needed.
     * **envelope(attach_key=)**: GPG: Append public key to the attachments when sending.
-    * **envelope(cert=)**: S/MIME: Any fetchable contents.
-    * **.sign(key=True, passphrase=, attach_key=False, cert=None, key_path=None)**: Sign now (and you may specify the parameters).
-        * **key**
-            * GPG:
-                * True (blank) for user default key
-                * key ID/fingerprint
-                * pathlib.Path object of the file with the key (will be imported into keyring)
-                * "auto" for turning on signing if there is a key matching to the "from" header
-            * S/MIME: Any fetchable contents with key to be signed with. May contain signing certificate as well.
+    * **envelope(cert=)**: S/MIME: Any attainable contents.
+    * **.sign(key=True, passphrase=, attach_key=False, cert=None, key_path=None)**: Sign now (and you may specify the parameters). (For `key` see above.)
     * **.signature(key=True, passphrase=, attach_key=False, cert=None, key_path=None)**: Sign later (when launched with *.sign()*, *.encrypt()* or *.send()* functions
 ### Encrypting
 If the GPG encryption fails, it tries to determine which recipient misses the key.
 
   * **encrypt**:  Recipient GPG public key or S/MIME certificate to be encrypted with. 
-    * **--encrypt**: Key string or blank or 1/true/yes if the key has already been in the ring. Put 0/false/no to disable `encrypt-path`.
+    * **--encrypt**: Key string or blank or 1/true/yes if the key has already been in the ring or "auto". Put 0/false/no to disable `encrypt-path`.
     * **--encrypt-path** *(CLI only)*: Recipient public key stored in a file path. (Alternative to `--encrypt`.)  
-    * **envelope(encrypt=)**: Any fetchable contents
-    * **.encrypt(key=True, sign=, key_path=)**: With *sign*, you may specify boolean or default signing key ID/fingerprint for GPG or Any fetchable contents with S/MIME key + signing certificate. If import needed, put your encrypting GPG key contents or S/MIME certificate to *key* or path to the key/certificate contents file in *key_path*.
-    * **.encryption(key=True, key_path=)**: Encrypt later (when launched with *.sign()*, *.encrypt()* or *.send()* functions. If needed, in the parameters specify Any fetchable contents with GPG encryption key or S/MIME encryption certificate. 
+    * **envelope(encrypt=)**: Any attainable contents
+    * **.encrypt(key=True, sign=, key_path=)**:
+        * **`key`**
+            * GPG:
+                * True (blank) to force encrypt
+                * key ID/fingerprint
+                * Any attainable contents with the key to be encrypted with (will be imported into keyring)
+                * "auto" for turning on encrypting if there is a matching key for every recipient
+            * S/MIME any attainable contents with certificate to be encrypted with.
+        * **`sign`** You may specify boolean or default signing key ID/fingerprint or "auto" for GPG or any attainable contents with S/MIME key + signing certificate.
+        * **`key_path`**: Key/certificate contents (alternative to `key` parameter)
+    * **.encryption(key=True, key_path=)**: Encrypt later (when launched with *.sign()*, *.encrypt()* or *.send()* functions. If needed, in the parameters specify Any attainable contents with GPG encryption key or S/MIME encryption certificate. 
   * **to**: E-mail or list. When encrypting, we use keys of these identities.
     * **--to**: One or more e-mail addresses.
     * **envelope(to=)**: E-mail or their list.
@@ -284,12 +288,12 @@ If the GPG encryption fails, it tries to determine which recipient misses the ke
     ```bash
     envelope --attachment "/tmp/file.txt" "displayed-name.txt" "text/plain" --attachment "/tmp/another-file.txt"
     ```
-    * **gpggp(attachments=)**: Attachment or their list. Attachment is defined by any fetchable contents, optionally in tuple with the file name to be used in the e-mail and/or mime type: `content [,name] [,mimetype]`
+    * **gpggp(attachments=)**: Attachment or their list. Attachment is defined by any attainable contents, optionally in tuple with the file name to be used in the e-mail and/or mime type: `content [,name] [,mimetype]`
     ```python3
     envelope(attachments=[(Path("/tmp/file.txt"), "displayed-name.txt", "text/plain"), Path("/tmp/another-file.txt"])
     ```    
     * **.attach(attachment_or_list=, path=, mimetype=, filename=)**: Three different usages.
-        * **.attach(attachment_or_list=, mimetype=, filename=)**: You can put Any fetchable contents in *attachment_or_list* and optionally mimetype or displayed filename.
+        * **.attach(attachment_or_list=, mimetype=, filename=)**: You can put Any attainable contents in *attachment_or_list* and optionally mimetype or displayed filename.
         * **.attach(path=, mimetype=, filename=)**: You can specify path and optionally mimetype or displayed filename.
         * **.attach(attachment_or_list=)**: You can put a list of attachments.
     ```python3
@@ -362,7 +366,7 @@ envelope().auto_submitted.no()  # mark message as human produced
     Trying to connect to the SMTP...
     Check succeeded.
     ```
- * *static* **.load(message)** **(experimental)**: Parse any fetchable contents like an EML file to build an Envelope object.
+ * *static* **.load(message)** **(experimental)**: Parse any attainable contents like an EML file to build an Envelope object.
     * Still considered experimental: it cannot read an attachment which stays a mere part of the body, it cannot decrypt.
     * Note that if you will send this reconstructed message, you might not probably receive it due to the Message-ID duplication.
         Delete at least Message-ID header prior to re-sending. 

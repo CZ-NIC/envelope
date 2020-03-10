@@ -94,6 +94,11 @@ def assure_list(l):
     return l
 
 
+def is_gpg_fingerprint(key):
+    """ Check if we have key fingerprint in the variable or the key contents itself """
+    return isinstance(key, str) and len(key) * 4 < 512  # 512 is the smallest possible GPG key
+
+
 class AutoSubmittedHeader:
     """  "auto-replied": direct response to another message by an automatic process """
 
@@ -274,7 +279,7 @@ class envelope:
 
         Note that if you will send this reconstructed message, you might not probably receive it due to the Message-ID duplication.
         Delete at least Message-ID header prior to re-sending.
-        @type message: Parse any fetchable contents to build an Envelope object.
+        @type message: Parse any attainable contents to build an Envelope object.
         """
         header_row = re.compile(r"([^\t:]+):(.*)")
         text = assure_fetched(message)
@@ -315,12 +320,12 @@ class envelope:
         """
         :rtype: object If output not set, return output bytes, else True/False if output file was correctly written to.
 
-        Any fetchable contents means plain text, bytes or stream (ex: from open()).
+        Any attainable contents means plain text, bytes or stream (ex: from open()).
         In *module interface*, you may use Path object to the file.
         In *CLI interface*, additional flags are provided.
 
         Input / Output
-        :param message: Any fetchable contents.
+        :param message: Any attainable contents.
         :param output: Path to file to be written to (else the contents is returned).
         :param gpg: Home folder of GNUPG rings else default ~/.gnupg is used. Put True for prefer GPG over SMIME.
 
@@ -410,7 +415,7 @@ class envelope:
                 getattr(self, k)(v)  # ex: self.message(message)
 
         if sign or encrypt or send is not None:
-            self._start(sign=sign, encrypt=encrypt, send=send)
+            self._start(send=send)
 
     def cc(self, email_or_list):
         self._cc += assure_list(email_or_list)
@@ -619,12 +624,12 @@ class envelope:
             * GPG:
                 * True (blank) for user default key
                 * key ID/fingerprint
-                * pathlib.Path object of the file with the key (will be imported into keyring)
+                * Any attainable contents with the key to be signed with (will be imported into keyring)
                 * "auto" for turning on signing if there is a key matching to the "from" header
-            * S/MIME: Any fetchable contents with key to be signed with. May contain signing certificate as well.
+            * S/MIME: Any attainable contents with key to be signed with. May contain signing certificate as well.
         :param passphrase: Passphrase to the key if needed.
         :param attach_key: GPG: Append public key to the attachments when sending.
-        :param cert: S/MIME: Any fetchable contents with certificate to be signed with.
+        :param cert: S/MIME: Any attainable contents with certificate to be signed with.
         :param key_path: Path to a file with the `key`.
         """
         if key_path:
@@ -634,8 +639,7 @@ class envelope:
             # (and not just "True")
             pass
         elif key is not None:
-            # GPG: string, S/MIME: fetchable bytes
-            # Do not call assure_fetched(bytes) because in GPG we need key fingerprint string.
+            # GPG: True, AUTO, fingerprint, or attainable contents, S/MIME: attainable bytes
             self._sign = key
         if passphrase is not None:
             self._passphrase = passphrase
@@ -655,23 +659,28 @@ class envelope:
             * GPG:
                 * True (blank) for user default key
                 * key ID/fingerprint
-                * pathlib.Path object of the file with the key (will be imported into keyring)
+                * Any attainable contents with the key to be signed with (will be imported into keyring)
                 * "auto" for turning on signing if there is a key matching to the "from" header
-            * S/MIME: Any fetchable contents with key to be signed with. May contain signing certificate as well.
+            * S/MIME: Any attainable contents with key to be signed with. May contain signing certificate as well.
         :param passphrase: Passphrase to the key if needed.
         :param attach_key: GPG: Append public key to the attachments when sending.
-        :param cert: S/MIME: Any fetchable contents with certificate to be signed with.
+        :param cert: S/MIME: Any attainable contents with certificate to be signed with.
         :param key_path: Path to a file with the `key`.
         """
         self._processed = True
         self.signature(key=key, passphrase=passphrase, attach_key=attach_key, cert=cert, key_path=key_path)
-        return self._start(sign=True)
+        return self._start()
 
     def encryption(self, key=True, *, key_path=None):
         """
         Turn encrypting on.
-        :param key: True (for default GPG key) or any fetchable contents with recipient GPG public key or S/MIME certificate
-                    to be encrypted with.
+        :param key:
+            * GPG:
+                * True (blank) for user default key
+                * key ID/fingerprint
+                * Any attainable contents with the key to be signed with (will be imported into keyring)
+                * "auto" for turning on encrypting if there is a matching key for every recipient
+            * S/MIME any attainable contents with certificate to be encrypted with.
         :param key_path: Path to a file with the `key`.
         """
         if key_path:
@@ -681,23 +690,28 @@ class envelope:
             # (and not just "True")
             pass
         elif key is not None:
-            self._encrypt = assure_fetched(key, bytes)
+            self._encrypt = key
         return self
 
     def encrypt(self, key=True, sign=None, *, key_path=None):
         """
         Encrypt now.
-        :param key: True (for default GPG key) or any fetchable contents with recipient GPG public key or S/MIME certificate
-                    to be encrypted with.
+        :param key:
+            * GPG:
+                * True (blank) for user default key
+                * key ID/fingerprint
+                * Any attainable contents with the key to be signed with (will be imported into keyring)
+                * "auto" for turning on encrypting if there is a matching key for every recipient
+            * S/MIME any attainable contents with certificate to be encrypted with.
         :param sign: Turn signing on.
             * GPG: True or default signing key ID/fingerprint.
-            * S/MIME: Any fetchable contents having the key + signing certificate combined in a single file.
+            * S/MIME: Any attainable contents having the key + signing certificate combined in a single file.
               (If not in a single file, use .signature() method.)
         :param key_path: Path to a file with the `key`.
         """
         self._processed = True
         self.encryption(key=key, key_path=key_path)
-        return self._start(encrypt=True, sign=sign)
+        return self._start(sign=sign)
 
     def send(self, send=True, sign=None, encrypt=None):
         """
@@ -705,9 +719,9 @@ class envelope:
         :param send: True to send now, False to print debug information.
         :param sign: Turn signing on.
             * GPG: True or default signing key ID/fingerprint.
-            * S/MIME: Any fetchable contents having the key + signing certificate combined in a single file.
+            * S/MIME: Any attainable contents having the key + signing certificate combined in a single file.
               (If not in a single file, use .signature() method.)
-        :param encrypt: Any fetchable contents with recipient GPG public key or S/MIME certificate to be encrypted with.
+        :param encrypt: Any attainable contents with recipient GPG public key or S/MIME certificate to be encrypted with.
         :return:
         """
         if self._processed:
@@ -724,10 +738,13 @@ class envelope:
         if encrypt is not None:
             self.encryption(encrypt)
 
-        # sign: if sign key=True, we will put here a keyid matched by "From" header,
-        # if sign key=Path, we will import it and put here its keyid
-        # else it will take user defined value (which is either keyid or fingerprint)
+        # sign:
+        #   GPG: (True, key contents, fingerprint, AUTO, None) → will be converted to key fingerprint or None,
+        #   SMIME: certificate contents
         sign = self._sign
+        # encrypt:
+        #   GPG: (True, key contents, fingerprint, None)
+        #   SMIME: certificate contents
         encrypt = self._encrypt
         if sign is None and encrypt is None and send is None:  # check if there is something to do
             logger.warning("There is nothing to do – no signing, no encrypting, no sending.")
@@ -752,28 +769,42 @@ class envelope:
                 self._gnupg = gnupg.GPG(gnupghome=self._get_gnupg_home(), options=["--trust-model=always"],
                                         # XX trust model might be optional
                                         verbose=False) if sign or encrypt else None
-                if isinstance(sign, Path):  # user included Path object as the sign key, import it and get its fingerprint
-                    result = self._gnupg.import_keys(assure_fetched(sign))
-                    sign = result.fingerprints[0]
-                if sign in [True, AUTO]:  # try to determine sign based on the "From" header
-                    fallback_sign = sign = None
-                    try:
-                        address_searched = getaddresses([self._sender])[0][1]
-                    except (TypeError, IndexError):
-                        # there is no "From" header and no default key is given, pick the first secret as a default
-                        for key in self._gnupg.list_keys(True):
-                            fallback_sign = key["keyid"]
-                            break
-                    else:
-                        for keyid in [key["keyid"] for key in self._gnupg.list_keys(True) for _, address in
-                                      getaddresses(key["uids"]) if address_searched == address]:
-                            sign = keyid
-                            break
-                    if not sign and self._sign != AUTO:
-                        if fallback_sign:
-                            sign = fallback_sign
+                # assure `sign` become either fingerprint of an imported key or None
+                if sign:
+                    if sign in [True, AUTO]:  # try to determine sign based on the "From" header
+                        fallback_sign = sign = None
+                        try:
+                            address_searched = getaddresses([self._sender])[0][1]
+                        except (TypeError, IndexError):
+                            # there is no "From" header and no default key is given, pick the first secret as a default
+                            for key in self._gnupg.list_keys(True):
+                                fallback_sign = key["keyid"]
+                                break
                         else:
-                            raise RuntimeError("No GPG sign key found")
+                            # sign = first available private keyid (fingerprint) or False
+                            sign = next((key["keyid"] for key, address in self._gpg_list_keys(True)
+                                         if address_searched == address), False)
+                        if not sign and self._sign != AUTO:
+                            if fallback_sign:
+                                sign = fallback_sign
+                            else:
+                                raise RuntimeError("No GPG sign key found")
+                    elif not is_gpg_fingerprint(sign):  # sign is Path or key contents, import it and get its fingerprint
+                        result = self._gnupg.import_keys(assure_fetched(sign, bytes))
+                        sign = result.fingerprints[0]
+
+                if encrypt:
+                    if encrypt == AUTO:
+                        # encrypt = True only if there exist a key for every neeeded address
+                        addresses_searched = self._get_decipherers()
+                        [addresses_searched.discard(address) for _, address in self._gpg_list_keys(False)]
+                        if addresses_searched:
+                            encrypt = False
+                    elif encrypt is not True and not is_gpg_fingerprint(encrypt):
+                        # if type(encrypt) is str:  # when True all keys are supposed to be in the keyring
+                        # XX it should be possible to pass a key-id too, not only the key-data
+                        # XXX multiple recipients allowed (list of keys)
+                        self._gnupg.import_keys(assure_fetched(encrypt, bytes))
 
         # if we plan to send later, convert text message to the email message object
         email = None
@@ -788,7 +819,7 @@ class envelope:
         if encrypt or sign:
             if gpg_on:
                 if encrypt:
-                    data = self._encrypt_gpg_now(data, sign, encrypt)
+                    data = self._encrypt_gpg_now(data, sign)
                 elif sign:
                     data, micalg = self._sign_gpg_now(data, sign, send)
             else:
@@ -900,7 +931,7 @@ class envelope:
             return False, None
         return status.data, micalg
 
-    def _encrypt_gpg_now(self, message, sign, encrypt):
+    def _encrypt_gpg_now(self, message, sign_fingerprint):
         exc = []
         if not self._to and not self._cc and not self._bcc:
             exc.append("No recipient e-mail specified")
@@ -908,15 +939,10 @@ class envelope:
             exc.append("No sender e-mail specified. If not planning to decipher later, put sender=False or --no-sender flag.")
         if exc:
             raise RuntimeError("Encrypt key present. " + ", ".join(exc))
-        if type(encrypt) is str:  # when True all keys are supposed to be in the keyring
-            # XX it should be possible to pass a key-id too, not only the key-data
-            # XXX multiple recipients allowed (list of keys)
-            self._gnupg.import_keys(encrypt)
-        deciphering = set(self._to + self._cc + self._bcc + ([self._sender] if self._sender else []))
         status = self._gnupg.encrypt(
             data=message,
-            recipients=deciphering,
-            sign=sign if sign else None,
+            recipients=self._get_decipherers(),
+            sign=sign_fingerprint if sign_fingerprint else None,
             passphrase=self._passphrase if self._passphrase else None
         )
         if status.ok:
@@ -934,7 +960,7 @@ class envelope:
             if any(s in status.stderr for s in ["No name", "No data", "General error", "Syntax error in URI"]):
                 keys = [uid["uids"] for uid in self._gnupg.list_keys()]
                 found = False
-                for identity in deciphering:
+                for identity in self._get_decipherers():
                     if not [k for k in keys if [x for x in k if identity in x]]:
                         found = True
                         logger.warning(f"Key for {identity} seems missing.")
@@ -943,6 +969,12 @@ class envelope:
                     s = f"GNUPGHOME={s} " if s else ""
                     logger.warning(f"See {s} gpg --list-keys")
             return False
+
+    def _gpg_list_keys(self, secret=False):
+        return ((key, address) for key in self._gnupg.list_keys(secret) for _, address in getaddresses(key["uids"]))
+
+    def _get_decipherers(self):
+        return set(self._to + self._cc + self._bcc + ([self._sender] if self._sender else []))
 
     def _encrypt_smime_now(self, email, sign, encrypt):
         with warnings.catch_warnings():
@@ -988,7 +1020,8 @@ class envelope:
                 content_buffer = signed_buffer
         if encrypt:
             sk = X509.X509_Stack()
-            sk.push(X509.load_cert_string(encrypt))  # XXX multiple recipients - may be loaded from a directory by from, to, sender?
+            sk.push(X509.load_cert_string(
+                assure_fetched(encrypt, bytes)))  # XXX multiple recipients - may be loaded from a directory by from, to, sender?
             smime.set_x509_stack(sk)
             smime.set_cipher(SMIME.Cipher('des_ede3_cbc'))  # Set cipher: 3-key triple-DES in CBC mode.
 

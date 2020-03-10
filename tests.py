@@ -1,6 +1,8 @@
+import contextlib
 import logging
 import sys
 import unittest
+from io import StringIO
 from pathlib import Path
 from typing import Tuple, Union
 
@@ -10,15 +12,36 @@ logging.basicConfig(stream=sys.stderr, level=logging.WARNING)
 
 
 class TestAbstract(unittest.TestCase):
-    def _check_lines(self, o, lines: Union[str, Tuple[str, ...]], longer=None, print_=False):
-        """ Converts Envelope objects to str and asserts that lines are present. """
+    def _check_lines(self, o, lines: Union[str, Tuple[str, ...]] = (), longer: Union[int, Tuple[int, int]] = None,
+                     print_=False, not_in: Union[str, Tuple[str, ...]] = (), raises=()):
+        """ Converts Envelope objects to str and asserts that lines are present.
+        :type lines: Assert in.
+        :type not_in: Assert not in.
+        :type longer: If int → result must be longer than int. If tuple → result line count must be within tuple range.
+        """
         if type(lines) is str:
             lines = lines,
-        output = str(o).splitlines()
+        if type(not_in) is str:
+            not_in = not_in,
+
+        if raises:
+            self.assertRaises(raises, str, o)
+            output = None
+        else:
+            output = str(o).splitlines()
+
+
         if print_:
             print(o)
         for line in lines:
             self.assertIn(line, output)
+        for line in not_in:
+            self.assertNotIn(line, output)
+
+        # result line count range
+        if type(longer) is tuple:
+            longer, shorter = longer
+            self.assertLess(len(output), shorter)
         if longer:
             self.assertGreater(len(output), longer)
 
@@ -154,9 +177,9 @@ class TestGPG(TestAbstract):
 
         # mail from "envelope-example-identity-not-stated-in-ring@example.com" should not be signed
         output = str(envelope("dumb message")
-                          .gpg("tests/gpg_ring/")
-                          .from_("envelope-example-identity-not-stated-in-ring@example.com")
-                          .sign("auto")).splitlines()
+                     .gpg("tests/gpg_ring/")
+                     .from_("envelope-example-identity-not-stated-in-ring@example.com")
+                     .sign("auto")).splitlines()
         self.assertNotIn('-----BEGIN PGP SIGNATURE-----', output)
 
         # force-signing without specifying a key nor sending address shuold produce a message signed with a first-found key
@@ -166,16 +189,10 @@ class TestGPG(TestAbstract):
         self.assertIn('-----BEGIN PGP SIGNATURE-----', output)
 
         # force-signing without specifying a key and with sending from an e-mail which is not in the keyring must fail
-        raised = False
-        try:
-            envelope("dumb message")\
-                     .gpg("tests/gpg_ring/")\
-                     .from_("envelope-example-identity-not-stated-in-ring@example.com")\
-                     .sign(True)
-        except RuntimeError:
-            raised = True
-        finally:
-            self.assertTrue(raised)
+        self._check_lines(envelope("dumb message")
+                          .gpg("tests/gpg_ring/")
+                          .from_("envelope-example-identity-not-stated-in-ring@example.com")
+                          .signature(True), raises=RuntimeError)
 
     def test_gpg_encrypt_message(self):
         # Message will look like this:
@@ -239,7 +256,50 @@ class TestGPG(TestAbstract):
                            "To: envelope-example-identity-2@example.com",
                            "From: envelope-example-identity@example.com",
                            'Content-Type: multipart/encrypted; protocol="application/pgp-encrypted";'
-                           ), 10, True)
+                           ), 10)
+
+    def test_gpg_auto_encrypt(self):
+        # mail `from` "envelope-example-identity@example.com" is in ring
+        self._check_lines(envelope("dumb message")
+                          .gpg("tests/gpg_ring/")
+                          .from_("envelope-example-identity@example.com")
+                          .to("envelope-example-identity@example.com")
+                          .encrypt("auto"),
+                          ('-----BEGIN PGP MESSAGE-----',
+                           '-----END PGP MESSAGE-----',), (10, 15), not_in="dumb message")
+
+        # mail `to` "envelope-unknown@example.com" unknown, must be both signed and encrypted
+        self._check_lines(envelope("dumb message")
+                          .gpg("tests/gpg_ring/")
+                          .from_("envelope-example-identity@example.com")
+                          .to("envelope-example-identity-2@example.com")
+                          .signature("auto")
+                          .encrypt("auto"),
+                          ('-----BEGIN PGP MESSAGE-----',
+                           '-----END PGP MESSAGE-----',), 20, not_in="dumb message")
+
+        # mail `from` "envelope-unknown@example.com" unknown, must not be encrypted
+        self._check_lines(envelope("dumb message")
+                          .gpg("tests/gpg_ring/")
+                          .from_("envelope-unknown@example.com")
+                          .to("envelope-example-identity@example.com")
+                          .encrypt("auto"),
+                          ('dumb message',), (0, 2), not_in='-----BEGIN PGP MESSAGE-----')
+
+        # mail `to` "envelope-unknown@example.com" unknown, must not be encrypted
+        self._check_lines(envelope("dumb message")
+                          .gpg("tests/gpg_ring/")
+                          .from_("envelope-example-identity@example.com")
+                          .to("envelope-unknown@example.com")
+                          .encrypt("auto"),
+                          ('dumb message',), (0, 2), not_in='-----BEGIN PGP MESSAGE-----')
+
+        # force-encrypting without having key must return empty response
+        self._check_lines(envelope("dumb message")
+                          .gpg("tests/gpg_ring/")
+                          .from_("envelope-example-identity@example.com")
+                          .to("envelope-unknown@example.com")
+                          .encryption(True), longer=(0, 1))
 
     def test_gpg_sign_passphrase(self):
         self._check_lines(envelope("dumb message")
@@ -247,7 +307,7 @@ class TestGPG(TestAbstract):
                           .gpg("tests/gpg_ring/")
                           .from_("envelope-example-identity@example.com")
                           .signature("3C8124A8245618D286CF871E94CE2905DB00CDB7", "test"),  # passphrase needed
-                          ("-----BEGIN PGP SIGNATURE-----",), 10, 1)
+                          ("-----BEGIN PGP SIGNATURE-----",), 10)
 
 
 class TestMime(TestAbstract):
@@ -290,7 +350,6 @@ Third
         self._check_lines(envelope().message(self.html_without_line_break), br)
         self._check_lines(envelope().message(self.html_without_line_break).mime("plain", True), nobr)  # nl2br disabled in "plain"
         self._check_lines(envelope().message(self.html_without_line_break).mime(nl2br=False), nobr)
-
 
 
 if __name__ == '__main__':

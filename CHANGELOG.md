@@ -3,6 +3,7 @@
 ## 0.9.10 (unreleased)
 - fix: --attach-key flag in CLI did not work
 - auto-import GPG key from file
+- auto-encrypt GPG possibility
 
 ## 0.9.9 (2020-02-10)
 - smime dependency is optional – thus package can be installed directly without having swig library 
