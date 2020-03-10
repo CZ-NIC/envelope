@@ -801,9 +801,7 @@ class envelope:
                         if addresses_searched:
                             encrypt = False
                     elif encrypt is not True and not is_gpg_fingerprint(encrypt):
-                        # if type(encrypt) is str:  # when True all keys are supposed to be in the keyring
-                        # XX it should be possible to pass a key-id too, not only the key-data
-                        # XXX multiple recipients allowed (list of keys)
+                        # XX multiple keys in list may be allowed
                         self._gnupg.import_keys(assure_fetched(encrypt, bytes))
 
         # if we plan to send later, convert text message to the email message object

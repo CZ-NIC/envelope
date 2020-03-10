@@ -8,7 +8,9 @@ from typing import Tuple, Union
 from envelope import envelope
 
 logging.basicConfig(stream=sys.stderr, level=logging.WARNING)
+
 GPG_PASSPHRASE = "test"
+GPG_IDENTITY_1_FINGERPRINT = "F14F2E8097E0CCDE93C4E871F4A4F26779FA03BB"
 
 class TestAbstract(unittest.TestCase):
     def _check_lines(self, o, lines: Union[str, Tuple[str, ...]] = (), longer: Union[int, Tuple[int, int]] = None,
@@ -350,6 +352,15 @@ class TestGPG(TestAbstract):
                           .from_("envelope-example-identity-2@example.com")
                           .signature(),
                           raises=RuntimeError)
+
+        # however it should pass when we explicitly use an existing GPG key to be signed with
+        self._check_lines(envelope("dumb message")
+                          .gpg(temp.name)
+                          .from_("envelope-example-identity-2@example.com")
+                          .signature(GPG_IDENTITY_1_FINGERPRINT),
+                          ('dumb message',
+                           '-----BEGIN PGP SIGNATURE-----',
+                           '-----END PGP SIGNATURE-----',), 10, result=True)
 
         # import encryption key - no passphrase needed while importing or using public key
         self._check_lines(envelope("dumb message")
