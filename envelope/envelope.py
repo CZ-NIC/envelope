@@ -680,11 +680,14 @@ class envelope:
                 * key ID/fingerprint
                 * Any attainable contents with the key to be signed with (will be imported into keyring)
                 * "auto" for turning on encrypting if there is a matching key for every recipient
-            * S/MIME any attainable contents with certificate to be encrypted with.
-        :param key_path: Path to a file with the `key`.
+            * S/MIME any attainable contents with certificate to be encrypted with or their list
+        :param key_path: Path to a file with the `key` or their list.
         """
         if key_path:
-            key = Path(key_path)
+            if type(key_path) is list:
+                key = [Path(k) for k in key_path]
+            else:
+                key = Path(key_path)
         if key is True and self._encrypt not in [None, False]:
             # usecase envelope().encrypt(key="keystring").send(encrypt=True) should still have key in self._encrypt
             # (and not just "True")
@@ -702,12 +705,12 @@ class envelope:
                 * key ID/fingerprint
                 * Any attainable contents with the key to be signed with (will be imported into keyring)
                 * "auto" for turning on encrypting if there is a matching key for every recipient
-            * S/MIME any attainable contents with certificate to be encrypted with.
+            * S/MIME any attainable contents with certificate to be encrypted with or their list
         :param sign: Turn signing on.
             * GPG: True or default signing key ID/fingerprint.
             * S/MIME: Any attainable contents having the key + signing certificate combined in a single file.
               (If not in a single file, use .signature() method.)
-        :param key_path: Path to a file with the `key`.
+        :param key_path: Path to a file with the `key` or their list.
         """
         self._processed = True
         self.encryption(key=key, key_path=key_path)
@@ -1018,8 +1021,13 @@ class envelope:
                 content_buffer = signed_buffer
         if encrypt:
             sk = X509.X509_Stack()
-            sk.push(X509.load_cert_string(
-                assure_fetched(encrypt, bytes)))  # XXX multiple recipients - may be loaded from a directory by from, to, sender?
+            if type(encrypt) is not list:
+                encrypt = [encrypt]
+            [sk.push(X509.load_cert_string(assure_fetched(e, bytes))) for e in encrypt]
+            # XX certificates might be loaded from a directory by from, to, sender:
+            # X509.load_cert_string(assure_fetched(e, bytes)).get_subject() ->
+            # 'C=CZ, ST=State, L=City, O=Organisation, OU=Unit, CN=my-name/emailAddress=email@example.com'
+            # X509.load_cert_string can take 7 µs, so the directory should be cached somewhere.
             smime.set_x509_stack(sk)
             smime.set_cipher(SMIME.Cipher('des_ede3_cbc'))  # Set cipher: 3-key triple-DES in CBC mode.
 
@@ -1274,10 +1282,17 @@ def _cli():
                                             ' if cert not included in the key. (Alternative to `cert` parameter.)',
                         metavar="CERT-PATH")
 
-    parser.add_argument('--encrypt', help='Recipients public key string or 1 or true if the key should be in the ring from before.',
-                        nargs="?", action=BlankTrue, metavar="GPG-KEY/SMIME-CERTIFICATE-CONTENTS")
-    parser.add_argument('--encrypt-path', help='Filename with the recipient\'s public key. (Alternative to `encrypt` parameter.)',
-                        metavar="PATH")
+    parser.add_argument('--encrypt', help='R|* GPG:'
+                                          "\n  * Blank for user default key"
+                                          "\n  * key ID/fingerprint"
+                                          "\n  * Any attainable contents with the key to be signed with"
+                                          " (will be imported into keyring)"
+                                          "\n  * \"auto\" for turning on encrypting if there is a matching key for every recipient"
+                                          "\n* S/MIME any attainable contents with certificate to be encrypted with or their list",
+                        nargs="*", action=BlankTrue, metavar="GPG-KEY/SMIME-CERTIFICATE-CONTENTS")
+    parser.add_argument('--encrypt-path', help='Filename(s) with the recipient\'s public key.'
+                                               ' (Alternative to `encrypt` parameter.)',
+                        nargs="*", metavar="PATH")
     parser.add_argument('-t', '--to', help="E-mail – needed to choose their key if encrypting", nargs="+", metavar="E-MAIL")
     parser.add_argument('--cc', help="E-mail or list", nargs="+", metavar="E-MAIL")
     parser.add_argument('--bcc', help="E-mail or list", nargs="+", metavar="E-MAIL")
@@ -1336,7 +1351,10 @@ def _cli():
     if args["encrypt_path"] and args["encrypt"] is not False:
         if args["encrypt"] not in [True, None]:  # user has specified both path and the key
             raise RuntimeError("Cannot define both encrypt key data and encrypt key path.")
-        args["encrypt"] = Path(args["encrypt_path"])
+        if type(args["encrypt_path"]) is list:
+            args["encrypt"] = [Path(p) for p in args["encrypt_path"]]
+        else:
+            args["encrypt"] = Path(args["encrypt_path"])
     del args["encrypt_path"]
 
     # user specified sign key in a path. And did not disabled signing

@@ -12,6 +12,7 @@ logging.basicConfig(stream=sys.stderr, level=logging.WARNING)
 GPG_PASSPHRASE = "test"
 GPG_IDENTITY_1_FINGERPRINT = "F14F2E8097E0CCDE93C4E871F4A4F26779FA03BB"
 
+
 class TestAbstract(unittest.TestCase):
     def _check_lines(self, o, lines: Union[str, Tuple[str, ...]] = (), longer: Union[int, Tuple[int, int]] = None,
                      print_=False, not_in: Union[str, Tuple[str, ...]] = (), raises=(), result=None):
@@ -135,6 +136,46 @@ class TestSmime(TestAbstract):
                            "Reply-To: test-reply@example.com"), 10)
 
         # XX decrypt test https://m2crypto.readthedocs.io/en/latest/howto.smime.html#decrypt
+
+    def test_multiple_recipients(self):
+        from M2Crypto import SMIME, BIO
+        msg = "dumb message"
+
+        def is_decryptable(key, cert, text):
+            # Load private key and cert and decrypt
+            s = SMIME.SMIME()
+            s.load_key(key, cert)
+            p7, data = SMIME.smime_load_pkcs7_bio(BIO.MemoryBuffer(bytes(text)))
+            try:
+                return s.decrypt(p7) == bytes(msg, "utf-8")
+            except SMIME.PKCS7_Error:
+                return False
+
+        # encrypt for both keys
+        output = (envelope(msg)
+                  .smime()
+                  .reply_to("test-reply@example.com")
+                  .subject("my message")
+                  .encrypt([Path("tests/smime/cert.pem"), Path("tests/smime/smime-identity@example.com-cert.pem")]))
+
+        self.assertTrue(is_decryptable('tests/smime/smime-identity@example.com-key.pem',
+                                       'tests/smime/smime-identity@example.com-cert.pem',
+                                       output))
+        self.assertTrue(is_decryptable('tests/smime/key.pem', 'tests/smime/cert.pem',
+                                       output))
+
+        # encrypt for single key only
+        output = (envelope(msg)
+                  .smime()
+                  .reply_to("test-reply@example.com")
+                  .subject("my message")
+                  .encrypt([Path("tests/smime/cert.pem")]))
+
+        self.assertFalse(is_decryptable('tests/smime/smime-identity@example.com-key.pem',
+                                        'tests/smime/smime-identity@example.com-cert.pem',
+                                        output))
+        self.assertTrue(is_decryptable('tests/smime/key.pem', 'tests/smime/cert.pem',
+                                       output))
 
 
 class TestGPG(TestAbstract):

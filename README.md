@@ -190,20 +190,24 @@ Note that if neither *gpg* nor *smime* is specified, we try to determine the met
 If the GPG encryption fails, it tries to determine which recipient misses the key.
 
   * **encrypt**:  Recipient GPG public key or S/MIME certificate to be encrypted with. 
-    * **--encrypt**: Key string or blank or 1/true/yes if the key has already been in the ring or "auto". Put 0/false/no to disable `encrypt-path`.
-    * **--encrypt-path** *(CLI only)*: Recipient public key stored in a file path. (Alternative to `--encrypt`.)  
+    * **`key`** parameter
+        * GPG:
+            * Blank (*CLI*) or True (*module*) to force encrypt
+            * key ID/fingerprint
+            * Any attainable contents with the key to be encrypted with (will be imported into keyring)
+            * "auto" for turning on encrypting if there is a matching key for every recipient
+        * S/MIME any attainable contents with certificate to be encrypted with or their list
+    * **--encrypt key**: (for `key` see above) Put 0/false/no to disable `encrypt-path`.
+    * **--encrypt-path** *(CLI only)*: Filename(s) with the recipient\'s public key. (Alternative to `encrypt` parameter.)
     * **envelope(encrypt=)**: Any attainable contents
     * **.encrypt(key=True, sign=, key_path=)**:
-        * **`key`**
-            * GPG:
-                * True (blank) to force encrypt
-                * key ID/fingerprint
-                * Any attainable contents with the key to be encrypted with (will be imported into keyring)
-                * "auto" for turning on encrypting if there is a matching key for every recipient
-            * S/MIME any attainable contents with certificate to be encrypted with.
         * **`sign`** You may specify boolean or default signing key ID/fingerprint or "auto" for GPG or any attainable contents with S/MIME key + signing certificate.
         * **`key_path`**: Key/certificate contents (alternative to `key` parameter)
     * **.encryption(key=True, key_path=)**: Encrypt later (when launched with *.sign()*, *.encrypt()* or *.send()* functions. If needed, in the parameters specify Any attainable contents with GPG encryption key or S/MIME encryption certificate. 
+    ```bash
+    # message gets encrypted for multiple certificates
+    envelope --smime --encrypt-path recipient1.pem recipient2.pem --message "Hello"
+    ```
   * **to**: E-mail or list. When encrypting, we use keys of these identities.
     * **--to**: One or more e-mail addresses.
     * **envelope(to=)**: E-mail or their list.
