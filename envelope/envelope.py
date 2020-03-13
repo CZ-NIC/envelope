@@ -11,7 +11,7 @@ import tempfile
 import warnings
 from collections import defaultdict
 from configparser import ConfigParser
-from copy import copy
+from copy import copy, deepcopy
 from email.message import EmailMessage
 from email.parser import BytesParser
 from email.utils import make_msgid, formatdate, getaddresses
@@ -421,6 +421,10 @@ class Envelope:
         self._prepare_from()
         if sign or encrypt or send is not None:
             self._start(send=send)
+
+    def copy(self):
+        """ Returns deep copy of the object. """
+        return deepcopy(self)
 
     def cc(self, email_or_list):
         self._cc += assure_list(email_or_list)

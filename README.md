@@ -360,6 +360,15 @@ Envelope().auto_submitted.no()  # mark message as human produced
 ### Supportive
   * **.recipients()**: Return set of all recipients – To, Cc, Bcc
     * **.recipients(clear=True)**: All To, Cc and Bcc recipients are removed and the object is returned.
+  * **.copy()**: Return deep copy of the instance to be used independently. 
+  ```python3    
+    factory = Envelope().cc("original@example.com").copy
+    e1 = factory().to("to-1@example.com")
+    e2 = factory().to("to-2@example.com").cc("additional@example.com")  # 
+
+    print(e1.recipients())  # {'to-1@example.com', 'original@example.com'}
+    print(e2.recipients())  # {'to-2@example.com', 'original@example.com', 'additional@example.com'}
+```
   * Read message and subject by **.message()** and **.subject()**
   * **.preview()**: Returns the string of the message or data with the readable text.
             Ex: whilst we have to use quoted-printable (as seen in __str__), here the output will be plain text.

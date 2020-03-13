@@ -492,5 +492,15 @@ class TestFrom(TestAbstract):
                           (f"From: {id1}", f"Sender: {id2}"))
 
 
+class TestSupportive(TestAbstract):
+    def test_copy(self):
+        factory = Envelope().cc("original@example.com").copy
+        e1 = factory().to("independent-1@example.com")
+        e2 = factory().to("independent-2@example.com").cc("additional@example.com")
+
+        self.assertEqual(e1.recipients(), {'independent-1@example.com', 'original@example.com'})
+        self.assertEqual(e2.recipients(), {'independent-2@example.com', 'original@example.com', 'additional@example.com'})
+
+
 if __name__ == '__main__':
     unittest.main()
