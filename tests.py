@@ -135,7 +135,6 @@ class TestSmime(TestAbstract):
                            "Subject: my message",
                            "Reply-To: test-reply@example.com"), 10)
 
-        # XX decrypt test https://m2crypto.readthedocs.io/en/latest/howto.smime.html#decrypt
 
     def test_multiple_recipients(self):
         from M2Crypto import SMIME, BIO
@@ -468,6 +467,30 @@ Third
         self._check_lines(envelope().message(self.html_without_line_break), br)
         self._check_lines(envelope().message(self.html_without_line_break).mime("plain", True), nobr)  # nl2br disabled in "plain"
         self._check_lines(envelope().message(self.html_without_line_break).mime(nl2br=False), nobr)
+
+
+class TestFrom(TestAbstract):
+    def test_from(self):
+        id1 = "identity-1@example.com"
+        id2 = "identity-2@example.com"
+        self._check_lines(envelope("dumb message").sender(id1),
+                          f"From: {id1}", not_in=f"Sender: {id1}")
+        self._check_lines(envelope("dumb message", sender=id1),
+                          f"From: {id1}", not_in=f"Sender: {id1}")
+
+        self._check_lines(envelope("dumb message", from_=id1),
+                          f"From: {id1}", not_in=f"Sender: {id1}")
+        self._check_lines(envelope("dumb message").from_(id1),
+                          f"From: {id1}", not_in=f"Sender: {id1}")
+
+        self._check_lines(envelope("dumb message")
+                          .from_(id1)
+                          .sender(id2),
+                          (f"From: {id1}", f"Sender: {id2}"))
+        self._check_lines(envelope("dumb message")
+                          .sender(id2)
+                          .from_(id1),
+                          (f"From: {id1}", f"Sender: {id2}"))
 
 
 if __name__ == '__main__':

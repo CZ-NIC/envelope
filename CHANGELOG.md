@@ -1,10 +1,12 @@
 # CHANGELOG
 
-## 0.9.10 (unreleased)
+## 1.0.0 (unreleased)
 - fix: --attach-key flag in CLI did not work
 - auto-import GPG key from file
 - auto-encrypt GPG possibility
 - S/MIME multiple recipients
+- "sender" works as an alias for "from_" if both are not used; otherwise standard "Sender" header is included
+- CHANGE: Envelope.__init__ parameters re-ordered 
 
 ## 0.9.9 (2020-02-10)
 - smime dependency is optional – thus package can be installed directly without having swig library 

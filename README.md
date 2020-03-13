@@ -215,13 +215,22 @@ If the GPG encryption fails, it tries to determine which recipient misses the ke
       ```bash
       envelope --to first@example.com second@example.com --message "hello" 
       ```  
-  * **sender**: E-mail – needed to choose our key if encrypting.
-    * **--sender** E-mail
+  * **from**: E-mail – needed to choose our key if encrypting.    
+    * **--from** E-mail
+    * **--sender** Alias for *--from* if not set. Otherwise appends header "Sender".
     * **--no-sender** Declare we want to encrypt and never decrypt back.
-    * **--from** Alias for *--sender*
-    * **envelope(sender=)**: Sender e-mail or False to explicitly omit. When encrypting without sender, we do not use their key so that we will not be able to decipher again.
-    * **.sender(email)**: E-mail or False.
-    * **.from_(email)**: an alias for *.sender*
+    * **envelope(from_=)**: Sender e-mail or False to explicitly omit. When encrypting without sender, we do not use their key so that we will not be able to decipher again.       
+        * **envelope(sender=)** *(see --sender)*
+    * **.from_(email)**: E-mail or False.
+    * **.sender(email)**: an alias for *.from_*
+    ```python3
+    # These statement are identic.
+    envelope(from_ = "identity@example.com")    
+    envelope(sender = "identity@example.com")
+  
+    # This statement produces both From header and Sender header.
+    envelope(from_ = "identity@example.com", sender="identity2@example.com")        
+    ```
 ### Sending
   * **send**: Send the message to the recipients by e-mail. True (blank in *CLI*) to send now or False to print out debug information.
     * **--send**
@@ -379,6 +388,8 @@ envelope().auto_submitted.no()  # mark message as human produced
     ```
     
 ## Default values
+
+XXX I think we should remove this and rahter make .clone or .copy method.
 
 In *module* interface, you may set the defaults when accessing `envelope.default` instance. 
 

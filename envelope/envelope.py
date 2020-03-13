@@ -312,11 +312,11 @@ class envelope:
             e.header(key, val)
         return e
 
-    def __init__(self, message=None, output=None, gpg=None, smime=None, headers=None,
-                 sign=None, passphrase=None, attach_key=None, cert=None,
-                 encrypt=None, to=None, sender=None,
-                 subject=None, cc=None, bcc=None, reply_to=None, mime=None, attachments=None,
-                 smtp=None, send=None):
+    def __init__(self, message=None, from_=None, to=None, subject=None, headers=None,
+                 gpg=None, smime=None,
+                 encrypt=None, sign=None, passphrase=None, attach_key=None, cert=None,
+                 sender=None, cc=None, bcc=None, reply_to=None, mime=None, attachments=None,
+                 smtp=None, output=None, send=None):
         """
         :rtype: object If output not set, return output bytes, else True/False if output file was correctly written to.
 
@@ -324,10 +324,11 @@ class envelope:
         In *module interface*, you may use Path object to the file.
         In *CLI interface*, additional flags are provided.
 
-        Input / Output
+        Output
         :param message: Any attainable contents.
         :param output: Path to file to be written to (else the contents is returned).
-        :param gpg: Home folder of GNUPG rings else default ~/.gnupg is used. Put True for prefer GPG over SMIME.
+        :param gpg: Home folder of GNUPG rings else default ~/.gnupg is used. Put True for prefer GPG over S/MIME.
+        :param smime: Prefer S/MIME over GPG.
 
         Signing
         :param sign: True or key id if the message is to be signed. S/MIME certificate key or Path or stream (ex: from open()).
@@ -338,10 +339,11 @@ class envelope:
         Encrypting
         :param encrypt: Recipients public key string or Path or stream (ex: from open()).
         :param to: E-mail or list. If encrypting used so that we choose the key they will be able to decipher with.
-        :param sender: E-mail. If encrypting used so that we choose our key to be still able to decipher the message later with.
+        :param from_: E-mail of the sender. If encrypting used so that we choose our key to be still able
+                        to decipher the message later with.
                         If False, we explicitly declare to give up on deciphering later.
 
-        Sending
+        Input / Sending
         :param subject: E-mail subject
         :param reply_to: Reply to header
         :param mime: Set contents mime subtype: "html" (default) or "plain" for plain text
@@ -353,6 +355,7 @@ class envelope:
         :param attachments: Attachment or their list. Attachment is defined by file path or stream (ex: from open()),
             optionally in tuple with the file name in the e-mail and/or mimetype.
         :param headers: List of headers which are tuples of name, value. Ex: [("X-Mailer", "my-cool-application"), ...]
+        :param sender: Alias for "from" if not set. Otherwise appends header "Sender".
         """
         # user defined variables
         self._message = None  # bytes
@@ -363,7 +366,8 @@ class envelope:
         self._attach_key = None
         self._cert = None
         self._encrypt = None
-        self._sender = None
+        self._from = self.__from = None
+        self._sender = self.__sender = None
         self._to = []
         self._cc = []
         self._bcc = []
@@ -392,6 +396,8 @@ class envelope:
                     self.smime()
             elif v is None:
                 if hasattr(self, "default"):
+                    if k == "from_":
+                        k = "from"
                     v = copy(getattr(self.default, "_" + k))  # ex `v = copy(self.default._message)`
             elif k == "passphrase":
                 self.signature(passphrase=v)
@@ -414,6 +420,7 @@ class envelope:
             elif v is not None:
                 getattr(self, k)(v)  # ex: self.message(message)
 
+        self._prepare_from()
         if sign or encrypt or send is not None:
             self._start(send=send)
 
@@ -426,6 +433,7 @@ class envelope:
         return self
 
     def message(self, text=None, *, path=None):
+        # XX make an alias "body" and "text"?
         if text is path is None:
             return self._message
         if path:
@@ -439,17 +447,15 @@ class envelope:
         return self
 
     def sender(self, email):
-        # XXX since sender is a real header, we should somehow distinguish 'sender' from 'from'. Pity that 'from' is a reserved keyword, from_ looks bad. Keyword header:Literal["from", "sender"]="from"?
-        # Is there a usecase Sender is useful to be set?
-        # def envelope(**kw): l(**{"from": "me@example.com", "subject": "my e-mail"}) Or make 'from' at least possible?
-        # Or method from_to?
-        # !!WHAT IF: both sender a from defined, we allow sender header; otherwise sender is From header. Will I ever need to send an e-mail with Sender and without FROM???
+        """  Alias for "from" if not set. Otherwise appends header "Sender". """
         self._sender = email
+        self._prepare_from()
         return self
 
     def from_(self, email):
-        """ An alias to self.sender """
-        return self.sender(email)
+        self._from = email
+        self._prepare_from()
+        return self
 
     def output(self, output_file):
         self._output = output_file
@@ -732,6 +738,21 @@ class envelope:
                                " You probably wanted to use .signature()/.encryption() instead.")
         return self._start(sign=sign, encrypt=encrypt, send=send)
 
+    def _prepare_from(self):
+        """ Prepare private variables. Resolve "from" and "sender" headers.
+
+        Due to a keyword clash we cannot use "from" as a method name and it seems convenient then to allow users
+        to use sender instead. However we do not want to block setting "Sender" header too – since sender is a real header,
+        we should somehow distinguish 'sender' from 'from'.
+        Pity that 'from' is a reserved keyword, "from_" looks bad.
+        """
+        if self._from is None and self._sender is not None:
+            self.__from = self._sender
+            self.__sender = None
+        else:
+            self.__from = self._from
+            self.__sender = self._sender
+
     def _start(self, sign=None, encrypt=None, send=None):
         """ Start processing. Either sign, encrypt or send the message and possibly set bool status of the object to True.
         * send == "test" is the same as send == False but the message "have not been sent" will not be produced
@@ -777,7 +798,7 @@ class envelope:
                     if sign in [True, AUTO]:  # try to determine sign based on the "From" header
                         fallback_sign = sign = None
                         try:
-                            address_searched = getaddresses([self._sender])[0][1]
+                            address_searched = getaddresses([self.__from])[0][1]
                         except (TypeError, IndexError):
                             # there is no "From" header and no default key is given, pick the first secret as a default
                             for key in self._gnupg.list_keys(True):
@@ -861,10 +882,10 @@ class envelope:
 
     def _send_now(self, email, encrypt, encrypted_subject, send):
         try:
-            if not self._sender and send is True:
+            if not self.__from and send is True:
                 logger.error("You have to specify sender e-mail.")
                 return False
-            email["From"] = self._sender
+            email["From"] = self.__from
             if self._to:
                 email["To"] = ",".join(self._to)
             if self._cc:
@@ -875,15 +896,20 @@ class envelope:
             s = set(self._to + self._cc + self._bcc)
             if self._reply_to:
                 s.add(self._reply_to)
-            if self._sender:
-                s.add(self._sender)
+            if self.__from:
+                s.add(self.__from)
             logger.error(f"An e-mail address seem to be malformed.\nAll addresses: {s}\n{e}")
             return
+
+        # insert arbitrary headers
+        # XX do not we want to encrypt these headers with GPG/SMIME?
         for k, v in self._headers.items():
             if k in ["Content-Type", "Content-Transfer-Encoding", "MIME-Version"]:
                 # skip headers already inserted in _prepare_email
                 continue
-            email[k] = v  # XX do not we want to encrypt these headers with GPG/SMIME?
+            email[k] = v
+        if self.__sender:
+            email["Sender"] = self.__sender
         if "Date" not in email:
             email["Date"] = formatdate(localtime=True)
         if "Message-ID" not in email and send != "test":  # we omit this field when testing
@@ -897,7 +923,7 @@ class envelope:
                 return False
         else:
             if send != "test":
-                self._result.append(f"{'*' * 100}\nHave not been sent from {(self._sender or '')}"
+                self._result.append(f"{'*' * 100}\nHave not been sent from {(self.__from or '')}"
                                     f" to {', '.join(set(self._to + self._cc + self._bcc))}")
             if encrypt:
                 if encrypted_subject:
@@ -936,7 +962,7 @@ class envelope:
         exc = []
         if not self._to and not self._cc and not self._bcc:
             exc.append("No recipient e-mail specified")
-        if self._sender is None:
+        if self.__from is None:
             exc.append("No sender e-mail specified. If not planning to decipher later, put sender=False or --no-sender flag.")
         if exc:
             raise RuntimeError("Encrypt key present. " + ", ".join(exc))
@@ -975,7 +1001,7 @@ class envelope:
         return ((key, address) for key in self._gnupg.list_keys(secret) for _, address in getaddresses(key["uids"]))
 
     def _get_decipherers(self):
-        return set(self._to + self._cc + self._bcc + ([self._sender] if self._sender else []))
+        return set(self._to + self._cc + self._bcc + ([self.__from] if self.__from else []))
 
     def _encrypt_smime_now(self, email, sign, encrypt):
         with warnings.catch_warnings():
@@ -1183,12 +1209,12 @@ class envelope:
         If sender specified, check if DMARC DNS records exist and prints out the information.
         :rtype: bool SMTP connection worked
         """
-        if self._sender:
+        if self.__from:
             try:
-                email = getaddresses([self._sender])[0][1]
+                email = getaddresses([self.__from])[0][1]
                 domain = email.split("@")[1]
             except IndexError:
-                logger.warning(f"Could not parse domain from the sender address '{self._sender}'")
+                logger.warning(f"Could not parse domain from the sender address '{self.__from}'")
             else:
                 def dig(query_or_list, rr="TXT", search_start=None):
                     if type(query_or_list) is not list:
