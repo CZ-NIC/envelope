@@ -233,6 +233,7 @@ If the GPG encryption fails, it tries to determine which recipient misses the ke
     * **--send**
     * **.send(send=True, sign=None, encrypt=None)**
         * *send*: True to send now. False (or 0/false/no in *CLI*) to print debug information.
+        * Returns the object back which converted to bool returns True if the message has been sent successfully.
     * **Envelope(send=)**
     
     ```bash

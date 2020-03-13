@@ -684,7 +684,8 @@ class Envelope:
         """
         self._processed = True
         self.signature(key=key, passphrase=passphrase, attach_key=attach_key, cert=cert, key_path=key_path)
-        return self._start()
+        self._start()
+        return self
 
     def encryption(self, key=True, *, key_path=None):
         """
@@ -729,7 +730,8 @@ class Envelope:
         """
         self._processed = True
         self.encryption(key=key, key_path=key_path)
-        return self._start(sign=sign)
+        self._start(sign=sign)
+        return self
 
     def send(self, send=True, sign=None, encrypt=None):
         """
@@ -745,7 +747,8 @@ class Envelope:
         if self._processed:
             raise RuntimeError("Cannot call .send() after .sign()/.encrypt()."
                                " You probably wanted to use .signature()/.encryption() instead.")
-        return self._start(sign=sign, encrypt=encrypt, send=send)
+        self._start(sign=sign, encrypt=encrypt, send=send)
+        return self
 
     def _prepare_from(self):
         """ Prepare private variables. Resolve "from" and "sender" headers.
@@ -766,6 +769,7 @@ class Envelope:
         """ Start processing. Either sign, encrypt or send the message and possibly set bool status of the object to True.
         * send == "test" is the same as send == False but the message "have not been sent" will not be produced
         """
+        self._status = False
         if sign is not None:
             self.signature(sign)
         if encrypt is not None:
@@ -788,7 +792,7 @@ class Envelope:
         # we need a message
         if data is None:
             logger.error("Missing message")
-            return False
+            return
 
         # determine if we are using gpg or smime
         gpg_on = None
@@ -842,7 +846,7 @@ class Envelope:
         if send is not None:
             email = self._prepare_email(data, encrypt and gpg_on, sign and gpg_on, sign)
             if not email:
-                return False
+                return
             data = email.as_bytes()
 
         # with GPG, encrypt or sign either text message or email message object
@@ -884,7 +888,6 @@ class Envelope:
                 with open(self._output, "wb") as f:
                     f.write(email.as_bytes() if email else data)
             self._status = True
-        return self
 
     def _get_gnupg_home(self, readable=False):
         return self._gpg if type(self._gpg) is str else ("default" if readable else None)
