@@ -130,9 +130,6 @@ class SMTP:
     # Usecase: user passes smtp server info in dict in a loop but we do want it connects just once
     _instances = {}
 
-    # def __init__(self):
-    #     self.instance = self.host = self.port = self.user = self.password = self.security = None
-
     def __init__(self, host="localhost", port=25, user=None, password=None, security=None):
         if isinstance(host, smtplib.SMTP):
             self.instance = host
@@ -234,8 +231,9 @@ class envelope:
         """ Returns the string of the message or data with the readable text.
             Ex: whilst we have to use quoted-printable (as seen in __str__), here the output will be plain text.
 
-            # XX is ciphering info seen?
+        # XX is ciphering info seen?
         # XX is Bcc header seen?
+        # XX might be available from CLI too
         """
         if not self._result:
             str(self)
@@ -612,7 +610,14 @@ class envelope:
         return self
 
     def attach(self, attachment_or_list=None, mimetype=None, filename=None, *, path=None):
-        # "path"/Path, [mimetype/filename], [mimetype/filename]
+        """
+
+        :type attachment_or_list: Any attainable contents that should be added as an attachment or their list.
+                The list may contain tuples: `any_attainable_contents [,mime type] [,file name]`.
+        :param mimetype: Mime type OR file name of the attachment.
+        :param filename: Mime type OR file name of the attachment.
+        :param path: Path to the file that should be attached.
+        """
         if type(attachment_or_list) is list:
             if path or mimetype or filename:
                 raise ValueError("Cannot specify both path, mimetype or filename and put list in attachment_or_list.")

@@ -301,14 +301,14 @@ If the GPG encryption fails, it tries to determine which recipient misses the ke
     ```bash
     envelope --attachment "/tmp/file.txt" "displayed-name.txt" "text/plain" --attachment "/tmp/another-file.txt"
     ```
-    * **gpggp(attachments=)**: Attachment or their list. Attachment is defined by any attainable contents, optionally in tuple with the file name to be used in the e-mail and/or mime type: `content [,name] [,mimetype]`
+    * **envelope(attachments=)**: Attachment or their list. Attachment is defined by any attainable contents, optionally in tuple with the file name to be used in the e-mail and/or mime type: `contents [,mimetype/filename] [,mimetype/filename]`
     ```python3
     envelope(attachments=[(Path("/tmp/file.txt"), "displayed-name.txt", "text/plain"), Path("/tmp/another-file.txt"])
     ```    
-    * **.attach(attachment_or_list=, path=, mimetype=, filename=)**: Three different usages.
-        * **.attach(attachment_or_list=, mimetype=, filename=)**: You can put Any attainable contents in *attachment_or_list* and optionally mimetype or displayed filename.
-        * **.attach(path=, mimetype=, filename=)**: You can specify path and optionally mimetype or displayed filename.
-        * **.attach(attachment_or_list=)**: You can put a list of attachments.
+    * **.attach(attachment_or_list=, mimetype=, filename=, path=)**: Three different usages.
+        * **.attach(attachment_or_list=, mimetype=, filename=)**: You can put any attainable contents of a single attachment into *attachment_or_list* and optionally add mime type or displayed file name.
+        * **.attach(mimetype=, filename=, path=)**: You can specify path and optionally mime type or displayed file name.
+        * **.attach(attachment_or_list=)**: You can put a list of attachments. The list may contain tuples: `contents [,mimetype/filename] [,mimetype/filename]`.
     ```python3
     envelope().attach(path="/tmp/file.txt").attach(path="/tmp/another-file.txt")
     ```

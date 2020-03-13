@@ -135,7 +135,6 @@ class TestSmime(TestAbstract):
                            "Subject: my message",
                            "Reply-To: test-reply@example.com"), 10)
 
-
     def test_multiple_recipients(self):
         from M2Crypto import SMIME, BIO
         msg = "dumb message"
