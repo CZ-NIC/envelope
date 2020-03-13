@@ -1,4 +1,4 @@
-# envelope
+# Envelope
 
 [![Build Status](https://travis-ci.org/CZ-NIC/envelope.svg?branch=master)](https://travis-ci.org/CZ-NIC/envelope)
 
@@ -7,7 +7,7 @@ You insert a message and attachments and receive signed and/or encrypted output 
 Just single line of code. With the great help of the examples below.  
 
 ```python3
-envelope("my message")
+Envelope("my message")
     .subject("hello world")
     .to("example@example.com")
     .attach(file_contents, filename="attached-file.txt")
@@ -92,8 +92,8 @@ envelope --message "Hello world" \
 You can easily write a one-liner function that encrypts your code or sends an e-mail from within your application when imported as a module. See `pydoc3 envelope` or documentation below.
 
 ```python3
-import envelope
-envelope(message="Hello world",
+from envelope import Envelope
+Envelope(message="Hello world",
         output="/tmp/output_file",
         sender="me@example.com",
         to="remote_person@example.com",
@@ -103,16 +103,13 @@ envelope(message="Hello world",
 ## Module: fluent interface
 Comfortable way to create the structure if your IDE supports autocompletion.
 ```python3
-import envelope
-envelope().message("Hello world")\
+from envelope import Envelope
+Envelope().message("Hello world")\
     .output("/tmp/output_file")\
     .sender("me@example.com")\
     .to("remote_person@example.com")\
     .encrypt(key_path="/tmp/remote_key.asc")
 ```
-
-Note: if autocompletion does not work, use **`from envelope import envelope`** instead of `import envelope`.  
-(For example, Jupyter can autocomplete with `import envelope` but PyCharm cannot because it does not serves itself with a [running kernel](https://youtrack.jetbrains.com/issue/PY-38086#comment=27-3716668).)
 
 # Documentation
 
@@ -122,7 +119,7 @@ Both `envelope --help` for CLI arguments help and `pydoc3 envelope` to see modul
 All parameters are optional. 
 
 * **--param** is used in CLI
-* **envelope(param=)** is a one-liner argument
+* **Envelope(param=)** is a one-liner argument
 * **.param(value)** denotes a positional argument
 * **.param(value=)** denotes a keyword argument
  
@@ -132,13 +129,13 @@ Any attainable contents means plain text, bytes or stream (ex: from open()). In 
   * **message**: Message / body text.
     * **--message**: String
     * **--input**: *(CLI only)* Path to the message file. (Alternative to `--message` parameter.)
-    * **envelope(message=)**: Any attainable contents
+    * **Envelope(message=)**: Any attainable contents
     * **.message(text)**:  String or stream.
     * **.message(path=None)**: Path to the file.
     
     Equivalents for setting a string (in *Python* and in *Bash*).
     ```python3
-    envelope(message="hello") == envelope().message("hello")
+    Envelope(message="hello") == Envelope().message("hello")
     ```
     ```bash
     envelope --message "hello"
@@ -146,24 +143,24 @@ Any attainable contents means plain text, bytes or stream (ex: from open()). In 
     Equivalents for setting contents of a file (in *Python* and in *Bash*).
     ```python3
     from pathlib import Path
-    envelope(message=Path("file.txt")) == envelope(message=open("file.txt")) == envelope.message(path="file.txt") 
+    Envelope(message=Path("file.txt")) == Envelope(message=open("file.txt")) == Envelope.message(path="file.txt") 
     ```
     ```bash
     envelope --input file.txt
     ```
   * **output**: Path to file to be written to (else the contents is returned).
     * **--output**
-    * **envelope(output=)**
+    * **Envelope(output=)**
     * **.output(output_file)**
 ### Cipher standard method
 Note that if neither *gpg* nor *smime* is specified, we try to determine the method automatically.
   * **gpg**: True to prefer GPG over S/MIME or home path to GNUPG rings (otherwise default ~/.gnupg is used)
     * **--gpg [path]**
-    * **envelope(gpg=True)**
+    * **Envelope(gpg=True)**
     * **.gpg(gnugp_home=True)**
   * **.smime**: Prefer S/MIME over GPG
     * **--smime**
-    * **envelope(smime=True)**
+    * **Envelope(smime=True)**
     * **.smime()**
 ### Signing
   * **sign**: Sign the message.
@@ -180,10 +177,10 @@ Note that if neither *gpg* nor *smime* is specified, we try to determine the met
     * **--attach-key**: GPG: Blank for appending public key to the attachments when sending.
     * **--cert**: S/MIME: Certificate contents if not included in the key.
     * **--cert-path**: S/MIME: Filename with the sender's private cert if cert not included in the key. (Alternative to `cert` parameter.)
-    * **envelope(sign=key)**: (for `key` see above)        
-    * **envelope(passphrase=)**: Passphrase to the key if needed.
-    * **envelope(attach_key=)**: GPG: Append public key to the attachments when sending.
-    * **envelope(cert=)**: S/MIME: Any attainable contents.
+    * **Envelope(sign=key)**: (for `key` see above)        
+    * **Envelope(passphrase=)**: Passphrase to the key if needed.
+    * **Envelope(attach_key=)**: GPG: Append public key to the attachments when sending.
+    * **Envelope(cert=)**: S/MIME: Any attainable contents.
     * **.sign(key=True, passphrase=, attach_key=False, cert=None, key_path=None)**: Sign now (and you may specify the parameters). (For `key` see above.)
     * **.signature(key=True, passphrase=, attach_key=False, cert=None, key_path=None)**: Sign later (when launched with *.sign()*, *.encrypt()* or *.send()* functions
 ### Encrypting
@@ -199,7 +196,7 @@ If the GPG encryption fails, it tries to determine which recipient misses the ke
         * S/MIME any attainable contents with certificate to be encrypted with or their list
     * **--encrypt key**: (for `key` see above) Put 0/false/no to disable `encrypt-path`.
     * **--encrypt-path** *(CLI only)*: Filename(s) with the recipient\'s public key. (Alternative to `encrypt` parameter.)
-    * **envelope(encrypt=)**: Any attainable contents
+    * **Envelope(encrypt=)**: Any attainable contents
     * **.encrypt(key=True, sign=, key_path=)**:
         * **`sign`** You may specify boolean or default signing key ID/fingerprint or "auto" for GPG or any attainable contents with S/MIME key + signing certificate.
         * **`key_path`**: Key/certificate contents (alternative to `key` parameter)
@@ -210,7 +207,7 @@ If the GPG encryption fails, it tries to determine which recipient misses the ke
     ```
   * **to**: E-mail or list. When encrypting, we use keys of these identities.
     * **--to**: One or more e-mail addresses.
-    * **envelope(to=)**: E-mail or their list.
+    * **Envelope(to=)**: E-mail or their list.
     * **.to(email_or_list)**:
       ```bash
       envelope --to first@example.com second@example.com --message "hello" 
@@ -219,22 +216,22 @@ If the GPG encryption fails, it tries to determine which recipient misses the ke
     * **--from** E-mail
     * **--sender** Alias for *--from* if not set. Otherwise appends header "Sender".
     * **--no-sender** Declare we want to encrypt and never decrypt back.
-    * **envelope(from_=)**: Sender e-mail or False to explicitly omit. When encrypting without sender, we do not use their key so that we will not be able to decipher again.       
-        * **envelope(sender=)** *(see --sender)*
+    * **Envelope(from_=)**: Sender e-mail or False to explicitly omit. When encrypting without sender, we do not use their key so that we will not be able to decipher again.       
+        * **Envelope(sender=)** *(see --sender)*
     * **.from_(email)**: E-mail or False.
     * **.sender(email)**: an alias for *.from_*
     ```python3
     # These statement are identic.
-    envelope(from_ = "identity@example.com")    
-    envelope(sender = "identity@example.com")
+    Envelope(from_ = "identity@example.com")    
+    Envelope(sender = "identity@example.com")
   
     # This statement produces both From header and Sender header.
-    envelope(from_ = "identity@example.com", sender="identity2@example.com")        
+    Envelope(from_ = "identity@example.com", sender="identity2@example.com")        
     ```
 ### Sending
   * **send**: Send the message to the recipients by e-mail. True (blank in *CLI*) to send now or False to print out debug information.
     * **--send**
-    * **envelope(send=)**
+    * **Envelope(send=)**
     * **.send(send=True, sign=None, encrypt=None)**
         * *send*: True to send now. False (or 0/false/no in *CLI*) to print debug information.
     
@@ -256,23 +253,23 @@ If the GPG encryption fails, it tries to determine which recipient misses the ke
     ```
   * **subject**: Mail subject. Gets encrypted with GPG, stays visible with S/MIME.
     * **--subject**
-    * **envelope(subject=)**
+    * **Envelope(subject=)**
     * **.subject(text)**     
   * **cc**: E-mail or their list
     * **--cc**
-    * **envelope(cc=)**
+    * **Envelope(cc=)**
     * **.cc(email_or_list)**
   * **bcc**: E-mail or their list
     * **--bcc**
-    * **envelope(bcc=)**
+    * **Envelope(bcc=)**
     * **.bcc(email_or_list)**
   * **reply-to**: E-mail to be replied to. The field is not encrypted.
     * **--reply-to**
-    * **envelope(reply_to=)**
+    * **Envelope(reply_to=)**
     * **.reply_to(email)**
   * **smtp**: SMTP server
     * **--smtp**
-    * **envelope(smtp=)**
+    * **Envelope(smtp=)**
     * **.smtp(host="localhost", port=25, user=, password=, security=)**
     * Parameters:
         * `host` may include hostname or any of the following input formats (ex: path to an INI file or a `dict`)
@@ -294,32 +291,32 @@ If the GPG encryption fails, it tries to determine which recipient misses the ke
     ```python3
     smtp = localhost, 25
     for mail in mails:
-        envelope(...).smtp(smtp).send()
+        Envelope(...).smtp(smtp).send()
     ```
   * **attachments**
     * **--attachment**: Path to the attachment, followed by optional file name to be used and/or mime type. This parameter may be used multiple times.
     ```bash
     envelope --attachment "/tmp/file.txt" "displayed-name.txt" "text/plain" --attachment "/tmp/another-file.txt"
     ```
-    * **envelope(attachments=)**: Attachment or their list. Attachment is defined by any attainable contents, optionally in tuple with the file name to be used in the e-mail and/or mime type: `contents [,mimetype/filename] [,mimetype/filename]`
+    * **Envelope(attachments=)**: Attachment or their list. Attachment is defined by any attainable contents, optionally in tuple with the file name to be used in the e-mail and/or mime type: `contents [,mimetype/filename] [,mimetype/filename]`
     ```python3
-    envelope(attachments=[(Path("/tmp/file.txt"), "displayed-name.txt", "text/plain"), Path("/tmp/another-file.txt"])
+    Envelope(attachments=[(Path("/tmp/file.txt"), "displayed-name.txt", "text/plain"), Path("/tmp/another-file.txt"])
     ```    
-    * **.attach(attachment_or_list=, mimetype=, filename=, path=)**: Three different usages.
-        * **.attach(attachment_or_list=, mimetype=, filename=)**: You can put any attainable contents of a single attachment into *attachment_or_list* and optionally add mime type or displayed file name.
+    * **.attach(attachment=, mimetype=, filename=, path=)**: Three different usages.
+        * **.attach(attachment=, mimetype=, filename=)**: You can put any attainable contents of a single attachment into *attachment* and optionally add mime type or displayed file name.
         * **.attach(mimetype=, filename=, path=)**: You can specify path and optionally mime type or displayed file name.
-        * **.attach(attachment_or_list=)**: You can put a list of attachments. The list may contain tuples: `contents [,mimetype/filename] [,mimetype/filename]`.
+        * **.attach(attachment=)**: You can put a list of attachments. The list may contain tuples: `contents [,mimetype/filename] [,mimetype/filename]`.
     ```python3
-    envelope().attach(path="/tmp/file.txt").attach(path="/tmp/another-file.txt")
+    Envelope().attach(path="/tmp/file.txt").attach(path="/tmp/another-file.txt")
     ```
     * **mime**: Set contents mime subtype: "auto" (default), "html" or "plain" for plain text. Ignored if `Content-Type` header put to the message.         
         * **--mime SUBTYPE**
-        * **envelope(mime=)**
+        * **Envelope(mime=)**
         * **.mime(subtype="auto", nl2br="auto")**
-            * nl2br: True: envelope will append `<br>` to every line break in the HTML message. "auto": line breaks are changed only if there is no `<br` or `<p` in the HTML message,
+            * nl2br: True will append `<br>` to every line break in the HTML message. "auto": line breaks are changed only if there is no `<br` or `<p` in the HTML message,
     * **headers**: Any custom headers (these will not be encrypted with GPG nor S/MIME)
         * **--header name value** (may be used multiple times)
-        * **envelope(headers=[(name, value)])**
+        * **Envelope(headers=[(name, value)])**
         * **.header(name, value)**
         
         Equivalent headers: 
@@ -328,8 +325,8 @@ If the GPG encryption fails, it tries to determine which recipient misses the ke
         ```
         
         ```python3
-        envelope(headers=[("X-Mailer", "my-app")])
-        envelope().header("X-Mailer", "my-app")
+        Envelope(headers=[("X-Mailer", "my-app")])
+        Envelope().header("X-Mailer", "my-app")
         ```                
 #### Specific headers
 These helpers are available via fluent interface.
@@ -342,13 +339,13 @@ These helpers are available via fluent interface.
     ```python3
     # These will produce:
     # List-Unsubscribe: <https://example.com/unsubscribe>
-    envelope().list_unsubscribe("example.com/unsubscribe")
-    envelope().list_unsubscribe(web="example.com/unsubscribe")
-    envelope().list_unsubscribe("<https://example.com/unsubscribe>")
+    Envelope().list_unsubscribe("example.com/unsubscribe")
+    Envelope().list_unsubscribe(web="example.com/unsubscribe")
+    Envelope().list_unsubscribe("<https://example.com/unsubscribe>")
     
     # This will produce:
     # List-Unsubscribe: <https://example.com/unsubscribe>, <mailto:me@example.com?subject=unsubscribe>
-    envelope().list_unsubscribe("example.com/unsubscribe", mail="me@example.com?subject=unsubscribe")
+    Envelope().list_unsubscribe("example.com/unsubscribe", mail="me@example.com?subject=unsubscribe")
     ```    
     
 * **.auto_submitted**: 
@@ -357,8 +354,8 @@ These helpers are available via fluent interface.
     * **.auto_submitted.no()**: message was originated by a human
 
 ```python3
-envelope().auto_submitted()  # mark message as automatic        
-envelope().auto_submitted.no()  # mark message as human produced
+Envelope().auto_submitted()  # mark message as automatic        
+Envelope().auto_submitted.no()  # mark message as human produced
 ```    
 ### Supportive
   * **.recipients()**: Return set of all recipients – To, Cc, Bcc
@@ -384,18 +381,16 @@ envelope().auto_submitted.no()  # mark message as human produced
     * Note that if you will send this reconstructed message, you might not probably receive it due to the Message-ID duplication.
         Delete at least Message-ID header prior to re-sending. 
     ```python3
-   envelope.load("Subject: testing message").subject()  # "testing message"
+   Envelope.load("Subject: testing message").subject()  # "testing message"
     ```
     
 ## Default values
 
-XXX I think we should remove this and rahter make .clone or .copy method.
-
-In *module* interface, you may set the defaults when accessing `envelope.default` instance. 
+In *module* interface, you may set the defaults when accessing `Envelope.default` instance. 
 
 ```python3
-envelope.default.subject("Test subject").signature()
-envelope("Hello")  # this message has a default subject and is signed by default when sent
+Envelope.default.subject("Test subject").signature()
+Envelope("Hello")  # this message has a default subject and is signed by default when sent
 ```
 
 ## Converting object to str or bool
@@ -403,7 +398,7 @@ envelope("Hello")  # this message has a default subject and is signed by default
 When successfully signing, encrypting or sending, object is resolvable to True and signed text / produced e-mail could be obtained via str().
 
 ```python3
-o = envelope("message", sign=True)
+o = Envelope("message", sign=True)
 str(o)  # signed text
 bool(o)  # True
 ```
@@ -414,24 +409,24 @@ bool(o)  # True
 
 Sign the message.
 ```python3
-envelope(message="Hello world", sign=True)
+Envelope(message="Hello world", sign=True)
 ```
 
 Sign the message loaded from a file by standard pathlib library
 ```python3
 from pathlib import Path
-envelope(message=Path("/tmp/message.txt"), sign=True)
+Envelope(message=Path("/tmp/message.txt"), sign=True)
 ```
 
 Sign the message got from a file-stream
 ```python3
 with open("/tmp/message.txt") as f:
-    envelope(message=f, sign=True)
+    Envelope(message=f, sign=True)
 ```
 
 Sign and encrypt the message so that's decryptable by keys for me@example.com and remote_person@example.com (that should already be loaded in the keyring).
 ```python3 
-envelope(message="Hello world", sign=True
+Envelope(message="Hello world", sign=True
         encrypt=True,
         sender="me@example.com",
         to="remote_person@example.com")
@@ -439,7 +434,7 @@ envelope(message="Hello world", sign=True
 
 Sign and encrypt the message so that's decryptable by keys for me@example.com and remote_person@example.com (that get's imported to the keyring from the file).
 ```python3 
-envelope(message="Hello world", sign=True
+Envelope(message="Hello world", sign=True
         encrypt=Path("/tmp/remote_key.asc"),
         sender="me@example.com",
         to="remote_person@example.com")
@@ -447,24 +442,24 @@ envelope(message="Hello world", sign=True
 
 Sign the message via different keyring.
 ```python3
-envelope(message="Hello world", sign=True, gnupg="/tmp/my-keyring/")
+Envelope(message="Hello world", sign=True, gnupg="/tmp/my-keyring/")
 ```
 
 Sign the message with a key that needs passphrase.
 ```python3 
-envelope(message="Hello world", sign=True, passphrase="my-password")
+Envelope(message="Hello world", sign=True, passphrase="my-password")
 ```
 
-Sign a message without signing by default turned previously on and having a default keyring path. Every `envelope` call will honour these defaults. 
+Sign a message without signing by default turned previously on and having a default keyring path. Every `Envelope` call will honour these defaults. 
 ```python3 
-envelope.default.signature(True).gnupghome("/tmp/my-keyring")
-envelope(message="Hello world")
+Envelope.default.signature(True).gnupghome("/tmp/my-keyring")
+Envelope(message="Hello world")
 ```
 
 ## Sending
 Send an e-mail via module call.
 ```python3
-envelope(message="Hello world", send=True)
+Envelope(message="Hello world", send=True)
 ```
 
 Send an e-mail via CLI and default SMTP server localhost on port 25.
@@ -485,36 +480,38 @@ envelope --to "user@example.org" --message "Hello world" --send --smtp '{"host":
 
 Send while having specified the SMTP server via module call.
 ```python3
-envelope(message="Hello world", to="user@example.org", send=True, smtp={"host":"localhost"}) 
+Envelope(message="Hello world", to="user@example.org", send=True, smtp={"host":"localhost"}) 
 ```
 
 ## Attachment
 You can attach a file in many different ways. Pick the one that suits you the best.
 ```python3
-envelope(attachment=Path("/tmp/file.txt"))  # filename will be 'file.txt'
+Envelope(attachment=Path("/tmp/file.txt"))  # filename will be 'file.txt'
 
 with open("/tmp/file.txt") as f:
-    envelope(attachment=f)  # filename will be 'file.txt'
+    Envelope(attachment=f)  # filename will be 'file.txt'
     
 with open("/tmp/file.txt") as f:
-    envelope(attachment=(f, "filename.txt"))
+    Envelope(attachment=(f, "filename.txt"))
     
-envelope().attach(path="/tmp/file.txt",filename="filename.txt")
+Envelope().attach(path="/tmp/file.txt",filename="filename.txt")
 ```
 
 ## Complex example
-Send an encrypted and signed message via the default SMTP server, via all three interfaces.
+Send an encrypted and signed message (GPG) via the default SMTP server, via all three interfaces.
 ```bash
 # CLI interface
-envelope --message "Hello world" --to "user@example.org" --sender "me@example.org" --subject "Test" --sign --encrypt -a /tmp/file.txt -a /tmp/file2 application/gzip zipped-file.zip --send
+envelope --message "Hello world" --from "me@example.org" --to "user@example.org" --subject "Test" --sign --encrypt -a /tmp/file.txt -a /tmp/file2 application/gzip zipped-file.zip --send
 ```
 ```python3
-# one-liner interface
 from pathlib import Path
-envelope().message("Hello world").to("user@example.org").sender("me@example.org").subject("Test").signature().encryption().attach(path="/tmp/file.txt").attach(Path("/tmp/file2"), "application/gzip", "zipped-file.zip").send()
+from envelope import Envelope
 
 # fluent interface
-envelope(message="Hello world", to="user@example.org", sender="me@example.org", subject="Test", sign=True, encrypt=True, attachments=[(Path("/tmp/file.txt"), (Path("/tmp/file2"), "application/gzip", "zipped-file.zip")], send=True)
+Envelope().message("Hello world").from_("me@example.org").to("user@example.org").subject("Test").signature().encryption().attach(path="/tmp/file.txt").attach(Path("/tmp/file2"), "application/gzip", "zipped-file.zip").send()
+
+# one-liner interface
+Envelope("Hello world", "me@example.org", "user@example.org", "Test", sign=True, encrypt=True, attachments=[(Path("/tmp/file.txt"), (Path("/tmp/file2"), "application/gzip", "zipped-file.zip")], send=True)
 ```
 
 In the condition *me@example.com* private key for signing, *user@example.com* public key for encrypting and open SMTP server on *localhost:25* are available, change `--send` to `--send 0` (or `.send()` to `.send(False)` or `send=True` to `send=False`) to investigate the generated message that may be similar to the following output:

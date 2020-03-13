@@ -5,7 +5,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Tuple, Union
 
-from envelope import envelope
+from envelope import Envelope
 
 logging.basicConfig(stream=sys.stderr, level=logging.WARNING)
 
@@ -53,7 +53,7 @@ class TestAbstract(unittest.TestCase):
 
 class TestEnvelope(TestAbstract):
     def test_message_generating(self):
-        self._check_lines(envelope("dumb message")
+        self._check_lines(Envelope("dumb message")
                           .subject("my subject")
                           .send(False),
                           ("Subject: my subject",
@@ -82,7 +82,7 @@ class TestSmime(TestAbstract):
         # MIIEggYJKoZIhvcNAQcCoIIEczCCBG8CAQExCzAJBgUrDgMCGgUAMAsGCSqGSIb3
         # DQEHAaCCAmwwggJoMIIB0aADAgECAhROmwkIH63oarp3NpQqFoKTy1Q3tTANBgkq
         # ... other lines changes every time
-        self._check_lines(envelope("dumb message")
+        self._check_lines(Envelope("dumb message")
                           .smime()
                           .subject("my subject")
                           .reply_to("test-reply@example.com")
@@ -95,7 +95,7 @@ class TestSmime(TestAbstract):
                            "Reply-To: test-reply@example.com"), 10)
 
     def test_smime_key_cert_together(self):
-        self._check_lines(envelope("dumb message")
+        self._check_lines(Envelope("dumb message")
                           .smime()
                           .signature(Path("tests/smime/key-cert-together.pem"))
                           .sign(),
@@ -103,7 +103,7 @@ class TestSmime(TestAbstract):
                            "MIIEggYJKoZIhvcNAQcCoIIEczCCBG8CAQExCzAJBgUrDgMCGgUAMAsGCSqGSIb3"))
 
     def test_smime_key_cert_together_passphrase(self):
-        self._check_lines(envelope("dumb message")
+        self._check_lines(Envelope("dumb message")
                           .smime()
                           .signature(Path("tests/smime/key-cert-together-passphrase.pem"), passphrase=GPG_PASSPHRASE)
                           .sign(),
@@ -124,7 +124,7 @@ class TestSmime(TestAbstract):
         # nnXprxG2Q+/0GHJw48R1/B2d4Ln1sYJe5BXl3LVr7QWpwPb+62AZ1TN8793jSic6
         # jBl/v6gDTRoEEjnb8RAkyvDJ7d6OOokgFOfCfTAUOBoZhZrqMCsGCSqGSIb3DQEH
         # ATAUBggqhkiG9w0DBwQIt4seJLnZZW+ACBRKsu4Go7lm
-        self._check_lines(envelope("dumb message")
+        self._check_lines(Envelope("dumb message")
                           .smime()
                           .reply_to("test-reply@example.com")
                           .subject("my message")
@@ -150,7 +150,7 @@ class TestSmime(TestAbstract):
                 return False
 
         # encrypt for both keys
-        output = (envelope(msg)
+        output = (Envelope(msg)
                   .smime()
                   .reply_to("test-reply@example.com")
                   .subject("my message")
@@ -163,7 +163,7 @@ class TestSmime(TestAbstract):
                                        output))
 
         # encrypt for single key only
-        output = (envelope(msg)
+        output = (Envelope(msg)
                   .smime()
                   .reply_to("test-reply@example.com")
                   .subject("my message")
@@ -201,7 +201,7 @@ class TestGPG(TestAbstract):
         # =qCHO
         # -----END PGP SIGNATURE-----
 
-        self._check_lines(envelope("dumb message")
+        self._check_lines(Envelope("dumb message")
                           .gpg("tests/gpg_ring/")
                           .sign(),
                           ('dumb message',
@@ -210,7 +210,7 @@ class TestGPG(TestAbstract):
 
     def test_gpg_auto_sign(self):
         # mail from "envelope-example-identity@example.com" is in ring
-        self._check_lines(envelope("dumb message")
+        self._check_lines(Envelope("dumb message")
                           .gpg("tests/gpg_ring/")
                           .from_("envelope-example-identity@example.com")
                           .sign("auto"),
@@ -219,20 +219,20 @@ class TestGPG(TestAbstract):
                            '-----END PGP SIGNATURE-----',), 10)
 
         # mail from "envelope-example-identity-not-stated-in-ring@example.com" should not be signed
-        output = str(envelope("dumb message")
+        output = str(Envelope("dumb message")
                      .gpg("tests/gpg_ring/")
                      .from_("envelope-example-identity-not-stated-in-ring@example.com")
                      .sign("auto")).splitlines()
         self.assertNotIn('-----BEGIN PGP SIGNATURE-----', output)
 
         # force-signing without specifying a key nor sending address shuold produce a message signed with a first-found key
-        output = str(envelope("dumb message")
+        output = str(Envelope("dumb message")
                      .gpg("tests/gpg_ring/")
                      .sign(True)).splitlines()
         self.assertIn('-----BEGIN PGP SIGNATURE-----', output)
 
         # force-signing without specifying a key and with sending from an e-mail which is not in the keyring must fail
-        self._check_lines(envelope("dumb message")
+        self._check_lines(Envelope("dumb message")
                           .gpg("tests/gpg_ring/")
                           .from_("envelope-example-identity-not-stated-in-ring@example.com")
                           .signature(True), raises=RuntimeError)
@@ -248,7 +248,7 @@ class TestGPG(TestAbstract):
         # =rK+/
         # -----END PGP MESSAGE-----
 
-        self._check_lines(envelope("dumb message")
+        self._check_lines(Envelope("dumb message")
                           .gpg("tests/gpg_ring/")
                           .from_("envelope-example-identity@example.com")
                           .to("envelope-example-identity-2@example.com")
@@ -286,7 +286,7 @@ class TestGPG(TestAbstract):
         #
         # --===============1001129828818615570==--
 
-        self._check_lines(envelope("dumb message")
+        self._check_lines(Envelope("dumb message")
                           .to("envelope-example-identity-2@example.com")
                           .gpg("tests/gpg_ring/")
                           .from_("envelope-example-identity@example.com")
@@ -303,7 +303,7 @@ class TestGPG(TestAbstract):
 
     def test_gpg_auto_encrypt(self):
         # mail `from` "envelope-example-identity@example.com" is in ring
-        self._check_lines(envelope("dumb message")
+        self._check_lines(Envelope("dumb message")
                           .gpg("tests/gpg_ring/")
                           .from_("envelope-example-identity@example.com")
                           .to("envelope-example-identity@example.com")
@@ -312,7 +312,7 @@ class TestGPG(TestAbstract):
                            '-----END PGP MESSAGE-----',), (10, 15), not_in="dumb message")
 
         # mail `to` "envelope-unknown@example.com" unknown, must be both signed and encrypted
-        self._check_lines(envelope("dumb message")
+        self._check_lines(Envelope("dumb message")
                           .gpg("tests/gpg_ring/")
                           .from_("envelope-example-identity@example.com")
                           .to("envelope-example-identity-2@example.com")
@@ -322,7 +322,7 @@ class TestGPG(TestAbstract):
                            '-----END PGP MESSAGE-----',), 20, not_in="dumb message")
 
         # mail `from` "envelope-unknown@example.com" unknown, must not be encrypted
-        self._check_lines(envelope("dumb message")
+        self._check_lines(Envelope("dumb message")
                           .gpg("tests/gpg_ring/")
                           .from_("envelope-unknown@example.com")
                           .to("envelope-example-identity@example.com")
@@ -330,7 +330,7 @@ class TestGPG(TestAbstract):
                           ('dumb message',), (0, 2), not_in='-----BEGIN PGP MESSAGE-----')
 
         # mail `to` "envelope-unknown@example.com" unknown, must not be encrypted
-        self._check_lines(envelope("dumb message")
+        self._check_lines(Envelope("dumb message")
                           .gpg("tests/gpg_ring/")
                           .from_("envelope-example-identity@example.com")
                           .to("envelope-unknown@example.com")
@@ -338,14 +338,14 @@ class TestGPG(TestAbstract):
                           ('dumb message',), (0, 2), not_in='-----BEGIN PGP MESSAGE-----')
 
         # force-encrypting without having key must return empty response
-        self._check_lines(envelope("dumb message")
+        self._check_lines(Envelope("dumb message")
                           .gpg("tests/gpg_ring/")
                           .from_("envelope-example-identity@example.com")
                           .to("envelope-unknown@example.com")
                           .encryption(True), longer=(0, 1), result=False)
 
     def test_gpg_sign_passphrase(self):
-        self._check_lines(envelope("dumb message")
+        self._check_lines(Envelope("dumb message")
                           .to("envelope-example-identity-2@example.com")
                           .gpg("tests/gpg_ring/")
                           .from_("envelope-example-identity@example.com")
@@ -356,13 +356,13 @@ class TestGPG(TestAbstract):
         temp = TemporaryDirectory()
 
         # no signature - empty ring
-        self._check_lines(envelope("dumb message")
+        self._check_lines(Envelope("dumb message")
                           .gpg(temp.name)
                           .signature(),
                           raises=RuntimeError)
 
         # import key to the ring
-        self._check_lines(envelope("dumb message")
+        self._check_lines(Envelope("dumb message")
                           .gpg(temp.name)
                           .sign(Path("tests/gpg_keys/envelope-example-identity@example.com.key")),
                           ('dumb message',
@@ -370,7 +370,7 @@ class TestGPG(TestAbstract):
                            '-----END PGP SIGNATURE-----',), 10)
 
         # key in the ring from last time
-        self._check_lines(envelope("dumb message")
+        self._check_lines(Envelope("dumb message")
                           .gpg(temp.name)
                           .signature(),
                           ('dumb message',
@@ -378,7 +378,7 @@ class TestGPG(TestAbstract):
                            '-----END PGP SIGNATURE-----',), 10)
 
         # cannot encrypt for identity-2
-        self._check_lines(envelope("dumb message")
+        self._check_lines(Envelope("dumb message")
                           .gpg(temp.name)
                           .from_("envelope-example-identity@example.com")
                           .to("envelope-example-identity-2@example.com")
@@ -386,14 +386,14 @@ class TestGPG(TestAbstract):
                           result=False)
 
         # signing should fail since we have not imported key for identity-2
-        self._check_lines(envelope("dumb message")
+        self._check_lines(Envelope("dumb message")
                           .gpg(temp.name)
                           .from_("envelope-example-identity-2@example.com")
                           .signature(),
                           raises=RuntimeError)
 
         # however it should pass when we explicitly use an existing GPG key to be signed with
-        self._check_lines(envelope("dumb message")
+        self._check_lines(Envelope("dumb message")
                           .gpg(temp.name)
                           .from_("envelope-example-identity-2@example.com")
                           .signature(GPG_IDENTITY_1_FINGERPRINT),
@@ -402,7 +402,7 @@ class TestGPG(TestAbstract):
                            '-----END PGP SIGNATURE-----',), 10, result=True)
 
         # import encryption key - no passphrase needed while importing or using public key
-        self._check_lines(envelope("dumb message")
+        self._check_lines(Envelope("dumb message")
                           .gpg(temp.name)
                           .from_("envelope-example-identity@example.com")
                           .to("envelope-example-identity-2@example.com")
@@ -410,14 +410,14 @@ class TestGPG(TestAbstract):
                           result=True)
 
         # signing with an invalid passphrase should fail for identity-2
-        self._check_lines(envelope("dumb message")
+        self._check_lines(Envelope("dumb message")
                           .gpg(temp.name)
                           .from_("envelope-example-identity-2@example.com")
                           .signature(passphrase="INVALID PASSPHRASE"),
                           result=False)
 
         # signing with a valid passphrase should pass
-        self._check_lines(envelope("dumb message")
+        self._check_lines(Envelope("dumb message")
                           .gpg(temp.name)
                           .from_("envelope-example-identity-2@example.com")
                           .signature(passphrase=GPG_PASSPHRASE),
@@ -447,46 +447,46 @@ Third
 
     def test_plain(self):
         pl = self.mime_plain
-        self._check_lines(envelope().message(self.plain).mime("plain", "auto"), pl)
-        self._check_lines(envelope().message(self.plain), pl)
-        self._check_lines(envelope().message(self.html).mime("plain"), pl)
+        self._check_lines(Envelope().message(self.plain).mime("plain", "auto"), pl)
+        self._check_lines(Envelope().message(self.plain), pl)
+        self._check_lines(Envelope().message(self.html).mime("plain"), pl)
 
     def test_html(self):
         m = self.mime_html
-        self._check_lines(envelope().message(self.plain).mime("html", "auto"), m)
-        self._check_lines(envelope().message(self.html), m)
-        self._check_lines(envelope().message(self.html_without_line_break), m)
+        self._check_lines(Envelope().message(self.plain).mime("html", "auto"), m)
+        self._check_lines(Envelope().message(self.html), m)
+        self._check_lines(Envelope().message(self.html_without_line_break), m)
 
     def test_nl2br(self):
         nobr = "Second"
         br = "Second<br>"
-        self._check_lines(envelope().message(self.html), nobr)  # there already is a <br> tag so nl2br "auto" should not convert it
-        self._check_lines(envelope().message(self.html).mime(nl2br=True), br)
+        self._check_lines(Envelope().message(self.html), nobr)  # there already is a <br> tag so nl2br "auto" should not convert it
+        self._check_lines(Envelope().message(self.html).mime(nl2br=True), br)
 
-        self._check_lines(envelope().message(self.html_without_line_break), br)
-        self._check_lines(envelope().message(self.html_without_line_break).mime("plain", True), nobr)  # nl2br disabled in "plain"
-        self._check_lines(envelope().message(self.html_without_line_break).mime(nl2br=False), nobr)
+        self._check_lines(Envelope().message(self.html_without_line_break), br)
+        self._check_lines(Envelope().message(self.html_without_line_break).mime("plain", True), nobr)  # nl2br disabled in "plain"
+        self._check_lines(Envelope().message(self.html_without_line_break).mime(nl2br=False), nobr)
 
 
 class TestFrom(TestAbstract):
     def test_from(self):
         id1 = "identity-1@example.com"
         id2 = "identity-2@example.com"
-        self._check_lines(envelope("dumb message").sender(id1),
+        self._check_lines(Envelope("dumb message").sender(id1),
                           f"From: {id1}", not_in=f"Sender: {id1}")
-        self._check_lines(envelope("dumb message", sender=id1),
-                          f"From: {id1}", not_in=f"Sender: {id1}")
-
-        self._check_lines(envelope("dumb message", from_=id1),
-                          f"From: {id1}", not_in=f"Sender: {id1}")
-        self._check_lines(envelope("dumb message").from_(id1),
+        self._check_lines(Envelope("dumb message", sender=id1),
                           f"From: {id1}", not_in=f"Sender: {id1}")
 
-        self._check_lines(envelope("dumb message")
+        self._check_lines(Envelope("dumb message", from_=id1),
+                          f"From: {id1}", not_in=f"Sender: {id1}")
+        self._check_lines(Envelope("dumb message").from_(id1),
+                          f"From: {id1}", not_in=f"Sender: {id1}")
+
+        self._check_lines(Envelope("dumb message")
                           .from_(id1)
                           .sender(id2),
                           (f"From: {id1}", f"Sender: {id2}"))
-        self._check_lines(envelope("dumb message")
+        self._check_lines(Envelope("dumb message")
                           .sender(id2)
                           .from_(id1),
                           (f"From: {id1}", f"Sender: {id2}"))

@@ -102,7 +102,7 @@ def is_gpg_fingerprint(key):
 class AutoSubmittedHeader:
     """  "auto-replied": direct response to another message by an automatic process """
 
-    def __init__(self, parent: 'envelope'):
+    def __init__(self, parent: 'Envelope'):
         self._parent = parent
 
     def __call__(self, val="auto-replied"):
@@ -199,8 +199,8 @@ class SMTP:
                 return False
 
 
-class envelope:
-    default: 'envelope'
+class Envelope:
+    default: 'Envelope'
 
     _gnupg: gnupg.GPG
 
@@ -305,7 +305,7 @@ class envelope:
             if not is_header:
                 body.append(line)
 
-        e = envelope().message(CRLF.join(body))
+        e = Envelope().message(CRLF.join(body))
         for _, key, val in header:
             e.header(key, val)
         return e
@@ -609,23 +609,23 @@ class envelope:
         self._to += assure_list(email_or_list)
         return self
 
-    def attach(self, attachment_or_list=None, mimetype=None, filename=None, *, path=None):
+    def attach(self, attachment=None, mimetype=None, filename=None, *, path=None):
         """
 
-        :type attachment_or_list: Any attainable contents that should be added as an attachment or their list.
+        :type attachment: Any attainable contents that should be added as an attachment or their list.
                 The list may contain tuples: `any_attainable_contents [,mime type] [,file name]`.
         :param mimetype: Mime type OR file name of the attachment.
         :param filename: Mime type OR file name of the attachment.
         :param path: Path to the file that should be attached.
         """
-        if type(attachment_or_list) is list:
+        if type(attachment) is list:
             if path or mimetype or filename:
                 raise ValueError("Cannot specify both path, mimetype or filename and put list in attachment_or_list.")
         else:
             if path:
-                attachment_or_list = Path(path)
-            attachment_or_list = attachment_or_list, mimetype, filename
-        self._attachments += assure_list(attachment_or_list)
+                attachment = Path(path)
+            attachment = attachment, mimetype, filename
+        self._attachments += assure_list(attachment)
         return self
 
     def signature(self, key=True, passphrase=None, attach_key=None, cert=None, *, key_path=None):
@@ -1433,7 +1433,7 @@ def _cli():
         del args["encrypt"]
         del args["send"]
         del args["check"]
-        o = envelope(**args)
+        o = Envelope(**args)
         if o.check():
             print("Check succeeded.")
             sys.exit(0)
@@ -1444,10 +1444,10 @@ def _cli():
 
     if not any([args["sign"], args["encrypt"], args["send"]]):
         # if there is anything to do, pretend the input parameters are a bone of a message
-        print(str(envelope(**args)))
+        print(str(Envelope(**args)))
         sys.exit(0)
 
-    res = envelope(**args)
+    res = Envelope(**args)
     if res:
         if not quiet:
             print(res)
@@ -1458,5 +1458,5 @@ def _cli():
 if __name__ == "__main__":
     _cli()
 else:
-    envelope._cli = _cli
-    envelope.default = envelope()
+    # XEnvelope._cli = _cli
+    Envelope.default = Envelope()

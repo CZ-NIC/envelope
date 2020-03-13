@@ -6,7 +6,8 @@
 - auto-encrypt GPG possibility
 - S/MIME multiple recipients
 - "sender" works as an alias for "from_" if both are not used; otherwise standard "Sender" header is included
-- CHANGE: Envelope.__init__ parameters re-ordered 
+- CHANGE: Envelope.__init__ parameters re-ordered
+- CHANGE: `from envelope import Envelope` is the only right way to import, `import envelope` no more supported (slightly longer, however better suits Python naming conventions)  
 
 ## 0.9.9 (2020-02-10)
 - smime dependency is optional – thus package can be installed directly without having swig library 
@@ -35,7 +36,7 @@
     * insert subject while encrypting
 - unit tests + travis build status
 - SMTP
-    * if SMTP/INI file is given as a relative path and not found at CWD, we try program directory (useful when importing envelope as a library from another program)
+    * if SMTP/INI file is given as a relative path and not found at CWD, we try program directory (useful when importing Envelope as a library from another program)
     * TLS security supported
     * if security not defined, determined by port
 - bash completion
