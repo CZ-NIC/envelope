@@ -88,6 +88,17 @@ envelope --message "Hello world" \
                --to "remote_person@example.com" \
                --encrypt-path "/tmp/remote_key.asc"
 ```
+## Module: fluent interface
+Comfortable way to create the structure if your IDE supports autocompletion.
+```python3
+from envelope import Envelope
+Envelope().message("Hello world")\
+    .output("/tmp/output_file")\
+    .sender("me@example.com")\
+    .to("remote_person@example.com")\
+    .encrypt(key_path="/tmp/remote_key.asc")
+```
+
 ## Module: one-liner function
 You can easily write a one-liner function that encrypts your code or sends an e-mail from within your application when imported as a module. See `pydoc3 envelope` or documentation below.
 
@@ -100,17 +111,6 @@ Envelope(message="Hello world",
         encrypt="/tmp/remote_key.asc")
 ```
 
-## Module: fluent interface
-Comfortable way to create the structure if your IDE supports autocompletion.
-```python3
-from envelope import Envelope
-Envelope().message("Hello world")\
-    .output("/tmp/output_file")\
-    .sender("me@example.com")\
-    .to("remote_person@example.com")\
-    .encrypt(key_path="/tmp/remote_key.asc")
-```
-
 # Documentation
 
 Both `envelope --help` for CLI arguments help and `pydoc3 envelope` to see module arguments help should contain same information as here.
@@ -119,9 +119,9 @@ Both `envelope --help` for CLI arguments help and `pydoc3 envelope` to see modul
 All parameters are optional. 
 
 * **--param** is used in CLI
-* **Envelope(param=)** is a one-liner argument
 * **.param(value)** denotes a positional argument
 * **.param(value=)** denotes a keyword argument
+* **Envelope(param=)** is a one-liner argument
  
 Any attainable contents means plain text, bytes or stream (ex: from open()). In *module interface*, you may use Path object to the file. In *CLI interface*, additional flags are provided.         
 
@@ -129,9 +129,9 @@ Any attainable contents means plain text, bytes or stream (ex: from open()). In 
   * **message**: Message / body text.
     * **--message**: String
     * **--input**: *(CLI only)* Path to the message file. (Alternative to `--message` parameter.)
-    * **Envelope(message=)**: Any attainable contents
     * **.message(text)**:  String or stream.
     * **.message(path=None)**: Path to the file.
+    * **Envelope(message=)**: Any attainable contents
     
     Equivalents for setting a string (in *Python* and in *Bash*).
     ```python3
@@ -150,18 +150,18 @@ Any attainable contents means plain text, bytes or stream (ex: from open()). In 
     ```
   * **output**: Path to file to be written to (else the contents is returned).
     * **--output**
-    * **Envelope(output=)**
     * **.output(output_file)**
+    * **Envelope(output=)**
 ### Cipher standard method
 Note that if neither *gpg* nor *smime* is specified, we try to determine the method automatically.
   * **gpg**: True to prefer GPG over S/MIME or home path to GNUPG rings (otherwise default ~/.gnupg is used)
     * **--gpg [path]**
-    * **Envelope(gpg=True)**
     * **.gpg(gnugp_home=True)**
+    * **Envelope(gpg=True)**
   * **.smime**: Prefer S/MIME over GPG
     * **--smime**
-    * **Envelope(smime=True)**
     * **.smime()**
+    * **Envelope(smime=True)**
 ### Signing
   * **sign**: Sign the message.
     * **`key`** parameter
@@ -177,12 +177,12 @@ Note that if neither *gpg* nor *smime* is specified, we try to determine the met
     * **--attach-key**: GPG: Blank for appending public key to the attachments when sending.
     * **--cert**: S/MIME: Certificate contents if not included in the key.
     * **--cert-path**: S/MIME: Filename with the sender's private cert if cert not included in the key. (Alternative to `cert` parameter.)
+    * **.sign(key=True, passphrase=, attach_key=False, cert=None, key_path=None)**: Sign now (and you may specify the parameters). (For `key` see above.)
+    * **.signature(key=True, passphrase=, attach_key=False, cert=None, key_path=None)**: Sign later (when launched with *.sign()*, *.encrypt()* or *.send()* functions
     * **Envelope(sign=key)**: (for `key` see above)        
     * **Envelope(passphrase=)**: Passphrase to the key if needed.
     * **Envelope(attach_key=)**: GPG: Append public key to the attachments when sending.
     * **Envelope(cert=)**: S/MIME: Any attainable contents.
-    * **.sign(key=True, passphrase=, attach_key=False, cert=None, key_path=None)**: Sign now (and you may specify the parameters). (For `key` see above.)
-    * **.signature(key=True, passphrase=, attach_key=False, cert=None, key_path=None)**: Sign later (when launched with *.sign()*, *.encrypt()* or *.send()* functions
 ### Encrypting
 If the GPG encryption fails, it tries to determine which recipient misses the key.
 
@@ -196,7 +196,6 @@ If the GPG encryption fails, it tries to determine which recipient misses the ke
         * S/MIME any attainable contents with certificate to be encrypted with or their list
     * **--encrypt key**: (for `key` see above) Put 0/false/no to disable `encrypt-path`.
     * **--encrypt-path** *(CLI only)*: Filename(s) with the recipient\'s public key. (Alternative to `encrypt` parameter.)
-    * **Envelope(encrypt=)**: Any attainable contents
     * **.encrypt(key=True, sign=, key_path=)**:
         * **`sign`** You may specify boolean or default signing key ID/fingerprint or "auto" for GPG or any attainable contents with S/MIME key + signing certificate.
         * **`key_path`**: Key/certificate contents (alternative to `key` parameter)
@@ -205,21 +204,22 @@ If the GPG encryption fails, it tries to determine which recipient misses the ke
     # message gets encrypted for multiple certificates
     envelope --smime --encrypt-path recipient1.pem recipient2.pem --message "Hello"
     ```
+    * **Envelope(encrypt=)**: Any attainable contents
   * **to**: E-mail or list. When encrypting, we use keys of these identities.
     * **--to**: One or more e-mail addresses.
-    * **Envelope(to=)**: E-mail or their list.
     * **.to(email_or_list)**:
       ```bash
       envelope --to first@example.com second@example.com --message "hello" 
       ```  
+    * **Envelope(to=)**: E-mail or their list.
   * **from**: E-mail – needed to choose our key if encrypting.    
     * **--from** E-mail
     * **--sender** Alias for *--from* if not set. Otherwise appends header "Sender".
     * **--no-sender** Declare we want to encrypt and never decrypt back.
-    * **Envelope(from_=)**: Sender e-mail or False to explicitly omit. When encrypting without sender, we do not use their key so that we will not be able to decipher again.       
-        * **Envelope(sender=)** *(see --sender)*
     * **.from_(email)**: E-mail or False.
     * **.sender(email)**: an alias for *.from_*
+    * **Envelope(from_=)**: Sender e-mail or False to explicitly omit. When encrypting without sender, we do not use their key so that we will not be able to decipher again.       
+    * **Envelope(sender=)** *(see --sender)*
     ```python3
     # These statement are identic.
     Envelope(from_ = "identity@example.com")    
@@ -231,9 +231,9 @@ If the GPG encryption fails, it tries to determine which recipient misses the ke
 ### Sending
   * **send**: Send the message to the recipients by e-mail. True (blank in *CLI*) to send now or False to print out debug information.
     * **--send**
-    * **Envelope(send=)**
     * **.send(send=True, sign=None, encrypt=None)**
         * *send*: True to send now. False (or 0/false/no in *CLI*) to print debug information.
+    * **Envelope(send=)**
     
     ```bash
     $ envelope --to "user@example.org" --message "Hello world" --send 0
@@ -253,24 +253,24 @@ If the GPG encryption fails, it tries to determine which recipient misses the ke
     ```
   * **subject**: Mail subject. Gets encrypted with GPG, stays visible with S/MIME.
     * **--subject**
-    * **Envelope(subject=)**
     * **.subject(text)**     
+    * **Envelope(subject=)**
   * **cc**: E-mail or their list
     * **--cc**
-    * **Envelope(cc=)**
     * **.cc(email_or_list)**
+    * **Envelope(cc=)**
   * **bcc**: E-mail or their list
     * **--bcc**
-    * **Envelope(bcc=)**
     * **.bcc(email_or_list)**
+    * **Envelope(bcc=)**
   * **reply-to**: E-mail to be replied to. The field is not encrypted.
     * **--reply-to**
-    * **Envelope(reply_to=)**
     * **.reply_to(email)**
+    * **Envelope(reply_to=)**
   * **smtp**: SMTP server
     * **--smtp**
-    * **Envelope(smtp=)**
     * **.smtp(host="localhost", port=25, user=, password=, security=)**
+    * **Envelope(smtp=)**
     * Parameters:
         * `host` may include hostname or any of the following input formats (ex: path to an INI file or a `dict`)
         * `security` if not set, automatically set to `starttls` for port *587* and to `tls` for port *465*
@@ -298,10 +298,6 @@ If the GPG encryption fails, it tries to determine which recipient misses the ke
     ```bash
     envelope --attachment "/tmp/file.txt" "displayed-name.txt" "text/plain" --attachment "/tmp/another-file.txt"
     ```
-    * **Envelope(attachments=)**: Attachment or their list. Attachment is defined by any attainable contents, optionally in tuple with the file name to be used in the e-mail and/or mime type: `contents [,mimetype/filename] [,mimetype/filename]`
-    ```python3
-    Envelope(attachments=[(Path("/tmp/file.txt"), "displayed-name.txt", "text/plain"), Path("/tmp/another-file.txt"])
-    ```    
     * **.attach(attachment=, mimetype=, filename=, path=)**: Three different usages.
         * **.attach(attachment=, mimetype=, filename=)**: You can put any attainable contents of a single attachment into *attachment* and optionally add mime type or displayed file name.
         * **.attach(mimetype=, filename=, path=)**: You can specify path and optionally mime type or displayed file name.
@@ -309,15 +305,19 @@ If the GPG encryption fails, it tries to determine which recipient misses the ke
     ```python3
     Envelope().attach(path="/tmp/file.txt").attach(path="/tmp/another-file.txt")
     ```
+    * **Envelope(attachments=)**: Attachment or their list. Attachment is defined by any attainable contents, optionally in tuple with the file name to be used in the e-mail and/or mime type: `contents [,mimetype/filename] [,mimetype/filename]`
+    ```python3
+    Envelope(attachments=[(Path("/tmp/file.txt"), "displayed-name.txt", "text/plain"), Path("/tmp/another-file.txt"])
+    ```    
     * **mime**: Set contents mime subtype: "auto" (default), "html" or "plain" for plain text. Ignored if `Content-Type` header put to the message.         
         * **--mime SUBTYPE**
-        * **Envelope(mime=)**
         * **.mime(subtype="auto", nl2br="auto")**
             * nl2br: True will append `<br>` to every line break in the HTML message. "auto": line breaks are changed only if there is no `<br` or `<p` in the HTML message,
+        * **Envelope(mime=)**
     * **headers**: Any custom headers (these will not be encrypted with GPG nor S/MIME)
         * **--header name value** (may be used multiple times)
-        * **Envelope(headers=[(name, value)])**
         * **.header(name, value)**
+        * **Envelope(headers=[(name, value)])**
         
         Equivalent headers: 
         ```bash
