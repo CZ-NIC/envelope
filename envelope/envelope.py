@@ -220,6 +220,18 @@ class Envelope:
                 self._start(send="test")
         return self._get_result()
 
+    def __repr__(self):
+        l = []
+        if self._subject:
+            l.append(f"{self._subject}")
+        if self._from:
+            l.append(f"From: {self._from}")
+        if self.recipients():
+            l.append(f"Recipients: {self.recipients()}")
+        if not l:
+            l.append(f"id: {id(self)}")
+        return f"<Envelope {' '.join(l)}>"
+
     def __bytes__(self):
         return assure_fetched(self._get_result(), bytes)
 
@@ -229,6 +241,7 @@ class Envelope:
 
     def preview(self):
         """ Returns the string of the message or data with the readable text.
+            Bcc and attachments are mentioned.
             Ex: whilst we have to use quoted-printable (as seen in __str__), here the output will be plain text.
 
         # XX is ciphering info seen?
@@ -376,6 +389,7 @@ class Envelope:
         self._mime = AUTO
         self._nl2br = AUTO
         self._headers = {}
+        self._ignore_date = False
 
         # variables defined while processing
         self._status = False  # whether we successfully encrypted/signed/send
@@ -446,6 +460,20 @@ class Envelope:
     def reply_to(self, email):
         # XX I think this might be just an alias to self.header("Reply-To", email)
         self._reply_to = email
+        return self
+
+    def date(self, date):
+        """
+        Specify Date header. If not used, Date will be added automatically.
+        :param date: str|False If False, the Date header will not be added automatically.
+        """
+        if date is False:
+            if "Date" in self._headers:
+                del self._headers["Date"]
+            self._ignore_date = True
+        else:
+            self._ignore_date = False
+            self.header("Date", date)
         return self
 
     def sender(self, email):
@@ -548,6 +576,7 @@ class Envelope:
         :return:
 
         XX Will not allow pasting a header multiple times. Which is usual for .load(). Ex: eml files have multiple Received header.
+        XX Allow removing header? (Now .date() has to remove it manually.)
         """
         specific_interface = {"to": self.to, "cc": self.cc, "bcc": self.bcc,
                               "reply_to": self.reply_to, "from": self.from_,
@@ -897,7 +926,8 @@ class Envelope:
             if not self.__from and send is True:
                 logger.error("You have to specify sender e-mail.")
                 return False
-            email["From"] = self.__from
+            if self.__from:
+                email["From"] = self.__from
             if self._to:
                 email["To"] = ",".join(self._to)
             if self._cc:
@@ -919,10 +949,14 @@ class Envelope:
             if k in ["Content-Type", "Content-Transfer-Encoding", "MIME-Version"]:
                 # skip headers already inserted in _prepare_email
                 continue
-            email[k] = v
+            try:
+                email[k] = v
+            except TypeError:
+                # ex: Using random string with header Date
+                raise TypeError(f"Wrong header {k} value: {v}")
         if self.__sender:
             email["Sender"] = self.__sender
-        if "Date" not in email:
+        if "Date" not in email and not self._ignore_date:
             email["Date"] = formatdate(localtime=True)
         if "Message-ID" not in email and send != "test":  # we omit this field when testing
             email["Message-ID"] = make_msgid()

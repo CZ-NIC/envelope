@@ -492,6 +492,13 @@ class TestFrom(TestAbstract):
                           (f"From: {id1}", f"Sender: {id2}"))
 
 
+class TestDate(TestAbstract):
+    def test_date(self):
+        """ Automatic adding of the Date header can be disabled. """
+        self.assertIn(f"Date: ", str(Envelope("dumb message")))
+        self.assertNotIn(f"Date: ", str(Envelope("dumb message").date(False)))
+
+
 class TestSupportive(TestAbstract):
     def test_copy(self):
         factory = Envelope().cc("original@example.com").copy

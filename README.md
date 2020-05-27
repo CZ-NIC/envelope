@@ -268,6 +268,8 @@ If the GPG encryption fails, it tries to determine which recipient misses the ke
     * **--reply-to**
     * **.reply_to(email)**
     * **Envelope(reply_to=)**
+  * **date**:
+    * **.date(date)** `str|False` Specify Date header (otherwise Date is added automatically). If False, the Date header will not be added automatically.
   * **smtp**: SMTP server
     * **--smtp**
     * **.smtp(host="localhost", port=25, user=, password=, security=)**
