@@ -208,6 +208,9 @@ class Envelope:
         return self._status
 
     def __str__(self):
+        if self._result_cache_hash and self._result_cache_hash != self._param_hash():
+            # ex: if we change Subject, we have to regenerate self._result
+            self._result.clear()
         if not self._result:
             if self._encrypt or self._sign:
                 # if subject is not set, we suppose this is just a data blob to be encrypted, no an e-mail message
@@ -233,9 +236,13 @@ class Envelope:
         return f"<Envelope {' '.join(l)}>"
 
     def __bytes__(self):
+        if not self._result:
+            str(self)
         return assure_fetched(self._get_result(), bytes)
 
     def __eq__(self, other):
+        if not self._result:
+            str(self)
         if type(other) in [str, bytes]:
             return assure_fetched(self._get_result(), bytes) == assure_fetched(other, bytes)
 
@@ -287,6 +294,11 @@ class Envelope:
         XX make it capable to decrypt and verify signatures?
         XX make it capable to read an "attachment" - now it's a mere part of the body
         XX write some tests
+
+        XX should be able to load Subject even if it is on a multiline.
+            Envelope.load("Subject: Very long text Very long text Very long text Very long text Very long text") will print out
+                Subject:
+                    Very long text Very long text Very long text Very long text Very long text
 
         Note that if you will send this reconstructed message, you might not probably receive it due to the Message-ID duplication.
         Delete at least Message-ID header prior to re-sending.
@@ -396,6 +408,7 @@ class Envelope:
         self._processed = False  # prevent the user from mistakenly call .sign().send() instead of .signature().send()
         self._result = []  # text output for str() conversion
         self._result_cache = None
+        self._result_cache_hash = None
         self._smtp = SMTP()
         self.auto_submitted = AutoSubmittedHeader(self)  # allows fluent interface to set header
 
@@ -978,7 +991,11 @@ class Envelope:
             if len(self._result):  # put an empty line only if some important content was already placed
                 self._result.append("")
 
+        self._result_cache_hash = self._param_hash()
         return email
+
+    def _param_hash(self):
+        return hash(frozenset(self._headers.items())) + hash("".join(self.recipients())) + hash(self._subject) + hash(self.__from)
 
     def _sign_gpg_now(self, message, sign, send):
         status = self._gnupg.sign(

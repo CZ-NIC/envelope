@@ -491,6 +491,16 @@ class TestFrom(TestAbstract):
                           .from_(id1),
                           (f"From: {id1}", f"Sender: {id2}"))
 
+class TestSubject(TestAbstract):
+    def test_cache_recreation(self):
+        s1 = "Test"
+        s2 = "Another"
+        e = Envelope("dumb message").subject(s1)
+        self._check_lines(e, f"Subject: {s1}")
+
+        e.subject(s2)
+        self._check_lines(e, f"Subject: {s2}")
+
 
 class TestDate(TestAbstract):
     def test_date(self):

@@ -10,6 +10,7 @@
 - S/MIME multiple recipients
 - "sender" works as an alias for "from_" if both are not used; otherwise standard "Sender" header is included
 - .date(date) method allows turn off automatic Date header adding
+- fix: object is modified whenever a parameter changes (ex: if user changes subject multiple times), not at send time
 
 ## 0.9.9 (2020-02-10)
 - smime dependency is optional – thus package can be installed directly without having swig library 
