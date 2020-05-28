@@ -293,6 +293,8 @@ class Envelope:
         XX make it capable to decrypt and verify signatures?
         XX make it capable to read an "attachment" - now it's a mere part of the body
         XX write some tests
+        XX if header inserted multiple times, only the last one is kept
+        XX header order is not kept
 
         XX should be able to load Subject even if it is on a multiline.
             Envelope.load("Subject: Very long text Very long text Very long text Very long text Very long text") will print out
@@ -600,7 +602,7 @@ class Envelope:
         """
         specific_interface = {"to": self.to, "cc": self.cc, "bcc": self.bcc,
                               "reply_to": self.reply_to, "from": self.from_,
-                              "sender": lambda x: self.header("Sender", x),
+                              "sender": self.sender,
                               "subject": self.subject
                               }
 
@@ -1199,7 +1201,7 @@ class Envelope:
             msg_text.set_content(t, subtype=mime)
         else:
             msg_text["Content-Type"] = self._headers["Content-Type"]
-            if "Content-Transfer-Encoding" not in self._headers:
+            if "Content-Transfer-Encoding" in self._headers:
                 msg_text["Content-Transfer-Encoding"] = self._headers["Content-Transfer-Encoding"]
             msg_text.set_payload(text, "utf-8")
 
