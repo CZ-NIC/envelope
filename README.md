@@ -131,6 +131,8 @@ Any attainable contents means plain text, bytes or stream (ex: from open()). In 
     * **--input**: *(CLI only)* Path to the message file. (Alternative to `--message` parameter.)
     * **.message(text)**:  String or stream.
     * **.message(path=None)**: Path to the file.
+    * **.body**: Alias of `.message`
+    * **.text**: Alias of `.message`
     * **Envelope(message=)**: Any attainable contents
     
     Equivalents for setting a string (in *Python* and in *Bash*).

@@ -252,7 +252,6 @@ class Envelope:
             Ex: whilst we have to use quoted-printable (as seen in __str__), here the output will be plain text.
 
         # XX is ciphering info seen?
-        # XX is Bcc header seen?
         # XX might be available from CLI too
         """
         if not self._result:
@@ -461,8 +460,16 @@ class Envelope:
         self._bcc += assure_list(email_or_list)
         return self
 
+    def body(self, text=None, *, path=None):
+        """ An alias of .message """
+        return self.message(text=text, path=path)
+
+    def text(self, text=None, *, path=None):
+        """ An alias of .message """
+        return self.message(text=text, path=path)
+
     def message(self, text=None, *, path=None):
-        # XX make an alias "body" and "text"?
+        """ Message to be ciphered / e-mail body text. """
         if text is path is None:
             return self._message
         if path:
