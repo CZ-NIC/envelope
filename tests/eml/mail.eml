@@ -1,0 +1,27 @@
+Return-Path: <advisory-board-open-bounces@lists.sans.org>
+Received: from receiver.example.com ([unix socket])
+	 by mail (random text) with anything;
+	 Thu, 04 Apr 2019 16:55:14 +0200
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed; d=gmail.com; s=20161025;
+	h=mime-version:references:in-reply-to:from:date:message-id:subject:to
+	:cc; bh=NvlHUaeMxeH+mGFaJ4rPXCBdcJmZOpx1QpUbsIlAjVE=;
+	b=cmgURW0zu+Cs64W3/nhB8R/LUAptfsdsdfCmKE208yF0CrZbkqRrAlPj8kpQ6Pbm5n
+	ELt/mC/T1UdQV4gx5igBTvNiL6HYWagDz0mSmusgZiRFtqqjzvzbaXdYWUBHFwcZJZ90
+	o+2iLEX+nh8E3gk5sB67Cb8FPkdB3VIldepkAxLqSn0SYoD+JKJfIkWMRkLu65Te72J0
+	5ePKOUkmzUMoEiTL3D12gXP7alyz48k8U8zzzu3gAP1NVYXbAv0IJ9cQk1wzArmYauRo
+	meoBttTuH36scE48ll9wbD5USQ4+Y0Ze+vIwAWMcen2Bj6EMfhWaRG28DdUBAlEw1t89
+	WGrQ==
+MIME-Version: 1.0
+References: <MWHPR1301MB19995D49E4F21C03D25CD05870@mwhprb19.namprd13.prod.outlook.com>
+	<CAMqa4kURd=Z5O-8GSfKyU4wJ2k32C83dD_8Gt4Twatng@mail.gmail.com>
+	<em1d4c3f8c-b514-42db-6c9fd566dc21@clncart102>
+Date: Thu, 4 Apr 2020 10:53:57 -0400
+Message-ID: <CAH-QD8UwGBTT7oLPRqabLi8KE9rGVDMjp-MfVzpg@mail.gmail.com>
+To: Person <person@example.com>
+Subject: Hello world subject
+Precedence: list
+From: Harry Potter Junior via online--hey-list-open
+	<some-list-email-address@example.com>
+Sender: "Person 3" <some-list-email-address-bouncer@example.com>
+
+Message body

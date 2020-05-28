@@ -1,4 +1,3 @@
-from collections import defaultdict
 from pathlib import Path
 
 from setuptools import setup
@@ -38,7 +37,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'envelope=envelope:_cli',
+            'envelope=envelope.envelope:main',
         ],
     },
     classifiers=[

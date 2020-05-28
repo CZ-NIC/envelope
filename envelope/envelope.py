@@ -51,7 +51,6 @@ gpg(message="Hello world",
 """
 
 logger = logging.getLogger(__name__)
-_cli_invoked = False
 CRLF = '\r\n'
 AUTO = "auto"
 
@@ -1336,9 +1335,12 @@ class Envelope:
         return bool(self._smtp.connect())  # check SMTP
 
 
-def _cli():
-    global _cli_invoked
-    _cli_invoked = True
+def main():
+    """ CLI """
+    if len(sys.argv) == 1:
+        res = Envelope.load(sys.stdin.read())
+        print(res)
+        sys.exit(0)
 
     class SmartFormatter(argparse.HelpFormatter):
 
@@ -1523,7 +1525,7 @@ def _cli():
 
 
 if __name__ == "__main__":
-    _cli()
+    main()
 else:
     # XEnvelope._cli = _cli
     Envelope.default = Envelope()

@@ -2,6 +2,7 @@ import logging
 import sys
 import unittest
 from pathlib import Path
+from subprocess import PIPE, STDOUT, Popen
 from tempfile import TemporaryDirectory
 from typing import Tuple, Union
 
@@ -491,6 +492,7 @@ class TestFrom(TestAbstract):
                           .from_(id1),
                           (f"From: {id1}", f"Sender: {id2}"))
 
+
 class TestSubject(TestAbstract):
     def test_cache_recreation(self):
         s1 = "Test"
@@ -517,6 +519,23 @@ class TestSupportive(TestAbstract):
 
         self.assertEqual(e1.recipients(), {'independent-1@example.com', 'original@example.com'})
         self.assertEqual(e2.recipients(), {'independent-2@example.com', 'original@example.com', 'additional@example.com'})
+
+
+class TestLoad(TestAbstract):
+    eml = Path("tests/eml/mail.eml")
+
+    def test_load(self):
+        self.assertEqual(Envelope.load("Subject: testing message").subject(), "testing message")
+
+    def test_load_file(self):
+        e = Envelope.load(self.eml.read_text())
+        self.assertEqual(e.subject(), "Hello world subject")
+
+    def test_load_bash(self):
+        cmd = ["./envelope/envelope.py"]
+        p = Popen(cmd, stdout=PIPE, stdin=PIPE, stderr=STDOUT)
+        output = p.communicate(input=self.eml.read_bytes())[0].decode()
+        self.assertIn("Hello world subject", output)
 
 
 if __name__ == '__main__':

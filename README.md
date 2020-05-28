@@ -390,14 +390,25 @@ Envelope().auto_submitted.no()  # mark message as human produced
     Trying to connect to the SMTP...
     Check succeeded.
     ```
- * *static* **.load(message)** **(experimental)**: Parse any attainable contents like an EML file to build an Envelope object.
-    * Still considered experimental: it cannot read an attachment which stays a mere part of the body, it cannot decrypt.
+ * **load**: **(experimental)**: Parse any attainable contents like an EML file to build an Envelope object.
+    * Still considered experimental: it cannot read an attachment which stays a mere part of the body, it cannot decrypt. It will shuffle headers and throw away headers used more than once.
     * Note that if you will send this reconstructed message, you might not probably receive it due to the Message-ID duplication.
         Delete at least Message-ID header prior to re-sending. 
-    ```python3
-   Envelope.load("Subject: testing message").subject()  # "testing message"
-    ```
-    
+    * (*static*) **.load(message)**
+        ```python3
+       Envelope.load("Subject: testing message").subject()  # "testing message"
+        ```
+    * (*bash*) piped in content, envelope executable used with no argument    
+        ```bash
+        $ echo "Subject: testing message" | envelope
+        Content-Type: text/plain; charset="utf-8"
+        Content-Transfer-Encoding: 7bit
+        MIME-Version: 1.0
+        Subject: testing message
+       
+       $ cat email.eml | envelope
+       ```
+   
 ## Default values
 
 In *module* interface, you may set the defaults when accessing `Envelope.default` instance. 
