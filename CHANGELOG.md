@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## 1.0.0 (unreleased)
+## 1.0.0 (2020-05-28)
 - CHANGED:
     * Envelope.__init__ parameters re-ordered
     * `from envelope import Envelope` is the only right way to import, `import envelope` no more supported (slightly longer, however better suits Python naming conventions)  
