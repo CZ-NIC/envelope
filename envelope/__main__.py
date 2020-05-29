@@ -25,10 +25,12 @@ class BlankTrue(argparse.Action):
             values = True
         setattr(namespace, self.dest, values)
 
-def build_instance(instance, args): # XXXX
-    for k, v in args.items():
-        instance[k](v)
-    return instance
+
+def _get_envelope(instance: Envelope, args):
+    """ Internal method. If loaded from STDIN, Envelope object exists already otherwise new object is created.  """
+    # noinspection PyProtectedMember
+    return Envelope(**args) if instance is None else instance._populate(args)
+
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=SmartFormatter)
@@ -102,32 +104,23 @@ def main():
 
     # build instance
     # determine if we have to load the instance from a file or string
+
     if args["load"]:
-        e = Envelope.load(Path(args["load"]))
-    elif select.select([sys.stdin, ], [], [], 0.0)[0]  \
-                or len(sys.argv) == 1 \
-                or args["subject"] is True or args["message"] is True:
-        # XXX check if this does not mess up Windows
-        e = Envelope.load(sys.stdin.read())
+        instance = Envelope.load(Path(args["load"]))
+    elif select.select([sys.stdin, ], [], [], 0.0)[0] \
+            or len(sys.argv) == 1 \
+            or args["subject"] is True or args["message"] is True:
+        # XXX check if using `select` to detect STDIN does not mess up Windows
+        instance = Envelope.load(sys.stdin.read())
     else:
-        e = Envelope()
-
-        # XXX append
-        # if args["subject"] is True:
-        #     loading = True
-        #     pritn exit
-        # if args["message"] is True:
-        #     print("fsd")
-        # print(res)
-        # sys.exit(0)
-
+        instance = None
+    del args["load"]
 
     # in command line, we may specify input message by path (in module we would rather call message=Path("path"))
     if args["input"]:
         if args["message"]:
             raise RuntimeError("Cannot define both input and message.")
         args["message"] = Path(args["input"])
-    # e.message(args["message"])
     del args["input"]
 
     # we explicitly say we do not want to decipher later if encrypting
@@ -182,7 +175,7 @@ def main():
     if args["attachment"]:
         for attachment in args["attachment"]:
             attachment[0] = Path(attachment[0])  # path-only (no direct content) allowed in CLI
-            # we cast to tuple because so that single attachment is not mistanek for list of attachments
+            # we cast to tuple so that single attachment is not mistaken for list of attachments
             args["attachments"].append(tuple(attachment))
     del args["attachment"]
 
@@ -198,24 +191,38 @@ def main():
         del args["encrypt"]
         del args["send"]
         del args["check"]
-        o = self.build_instance(args)
-        # XXX instance = o = Envelope(**args)
+        o = _get_envelope(instance, args)
         if o.check():
             print("Check succeeded.")
             sys.exit(0)
         else:
             print("Check failed.")
             sys.exit(1)
-    del args["check"]
-
-    if not any([args["sign"], args["encrypt"], args["send"]]):
-        # if there is anything to do, pretend the input parameters are a bone of a message
-        print(str(self.build_instance(args))) # XXX Envelope(**args)
-        sys.exit(0)
-
-    res = self.build_instance(args) # XXXEnvelope(**args)
-    if res:
-        if not quiet:
-            print(res)
     else:
-        sys.exit(1)
+        del args["check"]
+
+        # XX allow any header to be displayed, ex: `--header Received` will display all Received headers
+        read_method = None
+        if args["subject"] is True:
+            read_method = "subject"
+            del args["subject"]
+        if args["message"] is True:
+            read_method = "message"
+            del args["message"]
+
+        res = _get_envelope(instance, args)
+        if read_method:
+            print(getattr(res, read_method)())
+        elif not any([read_method, args["sign"], args["encrypt"], args["send"]]):
+            # if there is anything to do, pretend the input parameters are a bone of a message
+            print(str(res))
+            sys.exit(0)
+        elif res:
+            if not quiet:
+                print(res)
+        else:
+            sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()

@@ -521,8 +521,18 @@ class TestSupportive(TestAbstract):
         self.assertEqual(e2.recipients(), {'independent-2@example.com', 'original@example.com', 'additional@example.com'})
 
 
+class TestDefault(TestAbstract):
+    def test_default(self):
+        self.assertEqual(Envelope().subject(), None)
+
+        Envelope.default.subject("bar")
+        self.assertEqual(Envelope().subject("foo").subject(), "foo")
+        self.assertEqual(Envelope().subject(), "bar")
+
+
 class TestLoad(TestAbstract):
     eml = Path("tests/eml/mail.eml")
+    cmd = ["python3", "-m", "envelope"]
 
     def test_load(self):
         self.assertEqual(Envelope.load("Subject: testing message").subject(), "testing message")
@@ -532,11 +542,14 @@ class TestLoad(TestAbstract):
         self.assertEqual(e.subject(), "Hello world subject")
 
     def test_load_bash(self):
-        cmd = ["./envelope/envelope.py"]
-        p = Popen(cmd, stdout=PIPE, stdin=PIPE, stderr=STDOUT)
+        p = Popen(self.cmd, stdout=PIPE, stdin=PIPE, stderr=STDOUT)
         output = p.communicate(input=self.eml.read_bytes())[0].decode()
         self.assertIn("Hello world subject", output)
 
+    def test_bash_display(self):
+        p = Popen(self.cmd + ["--subject"], stdout=PIPE, stdin=PIPE, stderr=STDOUT)
+        output = p.communicate(input=self.eml.read_bytes())[0].decode()
+        self.assertEqual("Hello world subject", output.strip())
 
 if __name__ == '__main__':
     unittest.main()

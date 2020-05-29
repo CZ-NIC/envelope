@@ -398,16 +398,31 @@ Envelope().auto_submitted.no()  # mark message as human produced
         ```python3
        Envelope.load("Subject: testing message").subject()  # "testing message"
         ```
-    * (*bash*) piped in content, envelope executable used with no argument    
-        ```bash
-        $ echo "Subject: testing message" | envelope
-        Content-Type: text/plain; charset="utf-8"
-        Content-Transfer-Encoding: 7bit
-        MIME-Version: 1.0
-        Subject: testing message
-       
-       $ cat email.eml | envelope
-       ```
+    * bash
+        * allows use blank `--subject` or `--message` flags to display the 
+        * **--load FILE**
+            ```bash
+            $ envelope --load email.eml
+            Content-Type: text/plain; charset="utf-8"
+            Content-Transfer-Encoding: 7bit
+            MIME-Version: 1.0
+            Subject: testing message
+            
+            Message body
+          
+            $ envelope --load email.eml --subject
+            testing message          
+            ```
+        * (*bash*) piped in content XXX, envelope executable used with no argument    
+            ```bash
+            $ echo "Subject: testing message" | envelope
+            Content-Type: text/plain; charset="utf-8"
+            Content-Transfer-Encoding: 7bit
+            MIME-Version: 1.0
+            Subject: testing message
+           
+           $ cat email.eml | envelope
+           ```
    
 ## Default values
 

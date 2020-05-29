@@ -82,13 +82,13 @@ class Envelope:
             However this is not serialization, you cannot reconstruct any complicated objects having attachments or custom headers.
         """
         l = []
-        quote = lambda x: '"'+x.replace('"', r'\"')+'"' if type(x) is str else x
+        quote = lambda x: '"' + x.replace('"', r'\"') + '"' if type(x) is str else x
         [l.append(f'{k}={quote(v)}') for k, v in {"subject": self._subject,
-                                                    "from_": self._from,
-                                                    "to": self._to,
-                                                    "cc": self._cc,
-                                                    "bcc": self._bcc,
-                                                    "message": self._message}.items() if v]
+                                                  "from_": self._from,
+                                                  "to": self._to,
+                                                  "cc": self._cc,
+                                                  "bcc": self._bcc,
+                                                  "message": self._message}.items() if v]
 
         if not l:
             return super().__repr__()
@@ -146,7 +146,7 @@ class Envelope:
         return self._result_cache
 
     @staticmethod
-    def load(message,*,path=None):
+    def load(message, *, path=None):
         """ This is still an experimental function.
         XX make this available from CLI, through pipe cat "email.eml" | envelope # implicit --send 0
         XX make it capable to decrypt and verify signatures?
@@ -154,7 +154,8 @@ class Envelope:
         XX write some tests
         XX if header inserted multiple times, only the last one is kept
         XX header order is not kept
-
+        XX Allow message decoding so that you can write `envelope --load mail.eml  --message` to read message contents
+            that is garbled normally in BASE64 etc.
         XX should be able to load Subject even if it is on a multiline.
             Envelope.load("Subject: Very long text Very long text Very long text Very long text Very long text") will print out
                 Subject:
@@ -163,7 +164,7 @@ class Envelope:
         Note that if you will send this reconstructed message, you might not probably receive it due to the Message-ID duplication.
         Delete at least Message-ID header prior to re-sending.
 
-        :type message: Any attainable contents to build an Envelope object from.
+        :param message: Any attainable contents to build an Envelope object from.
         :param path: Path to the file that should be loaded.
         """
         if path:
@@ -278,18 +279,30 @@ class Envelope:
         self.auto_submitted = AutoSubmittedHeader(self)  # allows fluent interface to set header
 
         # if a parameter is not set, use class defaults, else init with parameter
-        for k, v in locals().items():
+        self._populate(locals())
+
+        if sign or encrypt or send is not None:
+            self._start(send=send)
+
+    def _populate(self, params):
+        for k, v in params.items():
             if k in ["self", "send"]:
                 continue
             elif k == "smime":  # smime uses _gpg, not _smime because it needs no parameter
                 if v is True:
                     self.smime()
+                continue
             elif v is None:
-                if hasattr(self, "default"):
-                    if k == "from_":
-                        k = "from"
-                    v = copy(getattr(self.default, "_" + k))  # ex `v = copy(self.default._message)`
-            elif k == "passphrase":
+                if not hasattr(self, "default"):
+                    continue
+                if k == "from_":
+                    k = "from"
+                v = copy(getattr(self.default, "_" + k))  # ex `v = copy(self.default._message)`
+                if v is None:
+                    continue
+
+            if k == "passphrase":
+                print("SIGNIGN", k, v)
                 self.signature(passphrase=v)
             elif k == "attach_key":
                 if v is True:
@@ -311,8 +324,7 @@ class Envelope:
                 getattr(self, k)(v)  # ex: self.message(message)
 
         self._prepare_from()
-        if sign or encrypt or send is not None:
-            self._start(send=send)
+        return self
 
     def copy(self):
         """ Returns deep copy of the object. """
@@ -1198,10 +1210,3 @@ class Envelope:
                     print("Could not spot DMARC.")
         print("Trying to connect to the SMTP...")
         return bool(self._smtp.connect())  # check SMTP
-
-
-if __name__ == "__main__":
-    from .cli import Controller
-    Controller()
-else:
-    Envelope.default = Envelope()
