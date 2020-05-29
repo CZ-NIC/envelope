@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
 
-import argparse
-import io
 import logging
 import re
 import smtplib
@@ -9,7 +7,6 @@ import subprocess
 import sys
 import tempfile
 import warnings
-from collections import defaultdict
 from configparser import ConfigParser
 from copy import copy, deepcopy
 from email.message import EmailMessage
@@ -17,15 +14,15 @@ from email.parser import BytesParser
 from email.utils import make_msgid, formatdate, getaddresses
 from getpass import getpass
 from pathlib import Path
-from socket import gaierror
 from typing import Union
+
+from .utils import AutoSubmittedHeader, SMTP, is_gpg_fingerprint, assure_list, assure_fetched
 
 try:
     import gnupg
 except ImportError:
     gnupg = None
 import magic
-from jsonpickle import decode
 
 __doc__ = """
 
@@ -53,149 +50,6 @@ gpg(message="Hello world",
 logger = logging.getLogger(__name__)
 CRLF = '\r\n'
 AUTO = "auto"
-
-
-def assure_fetched(message, retyped=str):
-    """ Accepts object, returns its string or bytes.
-    If object is
-        * stream or bytes, we consider this is the file contents
-        * Path, we load the file
-        * bool or none, it is returned as is.
-    :type message: object to be converted
-    :type retyped: str or bytes to assure str/bytes are returned
-    """
-    if message is None:
-        return None
-    elif isinstance(message, Path):
-        message = message.read_bytes()
-    elif isinstance(message, (io.TextIOBase, io.BufferedIOBase)):
-        message = message.read()
-    elif type(message) not in [str, bytes, bool]:
-        raise ValueError(f"Expected str, bytes, stream or pathlib.Path: {message}")
-
-    if retyped is bytes and type(message) is str:
-        message = message.encode("utf-8")
-    elif retyped is str and type(message) is bytes:
-        message = message.decode("utf-8")
-    return message
-
-
-def assure_list(l):
-    """ Accepts object and returns list, if object is not list, it's appended to a list. If None, returns empty list.
-        "test" → ["test"]
-        (5,1) → [(5,1)]
-        ["test", "foo"] → ["test", "foo"]
-    """
-    if l is None:
-        return []
-    elif type(l) is not list:
-        return [l]
-    return l
-
-
-def is_gpg_fingerprint(key):
-    """ Check if we have key fingerprint in the variable or the key contents itself """
-    return isinstance(key, str) and len(key) * 4 < 512  # 512 is the smallest possible GPG key
-
-
-class AutoSubmittedHeader:
-    """  "auto-replied": direct response to another message by an automatic process """
-
-    def __init__(self, parent: 'Envelope'):
-        self._parent = parent
-
-    def __call__(self, val="auto-replied"):
-        """
-        :param val: "auto-replied": direct response to another message by an automatic process
-        """
-        self._parent.header("Auto-Submitted", val)
-        return self._parent
-
-    def no(self):
-        """ message was originated by a human """
-        return self("no")
-
-    def auto_replied(self):
-        """ direct response to another message by an automatic process """
-        return self()
-
-    def auto_generated(self):
-        """ automatic (often periodic) processes (such as UNIX "cron jobs") which are not direct responses to other messages """
-        return self("auto-generated")
-
-
-class SMTP:
-    # cache of different smtp connections.
-    # Usecase: user passes smtp server info in dict in a loop but we do want it connects just once
-    _instances = {}
-
-    def __init__(self, host="localhost", port=25, user=None, password=None, security=None):
-        if isinstance(host, smtplib.SMTP):
-            self.instance = host
-        else:
-            self.instance = None
-            self.host = host
-            self.port = int(port)
-            self.user = user
-            self.password = password
-            self.security = security
-        d = locals()
-        del d["self"]
-        self.key = repr(d)
-
-    def connect(self):
-        if self.instance:  # we received this instance as is so we suppose it is already connected
-            return self.instance
-        try:
-            if self.security is None:
-                self.security = defaultdict(lambda: False, {587: "starttls", 465: "tls"})[self.port]
-
-            if self.security == "tls":
-                smtp = smtplib.SMTP_SSL(self.host, self.port, timeout=1)
-            else:
-                smtp = smtplib.SMTP(self.host, self.port, timeout=1)
-                if self.security == "starttls":
-                    smtp.starttls()
-            if self.user:
-                try:
-                    smtp.login(self.user, self.password)
-                except smtplib.SMTPAuthenticationError as e:
-                    logger.error(f"SMTP authentication failed: {self.key}.\n{e}")
-                    return False
-        except smtplib.SMTPException as e:
-            logger.error(f"SMTP connection failed: {self.key}.\n{e}")
-            return False
-        except (gaierror, ConnectionError):
-            logger.error(f"SMTP connection refused: {self.key}.")
-            return False
-        return smtp
-
-    def send_message(self, email, to_addrs):
-        for attempt in range(1, 3):  # an attempt to reconnect possible
-            # smtp = self._smtp
-            # if not smtp:
-            #     logger.error("No SMTP given")
-            #     return False
-            # key = repr(smtp)
-            try:
-                if self.key not in self._instances:
-                    self._instances[self.key] = self.connect()
-                smtp = self._instances[self.key]
-                if smtp is False:
-                    return False
-
-                # recipients cannot be taken from headers when encrypting, we have to re-list them again
-                return smtp.send_message(email, to_addrs=to_addrs)
-
-            except smtplib.SMTPSenderRefused as e:  # timeout
-                if attempt == 2:
-                    logger.warning(f"SMTP sender refused, unable to reconnect.\n{e}")
-                    return False
-                del self._instances[self.key]  # this connection is gone possibly due to a timeout, reconnect
-                continue
-            except smtplib.SMTPException as e:
-                logger.error(f"SMTP sending failed.\n{e}")
-                return False
 
 
 class Envelope:
@@ -292,7 +146,7 @@ class Envelope:
         return self._result_cache
 
     @staticmethod
-    def load(message):
+    def load(message,*,path=None):
         """ This is still an experimental function.
         XX make this available from CLI, through pipe cat "email.eml" | envelope # implicit --send 0
         XX make it capable to decrypt and verify signatures?
@@ -308,8 +162,13 @@ class Envelope:
 
         Note that if you will send this reconstructed message, you might not probably receive it due to the Message-ID duplication.
         Delete at least Message-ID header prior to re-sending.
-        @type message: Parse any attainable contents to build an Envelope object.
+
+        :type message: Any attainable contents to build an Envelope object from.
+        :param path: Path to the file that should be loaded.
         """
+        if path:
+            message = Path(path)
+
         header_row = re.compile(r"([^\t:]+):(.*)")
         text = assure_fetched(message)
         is_header = True
@@ -1341,197 +1200,8 @@ class Envelope:
         return bool(self._smtp.connect())  # check SMTP
 
 
-def main():
-    """ CLI """
-    if len(sys.argv) == 1:
-        res = Envelope.load(sys.stdin.read())
-        print(res)
-        sys.exit(0)
-
-    class SmartFormatter(argparse.HelpFormatter):
-
-        def _split_lines(self, text, width):
-            if text.startswith('R|'):
-                return text[2:].splitlines()
-            return argparse.HelpFormatter._split_lines(self, text, width)
-
-    class BlankTrue(argparse.Action):
-        """ When left blank, this flag produces True. (Normal behaviour is to produce None which I use for not being set."""
-
-        def __call__(self, _, namespace, values, option_string=None):
-            if values in [None, []]:  # blank argument with nargs="?" produces None, with ="*" produces []
-                values = True
-            setattr(namespace, self.dest, values)
-
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=SmartFormatter)
-    parser.add_argument('--message', help='Plain text message.', metavar="TEXT")
-    parser.add_argument('--input', help='Path to message file. (Alternative to `message` parameter.)', metavar="FILE")
-    parser.add_argument('--output',
-                        help='Path to file to be written to (else the contents is returned if ciphering or True if sending).',
-                        metavar="FILE")
-    parser.add_argument('--gpg', help='Home path to GNUPG rings else default ~/.gnupg is used.'
-                                      'Leave blank for prefer GPG over S/MIME.', nargs="?", action=BlankTrue, metavar="PATH")
-    parser.add_argument('--smime', action="store_true", help='Leave blank for prefer S/MIME over GPG.')
-    parser.add_argument('--check', action="store_true", help='Check SMTP server connection')
-
-    parser.add_argument('--sign', help='R|Sign the message.'
-                                       '\n * "auto" for turning on signing if there is a key matching to the "from" header'
-                                       '\n * GPG: Blank for user default key or key ID/fingerprint.'
-                                       '\n * S/MIME: Key data.', nargs="?",
-                        action=BlankTrue, metavar="FINGERPRINT|CONTENTS")
-    parser.add_argument('--cert', help='S/MIME: Certificate contents if not included in the key.',
-                        action=BlankTrue, metavar="CONTENTS")
-    parser.add_argument('--passphrase', help='If signing key needs passphrase.')
-    parser.add_argument('--sign-path', help='Filename with the sender\'s private key. (Alternative to `sign` parameter.)',
-                        metavar="KEY-PATH")
-    parser.add_argument('--cert-path', help='S/MIME: Filename with the sender\'s S/MIME private cert'
-                                            ' if cert not included in the key. (Alternative to `cert` parameter.)',
-                        metavar="CERT-PATH")
-
-    parser.add_argument('--encrypt', help='R|* GPG:'
-                                          "\n  * Blank for user default key"
-                                          "\n  * key ID/fingerprint"
-                                          "\n  * Any attainable contents with the key to be signed with"
-                                          " (will be imported into keyring)"
-                                          "\n  * \"auto\" for turning on encrypting if there is a matching key for every recipient"
-                                          "\n* S/MIME any attainable contents with certificate to be encrypted with or their list",
-                        nargs="*", action=BlankTrue, metavar="GPG-KEY/SMIME-CERTIFICATE-CONTENTS")
-    parser.add_argument('--encrypt-path', help='Filename(s) with the recipient\'s public key.'
-                                               ' (Alternative to `encrypt` parameter.)',
-                        nargs="*", metavar="PATH")
-    parser.add_argument('-t', '--to', help="E-mail – needed to choose their key if encrypting", nargs="+", metavar="E-MAIL")
-    parser.add_argument('--cc', help="E-mail or list", nargs="+", metavar="E-MAIL")
-    parser.add_argument('--bcc', help="E-mail or list", nargs="+", metavar="E-MAIL")
-    parser.add_argument('--reply-to', help="Header that states e-mail to be replied to. The field is not encrypted.",
-                        metavar="E-MAIL")
-    parser.add_argument('-f', '--from', help="Alias of --sender", metavar="E-MAIL")
-    parser.add_argument('--sender', help="E-mail – needed to choose our key if encrypting", metavar="E-MAIL")
-    parser.add_argument('--no-sender', action="store_true",
-                        help="We explicitly say we do not want to decipher later if encrypting.")
-    parser.add_argument('-a', '--attachment',
-                        help="Path to the attachment, followed by optional file name to be used and/or mimetype."
-                             " This parameter may be used multiple times.",
-                        nargs="+", action="append")
-    parser.add_argument('--attach-key', help="Appending public key to the attachments when sending.", action="store_true")
-
-    parser.add_argument('--send', help="Send e-mail. Blank to send now.", nargs="?", action=BlankTrue)
-    parser.add_argument('-s', '--subject', help="E-mail subject")
-    parser.add_argument('--smtp', help="SMTP server. List `host, [port, [username, password, [security]]]` or dict.\n"
-                                       "Ex: '--smtp {\"host\": \"localhost\", \"port\": 25}'."
-                                       " Security may be explicitly set to 'starttls', 'tls' or automatically determined by port.",
-                        nargs="*", action=BlankTrue, metavar=("HOST", "PORT"))
-    parser.add_argument('--mime', help="Set contents mime subtype: 'html' (default) or 'plain' for plain text",
-                        metavar="SUBTYPE")
-    parser.add_argument('--header',
-                        help="Any e-mail header in the form `name value`. Flag may be used multiple times.",
-                        nargs=2, action="append", metavar=("NAME", "VALUE"))
-    parser.add_argument('-q', '--quiet', help="Quiet output", action="store_true")
-
-    # envelope = Envelope()
-    args = vars(parser.parse_args())
-
-    # cli arguments
-    quiet = args.pop("quiet")
-
-    # in command line, we may specify input message by path (in module we would rather call message=Path("path"))
-    if args["input"]:
-        if args["message"]:
-            raise RuntimeError("Cannot define both input and message.")
-        args["message"] = Path(args["input"])
-    del args["input"]
-
-    # we explicitly say we do not want to decipher later if encrypting
-    if args["no_sender"]:
-        args["sender"] = False
-    del args["no_sender"]
-
-    # user is saying that encryption key has been already imported
-    enc = args["encrypt"]
-    if enc and enc is not True:
-        if enc.lower() in ["1", "true", "yes"]:
-            args["encrypt"] = True
-        elif enc.lower() in ["0", "false", "no"]:
-            args["encrypt"] = False
-
-    # user specified encrypt key in a path. And did not disabled encryption
-    if args["encrypt_path"] and args["encrypt"] is not False:
-        if args["encrypt"] not in [True, None]:  # user has specified both path and the key
-            raise RuntimeError("Cannot define both encrypt key data and encrypt key path.")
-        if type(args["encrypt_path"]) is list:
-            args["encrypt"] = [Path(p) for p in args["encrypt_path"]]
-        else:
-            args["encrypt"] = Path(args["encrypt_path"])
-    del args["encrypt_path"]
-
-    # user specified sign key in a path. And did not disabled signing
-    if args["sign_path"] and args["sign"] is not False:
-        if args["sign"] not in [True, None]:  # user has specified both path and the key
-            raise RuntimeError("Cannot define both sign key data and sign key path.")
-        args["sign"] = Path(args["sign_path"])
-    del args["sign_path"]
-
-    if args["cert_path"]:
-        if args["cert"] is not None:
-            raise RuntimeError("Cannot define both cert and cert-path.")
-        args["cert"] = Path(args["cert_path"])
-    del args["cert_path"]
-
-    # smtp can be a dict
-    if args["smtp"] and args["smtp"][0].startswith("{"):
-        args["smtp"] = decode(" ".join(args["smtp"]))
-
-    # send = False turns on debugging
-    if args["send"] and type(args["send"]) is not bool:
-        if args["send"].lower() in ["0", "false", "no"]:
-            args["send"] = False
-        elif args["send"].lower() in ["1", "true", "yes"]:
-            args["send"] = True
-
-    # convert to the module-style attachments `/tmp/file.txt text/plain` → (Path("/tmp/file.txt"), "text/plain")
-    args["attachments"] = []
-    if args["attachment"]:
-        for attachment in args["attachment"]:
-            attachment[0] = Path(attachment[0])  # path-only (no direct content) allowed in CLI
-            # we cast to tuple because so that single attachment is not mistanek for list of attachments
-            args["attachments"].append(tuple(attachment))
-    del args["attachment"]
-
-    args["headers"] = args["header"]
-    del args["header"]
-
-    if args["from"]:
-        args["sender"] = args["from"]
-    del args["from"]
-
-    if args["check"]:
-        del args["sign"]
-        del args["encrypt"]
-        del args["send"]
-        del args["check"]
-        o = Envelope(**args)
-        if o.check():
-            print("Check succeeded.")
-            sys.exit(0)
-        else:
-            print("Check failed.")
-            sys.exit(1)
-    del args["check"]
-
-    if not any([args["sign"], args["encrypt"], args["send"]]):
-        # if there is anything to do, pretend the input parameters are a bone of a message
-        print(str(Envelope(**args)))
-        sys.exit(0)
-
-    res = Envelope(**args)
-    if res:
-        if not quiet:
-            print(res)
-    else:
-        sys.exit(1)
-
-
 if __name__ == "__main__":
-    main()
+    from .cli import Controller
+    Controller()
 else:
-    # XEnvelope._cli = _cli
     Envelope.default = Envelope()

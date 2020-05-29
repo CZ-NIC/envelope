@@ -37,7 +37,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'envelope=envelope.envelope:main',
+            'envelope=envelope.cli:main',
         ],
     },
     classifiers=[
