@@ -1,5 +1,7 @@
 # CHANGELOG
 
+## 1.1 (unreleased)
+
 ## 1.0.0 (2020-05-28)
 - CHANGED:
     * Envelope.__init__ parameters re-ordered

@@ -591,7 +591,7 @@ envelope --message "SMTP test" --from [your e-mail] --to [your e-mail] --smtp lo
 ### Configure your GPG
 In order to sign messages, you need a private key. Let's pretend a usecase when your application will run under `www-data` user and GPG sign messages through the keys located at: `/var/www/.gnupg`. You have got a SMTP server with an e-mail account the application may use.
 ```bash 
-GNUPGHOME=/var/www/.gnupg sudo -H -u www-data gpg --full-generate-key  # put application e-mail your are able to send the e-mail from
+GNUPGHOME=/var/www/.gnupg sudo -H -u www-data gpg --full-generate-key  # put application e-mail you are able to send e-mails from
 # if the generation fails now because you are on a remote terminal, you may want to change temporarily the ownership of the terminal by the following command: 
 # sudo chown www-data $(tty)  # put it back afterwards
 GNUPGHOME=/var/www/.gnupg sudo -H -u www-data gpg --list-secret-keys  # get key ID

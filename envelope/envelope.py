@@ -223,16 +223,22 @@ class Envelope:
         return self._get_result()
 
     def __repr__(self):
+        """
+        :return: Prints out basic representation.
+            However this is not serialization, you cannot reconstruct any complicated objects having attachments or custom headers.
+        """
         l = []
-        if self._subject:
-            l.append(f"{self._subject}")
-        if self._from:
-            l.append(f"From: {self._from}")
-        if self.recipients():
-            l.append(f"Recipients: {self.recipients()}")
+        quote = lambda x: '"'+x.replace('"', r'\"')+'"' if type(x) is str else x
+        [l.append(f'{k}={quote(v)}') for k, v in {"subject": self._subject,
+                                                    "from_": self._from,
+                                                    "to": self._to,
+                                                    "cc": self._cc,
+                                                    "bcc": self._bcc,
+                                                    "message": self._message}.items() if v]
+
         if not l:
-            l.append(f"id: {id(self)}")
-        return f"<Envelope {' '.join(l)}>"
+            return super().__repr__()
+        return f"Envelope({', '.join(l)})"
 
     def __bytes__(self):
         if not self._result:
@@ -638,7 +644,7 @@ class Envelope:
 
         if ini and ini.endswith("ini"):
             if not Path(ini).exists() and not Path(ini).is_absolute():
-                # when imported as a library, the relative path to the ini file might point to the main program directory                
+                # when imported as a library, the relative path to the ini file might point to the main program directory
                 ini = Path(Path(sys.argv[0]).parent, ini)
 
             if Path(ini).exists():  # existing INI file
