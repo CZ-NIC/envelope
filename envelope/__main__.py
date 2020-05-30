@@ -34,31 +34,32 @@ def _get_envelope(instance: Envelope, args):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=SmartFormatter)
-    parser.add_argument('--message', help='Plain text message.', metavar="TEXT", nargs="?", action=BlankTrue)
-    parser.add_argument('--input', help='Path to message file. (Alternative to `message` parameter.)', metavar="FILE")
-    parser.add_argument('--output',
+    group_io = parser.add_argument_group("Input/Output")
+    group_io.add_argument('--message', help='Plain text message.', metavar="TEXT", nargs="?", action=BlankTrue)
+    group_io.add_argument('--input', help='Path to message file. (Alternative to `message` parameter.)', metavar="FILE")
+    group_io.add_argument('--output',
                         help='Path to file to be written to (else the contents is returned if ciphering or True if sending).',
                         metavar="FILE")
-    parser.add_argument('--gpg', help='Home path to GNUPG rings else default ~/.gnupg is used.'
+
+    group_ciph = parser.add_argument_group("Ciphering")
+    group_ciph.add_argument('--gpg', help='Home path to GNUPG rings else default ~/.gnupg is used.'
                                       'Leave blank for prefer GPG over S/MIME.', nargs="?", action=BlankTrue, metavar="PATH")
-    parser.add_argument('--smime', action="store_true", help='Leave blank for prefer S/MIME over GPG.')
-    parser.add_argument('--check', action="store_true", help='Check SMTP server connection')
-    parser.add_argument('--load', help="Path to the file to build an Envelope object from.", metavar="FILE")
-    parser.add_argument('--sign', help='R|Sign the message.'
+    group_ciph.add_argument('--smime', action="store_true", help='Leave blank for prefer S/MIME over GPG.')
+    group_ciph.add_argument('--sign', help='R|Sign the message.'
                                        '\n * "auto" for turning on signing if there is a key matching to the "from" header'
                                        '\n * GPG: Blank for user default key or key ID/fingerprint.'
                                        '\n * S/MIME: Key data.', nargs="?",
                         action=BlankTrue, metavar="FINGERPRINT|CONTENTS")
-    parser.add_argument('--cert', help='S/MIME: Certificate contents if not included in the key.',
+    group_ciph.add_argument('--cert', help='S/MIME: Certificate contents if not included in the key.',
                         action=BlankTrue, metavar="CONTENTS")
-    parser.add_argument('--passphrase', help='If signing key needs passphrase.')
-    parser.add_argument('--sign-path', help='Filename with the sender\'s private key. (Alternative to `sign` parameter.)',
+    group_ciph.add_argument('--passphrase', help='If signing key needs passphrase.')
+    group_ciph.add_argument('--sign-path', help='Filename with the sender\'s private key. (Alternative to `sign` parameter.)',
                         metavar="KEY-PATH")
-    parser.add_argument('--cert-path', help='S/MIME: Filename with the sender\'s S/MIME private cert'
+    group_ciph.add_argument('--cert-path', help='S/MIME: Filename with the sender\'s S/MIME private cert'
                                             ' if cert not included in the key. (Alternative to `cert` parameter.)',
                         metavar="CERT-PATH")
 
-    parser.add_argument('--encrypt', help='R|* GPG:'
+    group_ciph.add_argument('--encrypt', help='R|* GPG:'
                                           "\n  * Blank for user default key"
                                           "\n  * key ID/fingerprint"
                                           "\n  * Any attainable contents with the key to be signed with"
@@ -66,36 +67,41 @@ def main():
                                           "\n  * \"auto\" for turning on encrypting if there is a matching key for every recipient"
                                           "\n* S/MIME any attainable contents with certificate to be encrypted with or their list",
                         nargs="*", action=BlankTrue, metavar="GPG-KEY/SMIME-CERTIFICATE-CONTENTS")
-    parser.add_argument('--encrypt-path', help='Filename(s) with the recipient\'s public key.'
+    group_ciph.add_argument('--encrypt-path', help='Filename(s) with the recipient\'s public key.'
                                                ' (Alternative to `encrypt` parameter.)',
                         nargs="*", metavar="PATH")
-    parser.add_argument('-t', '--to', help="E-mail – needed to choose their key if encrypting", nargs="+", metavar="E-MAIL")
-    parser.add_argument('--cc', help="E-mail or list", nargs="+", metavar="E-MAIL")
-    parser.add_argument('--bcc', help="E-mail or list", nargs="+", metavar="E-MAIL")
-    parser.add_argument('--reply-to', help="Header that states e-mail to be replied to. The field is not encrypted.",
+    group_ciph.add_argument('--attach-key', help="Appending public key to the attachments when sending.", action="store_true")
+
+    group_send = parser.add_argument_group("Sending")
+    group_send.add_argument('-s', '--subject', help="E-mail subject", nargs="?", action=BlankTrue)
+    group_send.add_argument('-t', '--to', help="E-mail – needed to choose their key if encrypting", nargs="+", metavar="E-MAIL")
+    group_send.add_argument('--cc', help="E-mail or list", nargs="+", metavar="E-MAIL")
+    group_send.add_argument('--bcc', help="E-mail or list", nargs="+", metavar="E-MAIL")
+    group_send.add_argument('--reply-to', help="Header that states e-mail to be replied to. The field is not encrypted.",
                         metavar="E-MAIL")
-    parser.add_argument('-f', '--from', help="Alias of --sender", metavar="E-MAIL")
-    parser.add_argument('--sender', help="E-mail – needed to choose our key if encrypting", metavar="E-MAIL")
-    parser.add_argument('--no-sender', action="store_true",
+    group_send.add_argument('-f', '--from', help="Alias of --sender", metavar="E-MAIL")
+    group_send.add_argument('--sender', help="E-mail – needed to choose our key if encrypting", metavar="E-MAIL")
+    group_send.add_argument('--no-sender', action="store_true",
                         help="We explicitly say we do not want to decipher later if encrypting.")
-    parser.add_argument('-a', '--attachment',
+    group_send.add_argument('-a', '--attachment',
                         help="Path to the attachment, followed by optional file name to be used and/or mimetype."
                              " This parameter may be used multiple times.",
                         nargs="+", action="append")
-    parser.add_argument('--attach-key', help="Appending public key to the attachments when sending.", action="store_true")
-
-    parser.add_argument('--send', help="Send e-mail. Blank to send now.", nargs="?", action=BlankTrue)
-    parser.add_argument('-s', '--subject', help="E-mail subject", nargs="?", action=BlankTrue)
-    parser.add_argument('--smtp', help="SMTP server. List `host, [port, [username, password, [security]]]` or dict.\n"
+    group_send.add_argument('--header',
+                        help="Any e-mail header in the form `name value`. Flag may be used multiple times.",
+                        nargs=2, action="append", metavar=("NAME", "VALUE"))
+    group_send.add_argument('--mime', help="Set contents mime subtype: 'html' (default) or 'plain' for plain text",
+                        metavar="SUBTYPE")
+    group_send.add_argument('--smtp', help="SMTP server. List `host, [port, [username, password, [security]]]` or dict.\n"
                                        "Ex: '--smtp {\"host\": \"localhost\", \"port\": 25}'."
                                        " Security may be explicitly set to 'starttls', 'tls' or automatically determined by port.",
                         nargs="*", action=BlankTrue, metavar=("HOST", "PORT"))
-    parser.add_argument('--mime', help="Set contents mime subtype: 'html' (default) or 'plain' for plain text",
-                        metavar="SUBTYPE")
-    parser.add_argument('--header',
-                        help="Any e-mail header in the form `name value`. Flag may be used multiple times.",
-                        nargs=2, action="append", metavar=("NAME", "VALUE"))
-    parser.add_argument('-q', '--quiet', help="Quiet output", action="store_true")
+    group_send.add_argument('--send', help="Send e-mail. Blank to send now.", nargs="?", action=BlankTrue)
+
+    group_supp = parser.add_argument_group("Supportive")
+    group_supp.add_argument('--check', action="store_true", help='Check SMTP server connection')
+    group_supp.add_argument('--load', help="Path to the file to build an Envelope object from.", metavar="FILE")
+    group_supp.add_argument('-q', '--quiet', help="Quiet output", action="store_true")
 
     args = vars(parser.parse_args())
 
