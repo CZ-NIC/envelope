@@ -504,7 +504,52 @@ class TestSubject(TestAbstract):
         self._check_lines(e, f"Subject: {s2}")
 
 
-class TestDate(TestAbstract):
+class TestHeaders(TestAbstract):
+    def test_generic_header_manipulation(self):
+        # Add a custom header and delete it
+        e = Envelope("dumb message").subject("my subject").header("custom", "1")
+        self.assertEqual(e.header("custom"), "1")
+        self.assertIs(e.header("custom", replace=True), e)
+
+        # Add a header multiple times
+        e.header("custom", "2").header("custom", "3")
+        # Receive list
+        self.assertEqual(e.header("custom"), ["2", "3"])
+        # Replace by single value
+        self.assertIs(e.header("custom", "4", replace=True), e)
+        # Receive string
+        self.assertEqual(e.header("custom"), "4")
+        # Delete the header and read None
+        self.assertIs(e.header("custom", None, replace=True), e)
+        self.assertIs(e.header("custom"), None)
+
+    def test_specific_header_manipulation(self):
+        """ Specific headers are stored in instance attributes
+            Ex: It is useful to have Subject as a special header since it can be encrypted.
+            Ex: It is useful to have Cc as a special header since it can hold the list of receivers.
+        """
+        # Add a specific header like and delete it
+        s = "my subject"
+        id1 = "person@example.com"
+        id2 = "person2@example.com"
+        id3 = "person3@example.com"
+        e = Envelope("dumb message")\
+            .subject(s)\
+            .header("custom", "1")\
+            .cc(id1)  # set headers via their specific methods
+        self.assertEqual(e.header("subject"), s)  # access via .header
+        self.assertEqual(e.subject(), s)  # access via specific method .subject
+        self.assertIs(e.header("subject", replace=True), e)
+        self.assertIs(e.header("subject"), None)
+        self.assertEqual(e.header("subject", s).subject(), s)  # set via generic method
+
+        self.assertEqual(e.header("cc", id2).header("cc"), [id1, id2])  # access via .header
+        self.assertEqual(e.cc(), [id1, id2])
+        self.assertIs(e.header("cc", replace=True), e)
+        self.assertEqual(e.cc(), [])
+        self.assertIs(e.header("cc", id3), e)
+        self.assertEqual(e.header("cc"), [id3])  # cc and bcc headers always return list as documented (which is maybe not ideal)
+
     def test_date(self):
         """ Automatic adding of the Date header can be disabled. """
         self.assertIn(f"Date: ", str(Envelope("dumb message")))
@@ -541,6 +586,10 @@ class TestLoad(TestAbstract):
         e = Envelope.load(self.eml.read_text())
         self.assertEqual(e.subject(), "Hello world subject")
 
+        # multiple headers returned as list and in the same order
+        self.assertEqual(len(e.header("Received")), 2)
+        self.assertEqual(e.header("Received")[1][:26], "from receiver2.example.com")
+
     def test_load_bash(self):
         p = Popen(self.cmd, stdout=PIPE, stdin=PIPE, stderr=STDOUT)
         output = p.communicate(input=self.eml.read_bytes())[0].decode()
@@ -550,6 +599,7 @@ class TestLoad(TestAbstract):
         p = Popen(self.cmd + ["--subject"], stdout=PIPE, stdin=PIPE, stderr=STDOUT)
         output = p.communicate(input=self.eml.read_bytes())[0].decode()
         self.assertEqual("Hello world subject", output.strip())
+
 
 if __name__ == '__main__':
     unittest.main()

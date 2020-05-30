@@ -17,6 +17,9 @@ References: <MWHPR1301MB19995D49E4F21C03D25CD05870@mwhprb19.namprd13.prod.outloo
 	<em1d4c3f8c-b514-42db-6c9fd566dc21@clncart102>
 Date: Thu, 4 Apr 2020 10:53:57 -0400
 Message-ID: <CAH-QD8UwGBTT7oLPRqabLi8KE9rGVDMjp-MfVzpg@mail.gmail.com>
+Received: from receiver2.example.com ([unix socket])
+	 by mail (random text) with anything;
+	 Thu, 05 Apr 2019 16:55:14 +0200
 To: Person <person@example.com>
 Subject: Hello world subject
 Precedence: list

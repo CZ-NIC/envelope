@@ -148,12 +148,8 @@ class Envelope:
     @staticmethod
     def load(message, *, path=None):
         """ This is still an experimental function.
-        XX make this available from CLI, through pipe cat "email.eml" | envelope # implicit --send 0
         XX make it capable to decrypt and verify signatures?
         XX make it capable to read an "attachment" - now it's a mere part of the body
-        XX write some tests
-        XX if header inserted multiple times, only the last one is kept
-        XX header order is not kept
         XX Allow message decoding so that you can write `envelope --load mail.eml  --message` to read message contents
             that is garbled normally in BASE64 etc.
         XX should be able to load Subject even if it is on a multiline.
@@ -266,7 +262,7 @@ class Envelope:
         self._reply_to = None
         self._mime = AUTO
         self._nl2br = AUTO
-        self._headers = {}
+        self._headers = EmailMessage()  # object for storing headers the most standard way possible
         self._ignore_date = False
 
         # variables defined while processing
@@ -284,6 +280,13 @@ class Envelope:
         if sign or encrypt or send is not None:
             self._start(send=send)
 
+    @staticmethod
+    def _get_private_var(k):
+        """ Gets internal specific interface var name from its method name. """
+        if k == "from_":
+            k = "from"
+        return "_" + k
+
     def _populate(self, params):
         for k, v in params.items():
             if k in ["self", "send"]:
@@ -295,14 +298,11 @@ class Envelope:
             elif v is None:
                 if not hasattr(self, "default"):
                     continue
-                if k == "from_":
-                    k = "from"
-                v = copy(getattr(self.default, "_" + k))  # ex `v = copy(self.default._message)`
+                v = copy(getattr(self.default, self._get_private_var(k)))  # ex `v = copy(self.default._message)`
                 if v is None:
                     continue
 
             if k == "passphrase":
-                print("SIGNIGN", k, v)
                 self.signature(passphrase=v)
             elif k == "attach_key":
                 if v is True:
@@ -330,11 +330,15 @@ class Envelope:
         """ Returns deep copy of the object. """
         return deepcopy(self)
 
-    def cc(self, email_or_list):
+    def cc(self, email_or_list=None):
+        if email_or_list is None:
+            return self._cc
         self._cc += assure_list(email_or_list)
         return self
 
-    def bcc(self, email_or_list):
+    def bcc(self, email_or_list=None):
+        if email_or_list is None:
+            return self._bcc
         self._bcc += assure_list(email_or_list)
         return self
 
@@ -355,8 +359,10 @@ class Envelope:
         self._message = text
         return self
 
-    def reply_to(self, email):
+    def reply_to(self, email=None):
         # XX I think this might be just an alias to self.header("Reply-To", email)
+        if email is None:
+            return self._reply_to
         self._reply_to = email
         return self
 
@@ -366,7 +372,7 @@ class Envelope:
         :param date: str|False If False, the Date header will not be added automatically.
         """
         if date is False:
-            if "Date" in self._headers:
+            if "Date" in self._headers:  # removes date header
                 del self._headers["Date"]
             self._ignore_date = True
         else:
@@ -374,13 +380,17 @@ class Envelope:
             self.header("Date", date)
         return self
 
-    def sender(self, email):
+    def sender(self, email=None):
         """  Alias for "from" if not set. Otherwise appends header "Sender". """
+        if email is None:  # XX doc me
+            return self.__sender
         self._sender = email
         self._prepare_from()
         return self
 
-    def from_(self, email):
+    def from_(self, email=None):
+        if email is None:
+            return self.__from
         self._from = email
         self._prepare_from()
         return self
@@ -461,21 +471,23 @@ class Envelope:
             else:
                 elements.append(f"<mailto:{email}>")
 
-        self.header("List-Unsubscribe", ", ".join(elements))
+        self.header("List-Unsubscribe", ", ".join(elements), replace=True)
         return self
 
     auto_submitted: AutoSubmittedHeader
 
-    def header(self, key, val):
+    def header(self, key, val=None, replace=False):
         """ Add a generic header.
         The header will not be encrypted with GPG nor S/MIME.
-        :param key: Header name
-        :param val: Header value
-        :return:
-
-        XX Will not allow pasting a header multiple times. Which is usual for .load(). Ex: eml files have multiple Received header.
-        XX Allow removing header? (Now .date() has to remove it manually.)
+        :param key: str Header name
+        :param val: str Header value. If None, currently used value is returned.
+        :param replace: bool If True, any header of the `key` name are removed first and if `val` is None, the header is deleted.
+                        Otherwise another header of the same name is appended.
+        :return: Envelope|str|list Returned self if `val` is not None or replace=True, else returns value of the header
+                 or its list if the header was used multiple times. (Note that cc and bcc headers always return list.)
         """
+
+        # lowercase header to its method name
         specific_interface = {"to": self.to, "cc": self.cc, "bcc": self.bcc,
                               "reply_to": self.reply_to, "from": self.from_,
                               "sender": self.sender,
@@ -484,8 +496,22 @@ class Envelope:
 
         k = key.lower()
         if k in specific_interface:
-            specific_interface[k](val)
-        else:
+            if replace:
+                attr = getattr(self, self._get_private_var(k))
+                setattr(self, self._get_private_var(k), None if type(attr) is str else [])
+                if k in ("sender", "from"):
+                    self._prepare_from()
+                return self
+            return specific_interface[k](val)
+
+        if replace:
+            del self._headers[key]
+        if val is None and not replace:
+            h = self._headers.get_all(key)
+            if h and len(h) == 1:
+                return h[0]
+            return h
+        elif val:
             self._headers[key] = val
         return self
 
@@ -536,7 +562,9 @@ class Envelope:
             self._smtp = SMTP(host, port, user, password, security)
         return self
 
-    def to(self, email_or_list):
+    def to(self, email_or_list=None):
+        if email_or_list is None:
+            return self._to
         self._to += assure_list(email_or_list)
         return self
 
@@ -880,6 +908,7 @@ class Envelope:
         return email
 
     def _param_hash(self):
+        """ Check if headers changed from last _start call."""
         return hash(frozenset(self._headers.items())) + hash("".join(self.recipients())) + hash(self._subject) + hash(self.__from)
 
     def _sign_gpg_now(self, message, sign, send):

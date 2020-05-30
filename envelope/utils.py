@@ -18,7 +18,7 @@ class AutoSubmittedHeader:
         """
         :param val: "auto-replied": direct response to another message by an automatic process
         """
-        self._parent.header("Auto-Submitted", val)
+        self._parent.header("Auto-Submitted", val, replace=True)
         return self._parent
 
     def no(self):

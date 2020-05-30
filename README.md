@@ -209,17 +209,17 @@ If the GPG encryption fails, it tries to determine which recipient misses the ke
     * **Envelope(encrypt=)**: Any attainable contents
   * **to**: E-mail or list. When encrypting, we use keys of these identities.
     * **--to**: One or more e-mail addresses.
-    * **.to(email_or_list)**:
       ```bash
       envelope --to first@example.com second@example.com --message "hello" 
       ```  
+    * **.to(email_or_list)**: If None, current list is returned.
     * **Envelope(to=)**: E-mail or their list.
   * **from**: E-mail – needed to choose our key if encrypting.    
     * **--from** E-mail
     * **--sender** Alias for *--from* if not set. Otherwise appends header "Sender".
     * **--no-sender** Declare we want to encrypt and never decrypt back.
-    * **.from_(email)**: E-mail or False.
-    * **.sender(email)**: an alias for *.from_*
+    * **.from_(email)**: E-mail or False. If None, current `From` returned.
+    * **.sender(email)**: E-mail or False – an alias for *.from_*, will fill up `From` header. If `From` has already been set, this will fill `Sender` header. If None, current `Sender` returned.
     * **Envelope(from_=)**: Sender e-mail or False to explicitly omit. When encrypting without sender, we do not use their key so that we will not be able to decipher again.       
     * **Envelope(sender=)** *(see --sender)*
     ```python3
@@ -256,19 +256,19 @@ If the GPG encryption fails, it tries to determine which recipient misses the ke
     ```
   * **subject**: Mail subject. Gets encrypted with GPG, stays visible with S/MIME.
     * **--subject**
-    * **.subject(text)**     
+    * **.subject(text)**: If None, current subject returned.     
     * **Envelope(subject=)**
   * **cc**: E-mail or their list
     * **--cc**
-    * **.cc(email_or_list)**
+    * **.cc(email_or_list)**: If None, current list returned.
     * **Envelope(cc=)**
   * **bcc**: E-mail or their list
     * **--bcc**
-    * **.bcc(email_or_list)**
+    * **.bcc(email_or_list)**: If None, current list returned.
     * **Envelope(bcc=)**
   * **reply-to**: E-mail to be replied to. The field is not encrypted.
     * **--reply-to**
-    * **.reply_to(email)**
+    * **.reply_to(email)**: If None, current address returned.
     * **Envelope(reply_to=)**
   * **date**:
     * **.date(date)** `str|False` Specify Date header (otherwise Date is added automatically). If False, the Date header will not be added automatically.
@@ -321,7 +321,15 @@ If the GPG encryption fails, it tries to determine which recipient misses the ke
         * **Envelope(mime=)**
     * **headers**: Any custom headers (these will not be encrypted with GPG nor S/MIME)
         * **--header name value** (may be used multiple times)
-        * **.header(name, value)**
+        * **.header(name, value=None, replace=False)**
+            * `value` If None, returns value of the header or its list if the header was used multiple times. (Note that To, Cc and Bcc headers always return list.)
+            * `replace` If True, any header of the `key` name are removed first and if `val` is None, the header is deleted. Otherwise another header of the same name is appended.
+            ```python3
+            Envelope().header("X-Mailer", "my-app").header("X-Mailer") # "my-app"
+            Envelope().header("Generic-Header", "1") \
+                      .header("Generic-Header", "2") \
+                      .header("Generic-Header") # ["1", "2"]
+            ```
         * **Envelope(headers=[(name, value)])**
         
         Equivalent headers: 
@@ -391,9 +399,8 @@ Envelope().auto_submitted.no()  # mark message as human produced
     Check succeeded.
     ```
  * **load**: **(experimental)**: Parse any attainable contents like an EML file to build an Envelope object.
-    * Still considered experimental: it cannot read an attachment which stays a mere part of the body, it cannot decrypt. It will shuffle headers and throw away headers used more than once.
-    * Note that if you will send this reconstructed message, you might not probably receive it due to the Message-ID duplication.
-        Delete at least Message-ID header prior to re-sending. 
+    * Still considered experimental: it cannot read an attachment which stays a mere part of the body, it cannot decrypt.
+    * Note that if you will send this reconstructed message, you might not probably receive it due to the Message-ID duplication. Delete at least Message-ID header prior to re-sending. 
     * (*static*) **.load(message)**
         ```python3
        Envelope.load("Subject: testing message").subject()  # "testing message"
