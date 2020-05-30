@@ -88,6 +88,7 @@ class Envelope:
                                                   "to": self._to,
                                                   "cc": self._cc,
                                                   "bcc": self._bcc,
+                                                  "reply-to": self._reply_to,
                                                   "message": self._message}.items() if v]
 
         if not l:
@@ -256,10 +257,10 @@ class Envelope:
         self._to = []
         self._cc = []
         self._bcc = []
+        self._reply_to = []
         self._subject = None  # string
         self._smtp = None
         self._attachments = []
-        self._reply_to = None
         self._mime = AUTO
         self._nl2br = AUTO
         self._headers = EmailMessage()  # object for storing headers the most standard way possible
@@ -342,6 +343,12 @@ class Envelope:
         self._bcc += assure_list(email_or_list)
         return self
 
+    def reply_to(self, email_or_list=None):
+        if email_or_list is None:
+            return self._reply_to
+        self._reply_to += assure_list(email_or_list)
+        return self
+
     def body(self, text=None, *, path=None):
         """ An alias of .message """
         return self.message(text=text, path=path)
@@ -357,13 +364,6 @@ class Envelope:
         if path:
             text = Path(path)
         self._message = text
-        return self
-
-    def reply_to(self, email=None):
-        # XX I think this might be just an alias to self.header("Reply-To", email)
-        if email is None:
-            return self._reply_to
-        self._reply_to = email
         return self
 
     def date(self, date):
@@ -488,9 +488,8 @@ class Envelope:
         """
 
         # lowercase header to its method name
-        specific_interface = {"to": self.to, "cc": self.cc, "bcc": self.bcc,
-                              "reply_to": self.reply_to, "from": self.from_,
-                              "sender": self.sender,
+        specific_interface = {"to": self.to, "cc": self.cc, "bcc": self.bcc, "reply_to": self.reply_to,
+                              "from": self.from_, "sender": self.sender,
                               "subject": self.subject
                               }
 
@@ -859,7 +858,7 @@ class Envelope:
             if self._cc:
                 email["Cc"] = ",".join(self._cc)
             if self._reply_to:
-                email["Reply-To"] = self._reply_to
+                email["Reply-To"] = ",".join(self._reply_to)
         except IndexError as e:
             s = set(self._to + self._cc + self._bcc)
             if self._reply_to:

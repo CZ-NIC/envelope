@@ -266,9 +266,9 @@ If the GPG encryption fails, it tries to determine which recipient misses the ke
     * **--bcc**
     * **.bcc(email_or_list)**: If None, current list returned.
     * **Envelope(bcc=)**
-  * **reply-to**: E-mail to be replied to. The field is not encrypted.
+  * **reply-to**: E-mail to be replied to or their list. The field is not encrypted.
     * **--reply-to**
-    * **.reply_to(email)**: If None, current address returned.
+    * **.reply_to(email_or_list)**: If None, current list returned.
     * **Envelope(reply_to=)**
   * **date**:
     * **.date(date)** `str|False` Specify Date header (otherwise Date is added automatically). If False, the Date header will not be added automatically.
@@ -322,7 +322,7 @@ If the GPG encryption fails, it tries to determine which recipient misses the ke
     * **headers**: Any custom headers (these will not be encrypted with GPG nor S/MIME)
         * **--header name value** (may be used multiple times)
         * **.header(name, value=None, replace=False)**
-            * `value` If None, returns value of the header or its list if the header was used multiple times. (Note that To, Cc and Bcc headers always return list.)
+            * `value` If None, returns value of the header or its list if the header was used multiple times. (Note that To, Cc, Bcc and Reply-To headers always return list.)
             * `replace` If True, any header of the `key` name are removed first and if `val` is None, the header is deleted. Otherwise another header of the same name is appended.
             ```python3
             Envelope().header("X-Mailer", "my-app").header("X-Mailer") # "my-app"

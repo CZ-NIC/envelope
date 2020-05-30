@@ -4,6 +4,7 @@
 - fix: default object
 - better EML files loading
 - generic header manipulation (removing, adding multiple, mostly preserves order when loading)
+- reply-to allows multiple addresses
 
 ## 1.0.0 (2020-05-28)
 - CHANGED:
