@@ -612,13 +612,16 @@ envelope --message "SMTP test" --from [your e-mail] --to [your e-mail] --smtp lo
 
 ### Configure your GPG
 In order to sign messages, you need a private key. Let's pretend a usecase when your application will run under `www-data` user and GPG sign messages through the keys located at: `/var/www/.gnupg`. You have got a SMTP server with an e-mail account the application may use.
-```bash 
+```bash
+ls -l $(tty)  # see current TTY owner
+chown www-data $(tty)  # if creating the key for a different user and generation fails, this command might help (when handling passphrase, the agent opens the controlling terminal rather than using stdin/stdout for security purposes)
 GNUPGHOME=/var/www/.gnupg sudo -H -u www-data gpg --full-generate-key  # put application e-mail you are able to send e-mails from
 # if the generation fails now because you are on a remote terminal, you may want to change temporarily the ownership of the terminal by the following command: 
 # sudo chown www-data $(tty)  # put it back afterwards
 GNUPGHOME=/var/www/.gnupg sudo -H -u www-data gpg --list-secret-keys  # get key ID
 GNUPGHOME=/var/www/.gnupg sudo -H -u www-data gpg --send-keys [key ID]  # now the world is able to pull the key from a global webserver when they receive an e-mail from you
 GNUPGHOME=/var/www/.gnupg sudo -H -u www-data envelope --message "Hello world" --subject "GPG signing test" --sign [key ID] --from [application e-mail] --to [your e-mail] --send  # you now receive e-mail and may import the key and set the trust to the key
+# chown [USER] $(tty)  # you may set back TTY owner
 ```
 
 It takes few hours to a key to propagate. If the key cannot be imported in your e-mail client because not found on the servers, try in the morning again or check the online search form at http://hkps.pool.sks-keyservers.net.  

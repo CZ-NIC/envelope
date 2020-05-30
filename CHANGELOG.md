@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## 1.1 (unreleased)
+## 1.1 (2020-05-30)
 - fix: default object
 - better EML files loading
 - generic header manipulation (removing, adding multiple, mostly preserves order when loading)

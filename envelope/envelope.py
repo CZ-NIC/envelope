@@ -36,7 +36,7 @@ Just single line of code. With the great help of the examples below.
 
 Usage:
   * launch as application, see ./envelope.py --help
-  * import as a module to your application, ex: `from envelope import envelope` 
+  * import as a module to your application, ex: `from envelope import Envelope` 
 
 Example:
 
