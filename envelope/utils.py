@@ -3,7 +3,7 @@ import logging
 import smtplib
 from collections import defaultdict
 from pathlib import Path
-from socket import gaierror
+from socket import gaierror, timeout
 
 logger = logging.getLogger(__name__)
 
@@ -82,11 +82,6 @@ class SMTP:
 
     def send_message(self, email, to_addrs):
         for attempt in range(1, 3):  # an attempt to reconnect possible
-            # smtp = self._smtp
-            # if not smtp:
-            #     logger.error("No SMTP given")
-            #     return False
-            # key = repr(smtp)
             try:
                 if self.key not in self._instances:
                     self._instances[self.key] = self.connect()
@@ -97,7 +92,7 @@ class SMTP:
                 # recipients cannot be taken from headers when encrypting, we have to re-list them again
                 return smtp.send_message(email, to_addrs=to_addrs)
 
-            except smtplib.SMTPSenderRefused as e:  # timeout
+            except (timeout, smtplib.SMTPSenderRefused) as e:  # timeouts
                 if attempt == 2:
                     logger.warning(f"SMTP sender refused, unable to reconnect.\n{e}")
                     return False

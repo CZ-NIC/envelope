@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 1.2 (unreleased)
+- fix: smtplib.SMTP_SSL handshake operation timed out caught
+
 ## 1.1 (2020-05-30)
 - fix: default object
 - better EML files loading
