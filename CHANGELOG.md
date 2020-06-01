@@ -2,6 +2,7 @@
 
 ## 1.2 (unreleased)
 - fix: smtplib.SMTP_SSL handshake operation timed out caught
+- if a line is longer than 1000 characters, makes the message be transferred safely by bytes (which would not break up DKIM)
 
 ## 1.1 (2020-05-30)
 - fix: default object

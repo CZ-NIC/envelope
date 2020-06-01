@@ -1102,7 +1102,15 @@ class Envelope:
                     nl2br = True
                 if nl2br is True:
                     t = f"<br>{CRLF}".join(t.splitlines())
-            msg_text.set_content(t, subtype=mime)
+
+            # if a line is longer than 1000 characters, force EmailMessage to encode it
+            if any(line for line in t.splitlines() if len(line) >= 1000):
+                # passing bytes to EmailMessage makes its ContentManager to transfer it via base64 or quoted-printable
+                # rather than plain text. Which could cause a transferring SMTP server to include line breaks and spaces
+                # that might break up DKIM.
+                msg_text.set_content(t.encode("utf-8"), maintype="text", subtype=mime)
+            else:
+                msg_text.set_content(t, subtype=mime)
         else:
             msg_text["Content-Type"] = self._headers["Content-Type"]
             if "Content-Transfer-Encoding" in self._headers:

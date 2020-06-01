@@ -314,7 +314,10 @@ If the GPG encryption fails, it tries to determine which recipient misses the ke
     ```python3
     Envelope(attachments=[(Path("/tmp/file.txt"), "displayed-name.txt", "text/plain"), Path("/tmp/another-file.txt"])
     ```    
-    * **mime**: Set contents mime subtype: "auto" (default), "html" or "plain" for plain text. Ignored if `Content-Type` header put to the message.         
+    * **mime**: Sets contents mime subtype: "**auto**" (default), "**html**" or "**plain**" for plain text. 
+        Maintype is always set to "text".                 
+        Set maintype to "text".  If a line is longer than 1000 characters, makes the message be transferred safely by bytes (otherwise these non-standard long lines might cause a transferring SMTP server to include line breaks and redundant spaces that might break up ex: DKIM signature).  
+        In case of `Content-Type` header put to the message, **mime** section functionality **is skipped**.
         * **--mime SUBTYPE**
         * **.mime(subtype="auto", nl2br="auto")**
             * nl2br: True will append `<br>` to every line break in the HTML message. "auto": line breaks are changed only if there is no `<br` or `<p` in the HTML message,

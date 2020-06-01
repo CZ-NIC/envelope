@@ -60,6 +60,20 @@ class TestEnvelope(TestAbstract):
                           ("Subject: my subject",
                            "dumb message",), 10)
 
+    def test_1000_split(self):
+        self._check_lines(Envelope().message("short text").subject("my subject").send(False),
+                          ("Subject: my subject",
+                           'Content-Transfer-Encoding: 7bit',
+                           "short text"), 10)
+
+        # this should be no more 7bit but base64 (or quoted-printable which is however not guaranteed)
+        e = Envelope().message("Longer than thousand chars. " * 1000).subject("my subject").send(False)
+        self._check_lines(e,
+                          ("Subject: my subject",), 100,
+                          not_in=('Content-Transfer-Encoding: 7bit',)
+                          )
+        self.assertFalse(any(line for line in str(e).splitlines() if len(line) > 999))
+
 
 class TestSmime(TestAbstract):
     # create a key and its certificate valid for 100 years
@@ -533,9 +547,9 @@ class TestHeaders(TestAbstract):
         id1 = "person@example.com"
         id2 = "person2@example.com"
         id3 = "person3@example.com"
-        e = Envelope("dumb message")\
-            .subject(s)\
-            .header("custom", "1")\
+        e = Envelope("dumb message") \
+            .subject(s) \
+            .header("custom", "1") \
             .cc(id1)  # set headers via their specific methods
         self.assertEqual(e.header("subject"), s)  # access via .header
         self.assertEqual(e.subject(), s)  # access via specific method .subject
