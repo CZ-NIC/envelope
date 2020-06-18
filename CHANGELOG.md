@@ -1,8 +1,10 @@
 # CHANGELOG
 
-## 1.2 (unreleased)
+## 1.2 (2020-06-18)
 - fix: smtplib.SMTP_SSL handshake operation timed out caught
 - if a line is longer than 1000 characters, makes the message be transferred safely by bytes (which would not break up DKIM)
+- when "Content-Transfer-Encoding" is set to "base64" or "quo-pri" and reading message, it gets decoded (useful when loading EML files `cat file.eml | envelope --message`)
+- preview method available from CLI
 
 ## 1.1 (2020-05-30)
 - fix: default object

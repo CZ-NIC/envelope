@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-
+import binascii
 import logging
 import re
 import smtplib
@@ -7,13 +7,15 @@ import subprocess
 import sys
 import tempfile
 import warnings
+from base64 import b64decode
 from configparser import ConfigParser
 from copy import copy, deepcopy
-from email.message import EmailMessage
+from email.message import EmailMessage, Message
 from email.parser import BytesParser
 from email.utils import make_msgid, formatdate, getaddresses
 from getpass import getpass
 from pathlib import Path
+from quopri import decodestring
 from typing import Union
 
 from .utils import AutoSubmittedHeader, SMTP, is_gpg_fingerprint, assure_list, assure_fetched
@@ -107,12 +109,9 @@ class Envelope:
             return assure_fetched(self._get_result(), bytes) == assure_fetched(other, bytes)
 
     def preview(self):
-        """ Returns the string of the message or data with the readable text.
+        """ Returns the string of the message or data as a human-readable text.
             Bcc and attachments are mentioned.
-            Ex: whilst we have to use quoted-printable (as seen in __str__), here the output will be plain text.
-
-        # XX is ciphering info seen?
-        # XX might be available from CLI too
+            Ex: whilst we have to use quoted-printable, here the output will be plain text.
         """
         if not self._result:
             str(self)
@@ -125,18 +124,21 @@ class Envelope:
             result.append("Bcc: " + ", ".join(self._bcc))
 
         for i, r in enumerate(self._result):
-            if isinstance(r, EmailMessage):
-                # remove body from the message because it may have become unreadable
+            if isinstance(r, (EmailMessage, Message)):  # smime library always produces a Message object
+                if self._sign or self._encrypt:
+                    result.append(("GPG" if self._gpg else "S/MIME") + ": " + ", ".join(
+                        x for x in [bool(self._sign) and "signed", bool(self._encrypt) and "encrypted"] if x))
+
+                # remove body from the message because it may have become unreadable, we will be calling self.message() instead
                 # I cannot use r.set_payload(""), since it would change the headers like Content-Transfer-Encoding
                 for line in r.as_string().splitlines():
                     result.append(line)
                     if not line.strip():
                         break
-                continue
-            result.append(r)
+            else:
+                result.append(r)
 
-        result.append(self._message)
-
+        result.append(self.message())
         return "\n".join(result)
 
     def _get_result(self):
@@ -147,30 +149,26 @@ class Envelope:
         return self._result_cache
 
     @staticmethod
-    def load(message, *, path=None):
-        """ This is still an experimental function.
+    def load(message=None, *, path=None):
+        """
         XX make it capable to decrypt and verify signatures?
         XX make it capable to read an "attachment" - now it's a mere part of the body
-        XX Allow message decoding so that you can write `envelope --load mail.eml  --message` to read message contents
-            that is garbled normally in BASE64 etc.
-        XX should be able to load Subject even if it is on a multiline.
-            Envelope.load("Subject: Very long text Very long text Very long text Very long text Very long text") will print out
-                Subject:
-                    Very long text Very long text Very long text Very long text Very long text
 
         Note that if you will send this reconstructed message, you might not probably receive it due to the Message-ID duplication.
         Delete at least Message-ID header prior to re-sending.
 
-        :param message: Any attainable contents to build an Envelope object from.
-        :param path: Path to the file that should be loaded.
+        :param message: Any attainable contents to build an Envelope object from, including email.message.EmailMessage.
+        :param path: (Alternative to `message`.) Path to the file that should be loaded.
         """
         if path:
             message = Path(path)
+        elif isinstance(message, EmailMessage):
+            message = str(message)
 
         header_row = re.compile(r"([^\t:]+):(.*)")
         text = assure_fetched(message)
         is_header = True
-        header = []
+        header = []  # [whole line, header name, header val]
         body = []
         for line in text.splitlines():
             if is_header:  # we are parsing e-mail template header first
@@ -180,11 +178,11 @@ class Envelope:
                     header.append([line, m.group(1).strip(), m.group(2).strip()])
                     continue
                 else:
-                    if line.startswith("\t") and header:  # this is not end of header, just line continuation
+                    if line.startswith(("\t", " ")) and header:  # this is not end of header, just line continuation
                         header[-1][0] += " " + line.strip()
                         header[-1][2] += " " + line.strip()
                         continue
-                    is_header = False
+                    is_header = False  # header has ended
                     if line.strip() == "":  # next line will be body
                         continue
                     else:  # header is missing or incorrect, there is body only
@@ -247,10 +245,14 @@ class Envelope:
         self._message = None  # bytes
         self._output = None
         self._gpg: Union[str, bool] = None
+        #   GPG: (True, key contents, fingerprint, AUTO, None) → will be converted to key fingerprint or None,
+        #   S/MIME: certificate contents
         self._sign = None
         self._passphrase = None
         self._attach_key = None
         self._cert = None
+        #   GPG: (True, key contents, fingerprint, None)
+        #   SMIME: certificate contents
         self._encrypt = None
         self._from = self.__from = None
         self._sender = self.__sender = None
@@ -360,6 +362,19 @@ class Envelope:
     def message(self, text=None, *, path=None):
         """ Message to be ciphered / e-mail body text. """
         if text is path is None:
+            # reading value
+            transfer = self._headers.get("Content-Transfer-Encoding")
+            # XX make preview default over send(0) when no action is given?
+            if transfer == "base64":
+                try:
+                    return b64decode(self._message).decode("utf-8")
+                except binascii.Error:
+                    pass
+            elif transfer == "quoted-printable":
+                try:
+                    return decodestring(self._message).decode("utf-8")
+                except ValueError:
+                    pass
             return self._message
         if path:
             text = Path(path)
@@ -562,6 +577,14 @@ class Envelope:
         return self
 
     def to(self, email_or_list=None):
+        # XX
+        #   * parse email_or_list delimited by comma (or semicolon??) ["address1@ex,address2@ex", "address3@ex"] -> ["1", "2", "3"]
+        #   So that user can be sure they can "address1@ex" in envelope.to()
+        #   * Preserve order (list) but do not allow duplication (set).
+        #   * Implement in Convey mail sender "for address in e._to"
+        #   * validate_email here instead in Convey? or this would mean no generic mail like "ex@localhost" would be allowed?
+        #       Or that would mean we have to contact SMTP (so that validation might take place in .check())?
+        #   * The same for others (reply-to, cc, bcc)
         if email_or_list is None:
             return self._to
         self._to += assure_list(email_or_list)

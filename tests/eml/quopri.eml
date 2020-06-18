@@ -1,0 +1,41 @@
+Return-Path: <1axb4seu3fjdsfjdshfksdfsdjkhfksdj4nukx-person=example.com@bf01.example.net>
+Delivered-To: person@example.com
+Received: from mail.example.com
+	by mail.example.com (Dovecot) with LMTP id UeQh48948657AwfFDSejMA
+	for <person@example.com>; Thu, 18 Jun 2020 16:07:34 +0200
+DKIM-Signature: v=1; s=hs1; d=bf01.hubspotstarter.net; 
+        i=@bf01.example.com; 
+        h=sender:from:reply-to:to:subject:mime-version:content-type:list-unsubscribe:x-report-abuse:form-sub:feedback-id; 
+        a=rsa-sha256; c=relaxed/relaxed; 
+        bh=i8bgaWDfksdjfkldsjfklFKH/FFDSKLFJDSKL544DzY=; 
+        b=BjvwvoD6aeVAsgRUEF9wLRqf3wESRQuxGzmT7o522oGuh8PmeKnQ6AmJJnUdtn
+         kGWm1YoglxT/FfyfK3v48156156fdsFDON9/jD56FDm/uFSDFSDF6B7vlbg+D8Y
+         drhzAB+Y9FH2y63n5bWl/inMjB8OgkmAo2A7lPISNLaK4s455wgnrA/ykPl0VLw
+         U5zbsbzT4qvPPPkJXkTTxAeL4xcUsDwad5H5cHJge4kfdsfasdlfkjdklw/Psim
+         gA1NG1kb6kvGC4M2ENXMYAgGJuVHPk988F+FB/VlBo34M6DhskWuYRcQD9ULWi8
+         yTKhEoykC5iG+OifBZ9DBEZx5UoA==; q=dns/txt; t=1592489248;
+DKIM-Signature: v=1; s=hs1; d=abilab.it; i=@abilab.it; 
+        h=sender:from:reply-to:to:subject:mime-version:content-type:list-unsubscribe:x-report-abuse:form-sub:feedback-id; 
+        a=rsa-sha256; c=relaxed/relaxed; 
+        bh=i8bgJKIfjfkLkfdjNFDJKqvH/FfY13FmnZpY1vdzDzY=; 
+        b=R8465Zu+QaHJfFTwVhQcQFx0f/fbEdeKqEqi2/6jUZKY2ngc55ScShyU0ZNRra
+         p/bJtnPCmWhBA5KkD9QUsSsVgYWXlI4sFFGc2S1d0cZHE2IG7BSEvTTYa8+Ie7X
+         WklcHIooAbyhOhfVIHtJMCF3+A9jMfdskj5FSDKLGpsg/+BPz8a9hWe/EeBNyjW
+         Cds3aa5KDYMIa+NPAre3k2GGDTK3t4AArO2YZflq471uDzVe1asnTfhjNhYouLu
+         Thh3/L+4ohqH7UB+fY1OL5K49vzFDSKJKLf5jojTOxtz4w9mwkoGBqxeq3oV4vk
+         6tVmSSCdEGP6UiFsmPekHVjTDd4Q==; q=dns/txt; t=1592489248;
+Date: Thu, 18 Jun 2020 16:07:28 +0200
+From: Comunicazione ABI Lab <comunicazione@abilab.it>
+To: person@example.com
+Message-ID: <1589984896214.41eadd70-f53d-4de3-ab58-8f5bb5f5fdf6@bf01.example.com>
+Subject: Very long text Very long text Very long text Very long text Ver
+        Very long text Very long text
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: quoted-printable
+
+J'interdis aux marchands de vanter trop leurs marchandises. Car ils se font v=
+ite p=C3=A9dagogues et t'enseignent comme but ce qui n'est par essence qu'un =
+moyen, et te trompant ainsi sur la route =C3=A0 suivre les voil=C3=A0 bient=
+=C3=B4t qui te d=C3=A9gradent, car si leur musique est vulgaire ils te fabriq=
+uent pour te la vendre une =C3=A2me vulgaire.

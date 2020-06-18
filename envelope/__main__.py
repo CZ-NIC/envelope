@@ -99,6 +99,9 @@ def main():
     group_send.add_argument('--send', help="Send e-mail. Blank to send now.", nargs="?", action=BlankTrue)
 
     group_supp = parser.add_argument_group("Supportive")
+    group_supp.add_argument('--preview', help="Returns the string of the message or data a human-readable text."
+                                              " Ex: whilst we have to use quoted-printable,"
+                                              " here the output will be plain", action="store_true")
     group_supp.add_argument('--check', action="store_true", help='Check SMTP server connection')
     group_supp.add_argument('--load', help="Path to the file to build an Envelope object from.", metavar="FILE")
     group_supp.add_argument('-q', '--quiet', help="Quiet output", action="store_true")
@@ -192,11 +195,12 @@ def main():
         args["sender"] = args["from"]
     del args["from"]
 
-    if args["check"]:
+    check = args.pop("check")
+    preview = args.pop("preview")
+    if check:
         del args["sign"]
         del args["encrypt"]
         del args["send"]
-        del args["check"]
         o = _get_envelope(instance, args)
         if o.check():
             print("Check succeeded.")
@@ -204,9 +208,11 @@ def main():
         else:
             print("Check failed.")
             sys.exit(1)
+    elif preview:
+        del args["send"]
+        print(_get_envelope(instance, args).preview())
+        sys.exit(0)
     else:
-        del args["check"]
-
         # XX allow any header to be displayed, ex: `--header Received` will display all Received headers
         read_method = None
         if args["subject"] is True:
@@ -217,7 +223,7 @@ def main():
             del args["message"]
 
         res = _get_envelope(instance, args)
-        if read_method:
+        if read_method:  # ex: `--subject` displays subject
             print(getattr(res, read_method)())
         elif not any([read_method, args["sign"], args["encrypt"], args["send"]]):
             # if there is anything to do, pretend the input parameters are a bone of a message

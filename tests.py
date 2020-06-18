@@ -589,9 +589,30 @@ class TestDefault(TestAbstract):
         self.assertEqual(Envelope().subject(), "bar")
 
 
-class TestLoad(TestAbstract):
+class TestBash(TestAbstract):
     eml = Path("tests/eml/mail.eml")
-    cmd = ["python3", "-m", "envelope"]
+    quopri = Path("tests/eml/quopri.eml")  # the file has CRLF separators
+    text_attachment = "tests/eml/generic.txt"
+    cmd = "python3", "-m", "envelope"
+
+    def _output(self, *cmd, file=None):
+        p = Popen(self.cmd + cmd, stdout=PIPE, stdin=PIPE, stderr=STDOUT)
+        if not file:
+            file = self.eml
+        return p.communicate(input=file.read_bytes())[0].decode()
+
+    def test_bcc(self):
+        self.assertIn("Bcc: person@example.com", self._output("--bcc", "person@example.com", "--preview"))
+        self.assertNotIn("person@example.com", self._output("--bcc", "person@example.com", "--send", "off"))
+
+    def test_attachment(self):
+        self.assertIn(f"Attachment: {self.text_attachment}", self._output("--attachment", self.text_attachment, "--preview"))
+        o = self._output("--attachment", self.text_attachment, "--send", "0")
+        self.assertNotIn(f"Attachment: {self.text_attachment}", o)
+        self.assertIn('Content-Disposition: attachment; filename="generic.txt"', o)
+
+
+class TestLoad(TestBash):
 
     def test_load(self):
         self.assertEqual(Envelope.load("Subject: testing message").subject(), "testing message")
@@ -605,14 +626,50 @@ class TestLoad(TestAbstract):
         self.assertEqual(e.header("Received")[1][:26], "from receiver2.example.com")
 
     def test_load_bash(self):
-        p = Popen(self.cmd, stdout=PIPE, stdin=PIPE, stderr=STDOUT)
-        output = p.communicate(input=self.eml.read_bytes())[0].decode()
-        self.assertIn("Hello world subject", output)
+        self.assertIn("Hello world subject", self._output())
 
     def test_bash_display(self):
-        p = Popen(self.cmd + ["--subject"], stdout=PIPE, stdin=PIPE, stderr=STDOUT)
-        output = p.communicate(input=self.eml.read_bytes())[0].decode()
-        self.assertEqual("Hello world subject", output.strip())
+        self.assertEqual("Hello world subject", self._output("--subject").strip())
+
+    def test_multiline_folded_header(self):
+        self.assertEqual("Very long text Very long text Very long text Very long text Ver Very long text Very long text",
+                         self._output("--subject", file=self.quopri).strip())
+
+
+class TestTransfer(TestBash):
+    long_text = "J'interdis aux marchands de vanter trop leurs marchandises." \
+                " Car ils se font vite pédagogues et t'enseignent comme but ce qui n'est par essence qu'un moyen," \
+                " et te trompant ainsi sur la route à suivre les voilà bientôt qui te dégradent," \
+                " car si leur musique est vulgaire ils te fabriquent pour te la vendre une âme vulgaire."
+    quoted = "J'interdis aux marchands de vanter trop leurs marchandises. Car ils se font v=" \
+             "\nite p=C3=A9dagogues et t'enseignent comme but ce qui n'est par essence qu'un =" \
+             "\nmoyen, et te trompant ainsi sur la route =C3=A0 suivre les voil=C3=A0 bient=" \
+             "\n=C3=B4t qui te d=C3=A9gradent, car si leur musique est vulgaire ils te fabriq=" \
+             "\nuent pour te la vendre une =C3=A2me vulgaire."
+
+    def _quoted_message(self, e: Envelope):
+        self.assertEqual(self.long_text, e.message())
+        self.assertIn(self.long_text, e.preview())  # when using preview, we receive original text
+        output = str(e.send(False))  # but when sending, quoted text is got instead
+        self.assertNotIn(self.long_text, output)
+        self.assertIn(self.quoted, output)
+
+    def test_auto_quoted_printable(self):
+        """ Envelope internally converts long lines to quoted-printable. """
+        self._quoted_message(Envelope().message(self.long_text))
+
+    def test_quoted_printable(self):
+        """ Envelope is able to load the text that is already quoted. """
+        self._quoted_message(Envelope.load(f"Content-Transfer-Encoding: quoted-printable\n\n{self.quoted}"))
+
+    def test_quoted_printable_bash(self):
+        """ Envelope is able to load the text that is already quoted in a file. """
+        self.assertEqual(self.long_text, self._output("--message", file=self.quopri).strip())
+
+    def test_base64(self):
+        hello = "aGVsbG8gd29ybGQ="
+        self.assertEqual(Envelope.load(f"\n{hello}").message(), hello)
+        self.assertEqual(Envelope.load(f"Content-Transfer-Encoding: base64\n\n{hello}").message(), "hello world")
 
 
 if __name__ == '__main__':

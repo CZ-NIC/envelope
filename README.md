@@ -127,6 +127,7 @@ Any attainable contents means plain text, bytes or stream (ex: from open()). In 
 
 ### Input / Output
   * **message**: Message / body text.
+    If no string is set, message gets read. Besides, when "Content-Transfer-Encoding" is set to "base64" or "quoted-printable", it gets decoded (useful when quickly reading an EML file content `cat file.eml | envelope --message`).
     * **--message**: String
     * **--input**: *(CLI only)* Path to the message file. (Alternative to `--message` parameter.)
     * **.message(text)**:  String or stream.
@@ -385,9 +386,11 @@ Envelope().auto_submitted.no()  # mark message as human produced
     print(e1.recipients())  # {'to-1@example.com', 'original@example.com'}
     print(e2.recipients())  # {'to-2@example.com', 'original@example.com', 'additional@example.com'}
 ```
-  * Read message and subject by **.message()** and **.subject()**
-  * **.preview()**: Returns the string of the message or data with the readable text.
+  * Read message and subject by **.message()** and **.subject()**  
+  * **preview**: Returns the string of the message or data as a human-readable text.
             Ex: whilst we have to use quoted-printable (as seen in __str__), here the output will be plain text.
+    * **--preview**
+    * **.preview()**
   * **check**: Check SMTP connection and returns True/False if succeeded. Tries to find SPF, DKIM and DMARC DNS records depending on the sender's domain and print them out.
     * **--check**
     * **.check()**
@@ -401,7 +404,7 @@ Envelope().auto_submitted.no()  # mark message as human produced
     Trying to connect to the SMTP...
     Check succeeded.
     ```
- * **load**: **(experimental)**: Parse any attainable contents like an EML file to build an Envelope object.
+ * **load**: **(experimental)**: Parse any attainable contents (including email.message.EmailMessage) like an EML file to build an Envelope object.
     * Still considered experimental: it cannot read an attachment which stays a mere part of the body, it cannot decrypt.
     * Note that if you will send this reconstructed message, you might not probably receive it due to the Message-ID duplication. Delete at least Message-ID header prior to re-sending. 
     * (*static*) **.load(message)**
