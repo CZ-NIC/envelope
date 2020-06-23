@@ -52,6 +52,7 @@ gpg(message="Hello world",
 logger = logging.getLogger(__name__)
 CRLF = '\r\n'
 AUTO = "auto"
+SIMULATION = "simulation"
 
 
 class Envelope:
@@ -69,14 +70,14 @@ class Envelope:
         if not self._result:
             if self._encrypt or self._sign:
                 # if subject is not set, we suppose this is just a data blob to be encrypted, no an e-mail message
-                # and a ciphered blob will get output. However if subject is set, we put send="test"
+                # and a ciphered blob will get output. However if subject is set, we put send=SIMULATION
                 # in order to display all e-mail headers etc.
-                is_email = "test" if bool(self._subject) else False
+                is_email = SIMULATION if bool(self._subject) else False
                 self._start(send=is_email)
             else:
                 # nothing to do, let's assume this is a bone of an e-mail by appending `--send False` flag to produce an output
-                self._start(send="test")
-        return self._get_result()
+                self._start(send=SIMULATION)
+        return self._get_result_str()
 
     def __repr__(self):
         """
@@ -100,13 +101,13 @@ class Envelope:
     def __bytes__(self):
         if not self._result:
             str(self)
-        return assure_fetched(self._get_result(), bytes)
+        return assure_fetched(self._get_result_str(), bytes)
 
     def __eq__(self, other):
         if not self._result:
             str(self)
         if type(other) in [str, bytes]:
-            return assure_fetched(self._get_result(), bytes) == assure_fetched(other, bytes)
+            return assure_fetched(self._get_result_str(), bytes) == assure_fetched(other, bytes)
 
     def preview(self):
         """ Returns the string of the message or data as a human-readable text.
@@ -141,15 +142,21 @@ class Envelope:
         result.append(self.message())
         return "\n".join(result)
 
-    def _get_result(self):
+    def _get_result_str(self):
         """ concatenate output string """
         if not self._result_cache:
             s = "\n".join(str(r) for r in self._result)
             self._result_cache = s  # slightly quicker next time if ever containing a huge amount of lines
         return self._result_cache
 
+    def as_email_message(self) -> EmailMessage:
+        for el in self._result:
+            if isinstance(el, EmailMessage):
+                return el
+        return self._start(send=SIMULATION)
+
     @staticmethod
-    def load(message=None, *, path=None):
+    def load(message=None, *, path=None) -> "Envelope":
         """
         XX make it capable to decrypt and verify signatures?
         XX make it capable to read an "attachment" - now it's a mere part of the body
@@ -244,7 +251,7 @@ class Envelope:
         # user defined variables
         self._message = None  # bytes
         self._output = None
-        self._gpg: Union[str, bool] = None
+        self._gpg: Union[str, bool, None] = None
         #   GPG: (True, key contents, fingerprint, AUTO, None) → will be converted to key fingerprint or None,
         #   S/MIME: certificate contents
         self._sign = None
@@ -744,7 +751,7 @@ class Envelope:
 
     def _start(self, sign=None, encrypt=None, send=None):
         """ Start processing. Either sign, encrypt or send the message and possibly set bool status of the object to True.
-        * send == "test" is the same as send == False but the message "have not been sent" will not be produced
+        * send == SIMULATION is the same as send == False but the message "have not been sent" will not be produced
         """
         self._status = False
         if sign is not None:
@@ -844,6 +851,7 @@ class Envelope:
         # sending email message object
         self._result.clear()
         self._result_cache = None
+        self._result_cache_hash = self._param_hash()
         if send is not None:
             if gpg_on:
                 if encrypt:
@@ -865,6 +873,8 @@ class Envelope:
                 with open(self._output, "wb") as f:
                     f.write(email.as_bytes() if email else data)
             self._status = True
+
+        return email
 
     def _get_gnupg_home(self, readable=False):
         return self._gpg if type(self._gpg) is str else ("default" if readable else None)
@@ -889,7 +899,7 @@ class Envelope:
             if self.__from:
                 s.add(self.__from)
             logger.error(f"An e-mail address seem to be malformed.\nAll addresses: {s}\n{e}")
-            return
+            return False
 
         # insert arbitrary headers
         # XX do not we want to encrypt these headers with GPG/SMIME?
@@ -906,17 +916,17 @@ class Envelope:
             email["Sender"] = self.__sender
         if "Date" not in email and not self._ignore_date:
             email["Date"] = formatdate(localtime=True)
-        if "Message-ID" not in email and send != "test":  # we omit this field when testing
+        if "Message-ID" not in email and send != SIMULATION:  # we omit this field when testing
             email["Message-ID"] = make_msgid()
 
-        if send and send != "test":
+        if send and send != SIMULATION:
             failures = self._smtp.send_message(email, to_addrs=list(set(self._to + self._cc + self._bcc)))
             if failures:
                 logger.warning(f"Unable to send to all recipients: {repr(failures)}.")
             elif failures is False:
                 return False
         else:
-            if send != "test":
+            if send != SIMULATION:
                 self._result.append(f"{'*' * 100}\nHave not been sent from {(self.__from or '')}"
                                     f" to {', '.join(set(self._to + self._cc + self._bcc))}")
             if encrypt:
@@ -926,7 +936,6 @@ class Envelope:
             if len(self._result):  # put an empty line only if some important content was already placed
                 self._result.append("")
 
-        self._result_cache_hash = self._param_hash()
         return email
 
     def _param_hash(self):

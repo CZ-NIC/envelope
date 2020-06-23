@@ -404,12 +404,17 @@ Envelope().auto_submitted.no()  # mark message as human produced
     Trying to connect to the SMTP...
     Check succeeded.
     ```
- * **load**: **(experimental)**: Parse any attainable contents (including email.message.EmailMessage) like an EML file to build an Envelope object.
-    * Still considered experimental: it cannot read an attachment which stays a mere part of the body, it cannot decrypt.
+ * **.as_email_message()**: Generates an email.message.EmailMessage object.
+    ```python3
+    e = Envelope("hello").as_email_message()
+    print(type(e), e.get_payload())  # <class 'email.message.EmailMessage'> hello\n 
+    ```
+ * **load**: Parse any attainable contents (including email.message.EmailMessage) like an EML file to build an Envelope object.
+    * Limitation: it cannot read an attachment which stays a mere part of the body, it cannot decrypt.
     * Note that if you will send this reconstructed message, you might not probably receive it due to the Message-ID duplication. Delete at least Message-ID header prior to re-sending. 
     * (*static*) **.load(message)**
         ```python3
-       Envelope.load("Subject: testing message").subject()  # "testing message"
+        Envelope.load("Subject: testing message").subject()  # "testing message"
         ```
     * bash
         * allows use blank `--subject` or `--message` flags to display the 

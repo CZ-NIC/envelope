@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 1.3 (unreleased)
+- `.as_email_message` -> EmailMessage
+
 ## 1.2 (2020-06-18)
 - fix: smtplib.SMTP_SSL handshake operation timed out caught
 - if a line is longer than 1000 characters, makes the message be transferred safely by bytes (which would not break up DKIM)

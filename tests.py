@@ -1,6 +1,7 @@
 import logging
 import sys
 import unittest
+from email.message import EmailMessage
 from pathlib import Path
 from subprocess import PIPE, STDOUT, Popen
 from tempfile import TemporaryDirectory
@@ -578,6 +579,11 @@ class TestSupportive(TestAbstract):
 
         self.assertEqual(e1.recipients(), {'independent-1@example.com', 'original@example.com'})
         self.assertEqual(e2.recipients(), {'independent-2@example.com', 'original@example.com', 'additional@example.com'})
+
+    def test_email_message(self):
+        e = Envelope("hello").as_email_message()
+        self.assertEqual(type(e), EmailMessage)
+        self.assertEqual(e.get_payload(), "hello\n")
 
 
 class TestDefault(TestAbstract):
