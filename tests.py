@@ -570,6 +570,37 @@ class TestHeaders(TestAbstract):
         self.assertIn(f"Date: ", str(Envelope("dumb message")))
         self.assertNotIn(f"Date: ", str(Envelope("dumb message").date(False)))
 
+    def test_email_addresses(self):
+        e = (Envelope()
+             .cc("person1@example.com")
+             .to("person2@example.com")  # add as string
+             .to(["person3@example.com", "person4@example.com"])  # add as list
+             .to("person5@example.com")
+             .to("Duplicated <person5@example.com>")  # duplicated person should be ignored without any warning
+             # we can delimit both by comma (standard) and semicolon (invalid but usual)
+             .to(["person4@example.com; Sixth <person6@example.com>, Seventh <person7@example.com>"])
+             # even invalid delimiting works
+             .to(["person8@example.com,  , ; Ninth <person9@example.com>, Seventh <person7@example.com>"])
+             .to("Named person 1 again <person1@example.com>")  # appeared twice –> will be discarded
+             .bcc("person10@example.com")
+             )
+
+        self.assertEqual(9, len(e.to()))
+        self.assertEqual(1, len(e.cc()))
+        self.assertEqual(10, len(e.recipients()))
+        self.assertEqual(str, type(",".join(e.to())))  # we can join elements as strings
+        self.assertIn("person6@example.com <Sixth>", e.to())  # we can compare look up specific recipient
+
+    def test_invalid_email_addresses(self):
+        """ If we discard silently every invalid e-mail address received,
+         the user would not know their recipients are not valid. """
+        e = (Envelope().to('person1@example.com, [invalid!email], person2@example.com'))
+        self.assertEqual(3, len(e.to()))
+        self.assertFalse(e.check(check_mx=False, check_smtp=False))
+
+        e = (Envelope().to('person1@example.com, person2@example.com'))
+        self.assertTrue(e.check(check_mx=False, check_smtp=False))
+
 
 class TestSupportive(TestAbstract):
     def test_copy(self):
@@ -580,8 +611,8 @@ class TestSupportive(TestAbstract):
         self.assertEqual(e1.recipients(), {'independent-1@example.com', 'original@example.com'})
         self.assertEqual(e2.recipients(), {'independent-2@example.com', 'original@example.com', 'additional@example.com'})
 
-    def test_email_message(self):
-        e = Envelope("hello").as_email_message()
+    def test_message(self):
+        e = Envelope("hello").as_message()
         self.assertEqual(type(e), EmailMessage)
         self.assertEqual(e.get_payload(), "hello\n")
 
@@ -601,10 +632,13 @@ class TestBash(TestAbstract):
     text_attachment = "tests/eml/generic.txt"
     cmd = "python3", "-m", "envelope"
 
-    def _output(self, *cmd, file=None):
-        p = Popen(self.cmd + cmd, stdout=PIPE, stdin=PIPE, stderr=STDOUT)
+    def _output(self, *cmd, file=None, see=False):
+        cmd = self.cmd + cmd
         if not file:
             file = self.eml
+        if see:
+            print(f"Cmd: {' '.join(cmd)} < {file}")
+        p = Popen(cmd, stdout=PIPE, stdin=PIPE, stderr=STDOUT)
         return p.communicate(input=file.read_bytes())[0].decode()
 
     def test_bcc(self):

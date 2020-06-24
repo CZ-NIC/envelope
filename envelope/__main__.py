@@ -178,6 +178,8 @@ def main():
             args["send"] = False
         elif args["send"].lower() in ["1", "true", "yes"]:
             args["send"] = True
+        else:
+            raise ValueError(f"Cannot define `send` as {args['send']}, either use '0' or leave empty for sending now.")
 
     # convert to the module-style attachments `/tmp/file.txt text/plain` → (Path("/tmp/file.txt"), "text/plain")
     args["attachments"] = []

@@ -2,10 +2,55 @@ import io
 import logging
 import smtplib
 from collections import defaultdict
+from email.utils import getaddresses
 from pathlib import Path
 from socket import gaierror, timeout
 
+from validate_email import validate_email  # package py3-validate-email
+
 logger = logging.getLogger(__name__)
+
+
+class Address:
+    def __init__(self, real_name, address):
+        self.real_name = real_name
+        self.address = address
+
+    def __str__(self):
+        if self.real_name:
+            return f"{self.address} <{self.real_name}>"
+        return self.address
+
+    def __eq__(self, other):
+        """ Addresses are equal if their e-mail addresses are equal. (Their real names might differ.) """
+        return hash(self) == hash(other)
+
+    def __hash__(self):
+        return hash(self.address)
+
+    def __repr__(self):
+        return self.__str__()
+
+    @staticmethod
+    def parse(email_or_list, single=False):
+        l = [Address(real_name, address) for real_name, address in getaddresses(assure_list(email_or_list))
+             if not (real_name == address == "")]
+        if single:
+            if len(l) != 1:
+                raise ValueError(f"Single e-mail address expected: {email_or_list}")
+            return l[0]
+        if len(l) == 0:
+            raise ValueError(f"E-mail address cannot be parsed: {email_or_list}")
+        return l
+
+    def is_valid(self, check_mx=False):
+        if not validate_email(self.address, check_mx=False):
+            logger.warning(f"Address format invalid: '{self}'")
+            return False
+        elif check_mx and print(f"Verifying {self}...") and not validate_email(self.address, check_mx=True):
+            logger.warning(f"MX check failed for: '{self}'")
+            return False
+        return True
 
 
 class AutoSubmittedHeader:
@@ -72,6 +117,20 @@ class SMTP:
                 except smtplib.SMTPAuthenticationError as e:
                     logger.error(f"SMTP authentication failed: {self.key}.\n{e}")
                     return False
+        except TypeError:
+            # TypeError: getaddrinfo() argument 1 must be string or None
+            # XX I should handle this better.
+            # We get here without specifying SMTP.
+            # $ envelope  --send 1 --message "Hello" --subject "Test" --from person@example.com
+            # SMTP connection invalid: {'host': <envelope.utils.SMTP object at 0x7fbfe5384c10>,
+            #       'port': 25, 'user': None, 'password': None, 'security': None}.
+            #
+            # Whereas that one will give us ConnectionError.
+            # $ envelope  --send 1 --message "Hello" --subject "Test" --from person@example.com  --smtp localhost
+            #
+            # Why there is the default object in the host, rather than normal word "localhost"?
+            logger.error(f"SMTP connection invalid: {self.key}.")
+            return False
         except smtplib.SMTPException as e:
             logger.error(f"SMTP connection failed: {self.key}.\n{e}")
             return False

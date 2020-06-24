@@ -14,11 +14,12 @@ from email.message import EmailMessage, Message
 from email.parser import BytesParser
 from email.utils import make_msgid, formatdate, getaddresses
 from getpass import getpass
+from itertools import chain
 from pathlib import Path
 from quopri import decodestring
-from typing import Union
+from typing import Union, List, Set
 
-from .utils import AutoSubmittedHeader, SMTP, is_gpg_fingerprint, assure_list, assure_fetched
+from .utils import Address, AutoSubmittedHeader, SMTP, is_gpg_fingerprint, assure_list, assure_fetched
 
 try:
     import gnupg
@@ -122,10 +123,10 @@ class Envelope:
             result.append("Attachment: " + ", ".join(str(s) for s in a))
 
         if self._bcc:  # as bcc is not included as an e-mail header, we explicitly states it here
-            result.append("Bcc: " + ", ".join(self._bcc))
+            result.append("Bcc: " + ", ".join(map(str, self._bcc)))
 
         for i, r in enumerate(self._result):
-            if isinstance(r, (EmailMessage, Message)):  # smime library always produces a Message object
+            if isinstance(r, Message):  # smime library always produces a Message object, otherwise EmailMessage is got
                 if self._sign or self._encrypt:
                     result.append(("GPG" if self._gpg else "S/MIME") + ": " + ", ".join(
                         x for x in [bool(self._sign) and "signed", bool(self._encrypt) and "encrypted"] if x))
@@ -149,9 +150,12 @@ class Envelope:
             self._result_cache = s  # slightly quicker next time if ever containing a huge amount of lines
         return self._result_cache
 
-    def as_email_message(self) -> EmailMessage:
+    def as_message(self) -> Message:
+        """
+        :return: Message object is S/MIME is used, EmailMessage otherwise.
+        """
         for el in self._result:
-            if isinstance(el, EmailMessage):
+            if isinstance(el, Message):
                 return el
         return self._start(send=SIMULATION)
 
@@ -159,17 +163,17 @@ class Envelope:
     def load(message=None, *, path=None) -> "Envelope":
         """
         XX make it capable to decrypt and verify signatures?
-        XX make it capable to read an "attachment" - now it's a mere part of the body
+        XX make it capable to read an "attachment" - now it's a mere part of the body. .attachments() method is needed.
 
         Note that if you will send this reconstructed message, you might not probably receive it due to the Message-ID duplication.
         Delete at least Message-ID header prior to re-sending.
 
-        :param message: Any attainable contents to build an Envelope object from, including email.message.EmailMessage.
+        :param message: Any attainable contents to build an Envelope object from, including email.message.Message.
         :param path: (Alternative to `message`.) Path to the file that should be loaded.
         """
         if path:
             message = Path(path)
-        elif isinstance(message, EmailMessage):
+        elif isinstance(message, Message):
             message = str(message)
 
         header_row = re.compile(r"([^\t:]+):(.*)")
@@ -261,12 +265,14 @@ class Envelope:
         #   GPG: (True, key contents, fingerprint, None)
         #   SMIME: certificate contents
         self._encrypt = None
-        self._from = self.__from = None
-        self._sender = self.__sender = None
-        self._to = []
-        self._cc = []
-        self._bcc = []
-        self._reply_to = []
+        self._from: Address = None
+        self.__from: Address = None
+        self._sender: Address = None
+        self.__sender: Address = None
+        self._to: List[Address] = []
+        self._cc: List[Address] = []
+        self._bcc: List[Address] = []
+        self._reply_to: List[Address] = []
         self._subject = None  # string
         self._smtp = None
         self._attachments = []
@@ -319,8 +325,6 @@ class Envelope:
                     self.signature(attach_key=v)
             elif k == "cert":
                 self.signature(None, cert=v)
-            elif k == "to":
-                self.to(v)
             elif k == "attachments":
                 self.attach(v)
             elif k == "headers":  # [(header-name, val), ...]
@@ -330,7 +334,7 @@ class Envelope:
                 self.signature(v)
             elif k == "encrypt":
                 self.encryption(v)
-            elif v is not None:
+            elif v is not None and v != []:  # "to" will receive [] by default
                 getattr(self, k)(v)  # ex: self.message(message)
 
         self._prepare_from()
@@ -340,22 +344,41 @@ class Envelope:
         """ Returns deep copy of the object. """
         return deepcopy(self)
 
+    @staticmethod
+    def _parse_addresses(registry, email_or_list):
+        registry += (a for a in Address.parse(email_or_list) if a not in registry)
+
+    def to(self, email_or_list=None):
+        """ Multiple addresses may be given in a string, delimited by comma (or semicolon).
+         (The same is valid for `to`, `cc`, `bcc` and `reply-to`.)
+
+            Envelope()
+                .to("person1@example.com")
+                .to("person1@example.com, John <person2@example.com>")
+                .to(["person3@example.com"])
+                .to()  # ["person1@example.com", "John <person2@example.com>", "person3@example.com"]
+        """
+        if email_or_list is None:
+            return [str(x) for x in self._to]
+        self._parse_addresses(self._to, email_or_list)
+        return self
+
     def cc(self, email_or_list=None):
         if email_or_list is None:
-            return self._cc
-        self._cc += assure_list(email_or_list)
+            return [str(x) for x in self._cc]
+        self._parse_addresses(self._cc, email_or_list)
         return self
 
     def bcc(self, email_or_list=None):
         if email_or_list is None:
-            return self._bcc
-        self._bcc += assure_list(email_or_list)
+            return [str(x) for x in self._bcc]
+        self._parse_addresses(self._bcc, email_or_list)
         return self
 
     def reply_to(self, email_or_list=None):
         if email_or_list is None:
-            return self._reply_to
-        self._reply_to += assure_list(email_or_list)
+            return [str(x) for x in self._reply_to]
+        self._parse_addresses(self._reply_to, email_or_list)
         return self
 
     def body(self, text=None, *, path=None):
@@ -403,17 +426,17 @@ class Envelope:
         return self
 
     def sender(self, email=None):
-        """  Alias for "from" if not set. Otherwise appends header "Sender". """
-        if email is None:  # XX doc me
-            return self.__sender
-        self._sender = email
+        """  Alias for "from" if not set. Otherwise appends header "Sender". If None, current `Sender` returned. """
+        if email is None:
+            return str(self.__sender)
+        self._sender = Address.parse(email, single=True)
         self._prepare_from()
         return self
 
     def from_(self, email=None):
         if email is None:
-            return self.__from
-        self._from = email
+            return str(self.__from)
+        self._from = Address.parse(email, single=True)
         self._prepare_from()
         return self
 
@@ -581,20 +604,6 @@ class Envelope:
             self._smtp = SMTP(host)
         else:
             self._smtp = SMTP(host, port, user, password, security)
-        return self
-
-    def to(self, email_or_list=None):
-        # XX
-        #   * parse email_or_list delimited by comma (or semicolon??) ["address1@ex,address2@ex", "address3@ex"] -> ["1", "2", "3"]
-        #   So that user can be sure they can "address1@ex" in envelope.to()
-        #   * Preserve order (list) but do not allow duplication (set).
-        #   * Implement in Convey mail sender "for address in e._to"
-        #   * validate_email here instead in Convey? or this would mean no generic mail like "ex@localhost" would be allowed?
-        #       Or that would mean we have to contact SMTP (so that validation might take place in .check())?
-        #   * The same for others (reply-to, cc, bcc)
-        if email_or_list is None:
-            return self._to
-        self._to += assure_list(email_or_list)
         return self
 
     def attach(self, attachment=None, mimetype=None, filename=None, *, path=None):
@@ -795,8 +804,8 @@ class Envelope:
                     if sign in [True, AUTO]:  # try to determine sign based on the "From" header
                         fallback_sign = sign = None
                         try:
-                            address_searched = getaddresses([self.__from])[0][1]
-                        except (TypeError, IndexError):
+                            address_searched = self.__from.address
+                        except AttributeError:
                             # there is no "From" header and no default key is given, pick the first secret as a default
                             for key in self._gnupg.list_keys(True):
                                 fallback_sign = key["keyid"]
@@ -816,7 +825,7 @@ class Envelope:
 
                 if encrypt:
                     if encrypt == AUTO:
-                        # encrypt = True only if there exist a key for every neeeded address
+                        # encrypt = True only if there exist a key for every needed address
                         addresses_searched = self._get_decipherers()
                         [addresses_searched.discard(address) for _, address in self._gpg_list_keys(False)]
                         if addresses_searched:
@@ -885,17 +894,15 @@ class Envelope:
                 logger.error("You have to specify sender e-mail.")
                 return False
             if self.__from:
-                email["From"] = self.__from
+                email["From"] = str(self.__from)
             if self._to:
-                email["To"] = ",".join(self._to)
+                email["To"] = ",".join(map(str, self._to))
             if self._cc:
-                email["Cc"] = ",".join(self._cc)
+                email["Cc"] = ",".join(map(str, self._cc))
             if self._reply_to:
-                email["Reply-To"] = ",".join(self._reply_to)
+                email["Reply-To"] = ",".join(map(str, self._reply_to))
         except IndexError as e:
-            s = set(self._to + self._cc + self._bcc)
-            if self._reply_to:
-                s.add(self._reply_to)
+            s = set(self._to + self._cc + self._bcc + self._reply_to)
             if self.__from:
                 s.add(self.__from)
             logger.error(f"An e-mail address seem to be malformed.\nAll addresses: {s}\n{e}")
@@ -913,14 +920,14 @@ class Envelope:
                 # ex: Using random string with header Date
                 raise TypeError(f"Wrong header {k} value: {v}")
         if self.__sender:
-            email["Sender"] = self.__sender
+            email["Sender"] = str(self.__sender)
         if "Date" not in email and not self._ignore_date:
             email["Date"] = formatdate(localtime=True)
         if "Message-ID" not in email and send != SIMULATION:  # we omit this field when testing
             email["Message-ID"] = make_msgid()
 
         if send and send != SIMULATION:
-            failures = self._smtp.send_message(email, to_addrs=list(set(self._to + self._cc + self._bcc)))
+            failures = self._smtp.send_message(email, to_addrs=list(map(str, set(self._to + self._cc + self._bcc))))
             if failures:
                 logger.warning(f"Unable to send to all recipients: {repr(failures)}.")
             elif failures is False:
@@ -928,7 +935,7 @@ class Envelope:
         else:
             if send != SIMULATION:
                 self._result.append(f"{'*' * 100}\nHave not been sent from {(self.__from or '')}"
-                                    f" to {', '.join(set(self._to + self._cc + self._bcc))}")
+                                    f" to {', '.join(self.recipients())}")
             if encrypt:
                 if encrypted_subject:
                     self._result.append(f"Encrypted subject: {self._subject}")
@@ -968,7 +975,7 @@ class Envelope:
 
     def _encrypt_gpg_now(self, message, sign_fingerprint):
         exc = []
-        if not self._to and not self._cc and not self._bcc:
+        if not any(chain(self._to, self._cc, self._bcc)):
             exc.append("No recipient e-mail specified")
         if self.__from is None:
             exc.append("No sender e-mail specified. If not planning to decipher later, put sender=False or --no-sender flag.")
@@ -994,22 +1001,25 @@ class Envelope:
                 logger.info(f"Unable to download missing key.")
             if any(s in status.stderr for s in ["No name", "No data", "General error", "Syntax error in URI"]):
                 keys = [uid["uids"] for uid in self._gnupg.list_keys()]
-                found = False
+                found_missing = False
                 for identity in self._get_decipherers():
-                    if not [k for k in keys if [x for x in k if identity in x]]:
-                        found = True
+                    if not [k for k in keys if any(x for x in k if identity in x)]:
+                        found_missing = True
                         logger.warning(f"Key for {identity} seems missing.")
-                if found:
+                if found_missing:
                     s = self._get_gnupg_home()
-                    s = f"GNUPGHOME={s} " if s else ""
-                    logger.warning(f"See {s} gpg --list-keys")
+                    s = f" GNUPGHOME={s}" if s else ""
+                    logger.warning(f"See{s} gpg --list-keys")
             return False
 
     def _gpg_list_keys(self, secret=False):
         return ((key, address) for key in self._gnupg.list_keys(secret) for _, address in getaddresses(key["uids"]))
 
-    def _get_decipherers(self):
-        return set(self._to + self._cc + self._bcc + ([self.__from] if self.__from else []))
+    def _get_decipherers(self) -> Set[str]:
+        """
+        :return: Set of e-mail addresses
+        """
+        return set(x.address for x in self._to + self._cc + self._bcc + ([self.__from] if self.__from else []))
 
     def _encrypt_smime_now(self, email, sign, encrypt):
         with warnings.catch_warnings():
@@ -1209,27 +1219,39 @@ class Envelope:
                 email["Subject"] = self._subject
         return email
 
-    def recipients(self, *, clear=False):
+    def recipients(self, *, clear=False) -> Set[str]:
         """ Return set of all recipients – To, Cc, Bcc
             :param: clear If true, all To, Cc and Bcc recipients are removed and the object is returned.
+
+            Envelope()
+                .to("person1@example.com")
+                .to("person1@example.com, John <person2@example.com>")
+                .to(["person3@example.com"])
+                .recipients()  # ["person1@example.com", "John <person2@example.com>", "person3@example.com"]
         """
         if clear:
             self._to.clear()
             self._cc.clear()
             self._bcc.clear()
             return self
-        return set(self._to + self._cc + self._bcc)
+        return {str(x) for x in set(self._to + self._cc + self._bcc)}
 
-    def check(self) -> bool:
+    def check(self, check_mx=True, check_smtp=True) -> bool:
         """
         If sender specified, check if DMARC DNS records exist and prints out the information.
-        :rtype: bool SMTP connection worked
+        :param check_mx: bool If True, all e-mail addresses are checked for MX record.
+        :param check_smtp: bool If True, we try to connect to the SMTP host.
+        :rtype: bool All e-mail addresses are valid and SMTP connection worked
         """
+        passed = all(address.is_valid(check_mx)
+                     for address in self._to + self._cc + self._bcc + self._reply_to +
+                     [x for x in (self.__from, self.__sender) if x])
+
         if self.__from:
             try:
-                email = getaddresses([self.__from])[0][1]
-                domain = email.split("@")[1]
+                domain = self.__from.address.split("@")[1]
             except IndexError:
+                passed = False
                 logger.warning(f"Could not parse domain from the sender address '{self.__from}'")
             else:
                 def dig(query_or_list, rr="TXT", search_start=None):
@@ -1276,5 +1298,8 @@ class Envelope:
                     print(f"DMARC found: {dmarc}")
                 else:
                     print("Could not spot DMARC.")
-        print("Trying to connect to the SMTP...")
-        return bool(self._smtp.connect())  # check SMTP
+
+        if check_smtp:
+            print("Trying to connect to the SMTP...")
+            passed *= bool(self._smtp.connect())  # check SMTP
+        return passed

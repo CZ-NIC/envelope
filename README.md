@@ -208,12 +208,19 @@ If the GPG encryption fails, it tries to determine which recipient misses the ke
     envelope --smime --encrypt-path recipient1.pem recipient2.pem --message "Hello"
     ```
     * **Envelope(encrypt=)**: Any attainable contents
-  * **to**: E-mail or list. When encrypting, we use keys of these identities.
+  * **to**: E-mail or list. When encrypting, we use keys of these identities. Multiple addresses may be given in a string, delimited by comma (or semicolon). (The same is valid for `to`, `cc`, `bcc` and `reply-to`.)
     * **--to**: One or more e-mail addresses.
       ```bash
       envelope --to first@example.com second@example.com --message "hello" 
       ```  
     * **.to(email_or_list)**: If None, current list is returned.
+    ```python3
+        Envelope()
+            .to("person1@example.com")
+            .to("person1@example.com, John <person2@example.com>")
+            .to(["person3@example.com"])
+            .to()  # ["person1@example.com", "John <person2@example.com>", "person3@example.com"] 
+        ```
     * **Envelope(to=)**: E-mail or their list.
   * **from**: E-mail – needed to choose our key if encrypting.    
     * **--from** E-mail
@@ -259,9 +266,16 @@ If the GPG encryption fails, it tries to determine which recipient misses the ke
     * **--subject**
     * **.subject(text)**: If None, current subject returned.     
     * **Envelope(subject=)**
-  * **cc**: E-mail or their list
+  * **cc**: E-mail or their list. Multiple addresses may be given in a string, delimited by comma (or semicolon). (The same is valid for `to`, `cc`, `bcc` and `reply-to`.)
     * **--cc**
     * **.cc(email_or_list)**: If None, current list returned.
+        ```python3
+        Envelope()
+            .cc("person1@example.com")
+            .cc("person1@example.com, John <person2@example.com>")
+            .cc(["person3@example.com"])
+            .cc()  # ["person1@example.com", "John <person2@example.com>", "person3@example.com"] 
+        ```
     * **Envelope(cc=)**
   * **bcc**: E-mail or their list
     * **--bcc**
@@ -375,8 +389,8 @@ Envelope().auto_submitted()  # mark message as automatic
 Envelope().auto_submitted.no()  # mark message as human produced
 ```    
 ### Supportive
-  * **.recipients()**: Return set of all recipients – To, Cc, Bcc
-    * **.recipients(clear=True)**: All To, Cc and Bcc recipients are removed and the object is returned.
+  * **.recipients()**: Return set of all recipients – `To`, `Cc`, `Bcc`
+    * **.recipients(clear=True)**: All `To`, `Cc` and `Bcc` recipients are removed and the `Envelope` object is returned.
   * **.copy()**: Return deep copy of the instance to be used independently. 
   ```python3    
     factory = Envelope().cc("original@example.com").copy
@@ -391,9 +405,11 @@ Envelope().auto_submitted.no()  # mark message as human produced
             Ex: whilst we have to use quoted-printable (as seen in __str__), here the output will be plain text.
     * **--preview**
     * **.preview()**
-  * **check**: Check SMTP connection and returns True/False if succeeded. Tries to find SPF, DKIM and DMARC DNS records depending on the sender's domain and print them out.
+  * **check**: Check all e-mail addresses and SMTP connection and return True/False if succeeded. Tries to find SPF, DKIM and DMARC DNS records depending on the sender's domain and print them out.
     * **--check**
-    * **.check()**
+    * **.check(check_mx=True, check_smtp=True)**
+        * `check_mx` E-mail addresses can be checked for MX record, not only for their format.  
+        * `check_smtp` We try to connect to the SMTP host.
     
     ```bash
     $ envelope --smtp localhost 25 --sender me@example.com --check 
@@ -404,12 +420,12 @@ Envelope().auto_submitted.no()  # mark message as human produced
     Trying to connect to the SMTP...
     Check succeeded.
     ```
- * **.as_email_message()**: Generates an email.message.EmailMessage object.
+ * **.as_message()**: Generates an email.message.Message object.
     ```python3
-    e = Envelope("hello").as_email_message()
+    e = Envelope("hello").as_message()
     print(type(e), e.get_payload())  # <class 'email.message.EmailMessage'> hello\n 
     ```
- * **load**: Parse any attainable contents (including email.message.EmailMessage) like an EML file to build an Envelope object.
+ * **load**: Parse any attainable contents (including email.message.Message) like an EML file to build an Envelope object.
     * Limitation: it cannot read an attachment which stays a mere part of the body, it cannot decrypt.
     * Note that if you will send this reconstructed message, you might not probably receive it due to the Message-ID duplication. Delete at least Message-ID header prior to re-sending. 
     * (*static*) **.load(message)**
