@@ -714,6 +714,8 @@ class TestDefault(TestAbstract):
 class TestBash(TestAbstract):
     eml = Path("tests/eml/mail.eml")
     quopri = Path("tests/eml/quopri.eml")  # the file has CRLF separators
+    utf_header = Path("tests/eml/utf-header.eml")  # the file has encoded headers
+
     text_attachment = "tests/eml/generic.txt"
     cmd = "python3", "-m", "envelope"
 
@@ -749,6 +751,11 @@ class TestLoad(TestBash):
         # multiple headers returned as list and in the same order
         self.assertEqual(len(e.header("Received")), 2)
         self.assertEqual(e.header("Received")[1][:26], "from receiver2.example.com")
+
+    def test_encoded_headers(self):
+        e = Envelope.load(path=str(self.utf_header))
+        self.assertEqual(e.subject(), "Re: text")
+        self.assertEqual(e.from_(), "Jiří <jiri@example.com>")
 
     def test_load_bash(self):
         self.assertIn("Hello world subject", self._output())

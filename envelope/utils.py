@@ -18,7 +18,7 @@ class Address:
 
     def __str__(self):
         if self.real_name:
-            return f"{self.address} <{self.real_name}>"
+            return f"{self.real_name} <{self.address}>"
         return self.address
 
     def __eq__(self, other):

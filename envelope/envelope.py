@@ -12,6 +12,7 @@ from configparser import ConfigParser
 from copy import copy, deepcopy
 from email.message import EmailMessage, Message
 from email.parser import BytesParser
+from email.policy import default as policy
 from email.utils import make_msgid, formatdate, getaddresses
 from getpass import getpass
 from itertools import chain
@@ -292,7 +293,7 @@ class Envelope:
         self._cc: List[Address] = []
         self._bcc: List[Address] = []
         self._reply_to: List[Address] = []
-        self._subject = None  # string
+        self._subject: str = None
         self._smtp = None
         self._attachments = []
         self._mime = AUTO
@@ -607,6 +608,7 @@ class Envelope:
                               }
 
         k = key.lower()
+
         if k in specific_interface:
             if replace:
                 attr = getattr(self, self._get_private_var(k))
@@ -614,6 +616,7 @@ class Envelope:
                 if k in ("sender", "from"):
                     self._prepare_from()
                 return self
+            val = policy.header_store_parse(k, val)[1]  # Subject '=?UTF-8?Q?Re=3a_text?=' -> 'Re: text'
             return specific_interface[k](val)
 
         if replace:
