@@ -2,6 +2,7 @@ import logging
 import sys
 import unittest
 from email.message import EmailMessage
+from os import environ
 from pathlib import Path
 from subprocess import PIPE, STDOUT, Popen
 from tempfile import TemporaryDirectory
@@ -13,11 +14,17 @@ logging.basicConfig(stream=sys.stderr, level=logging.WARNING)
 
 GPG_PASSPHRASE = "test"
 GPG_IDENTITY_1_FINGERPRINT = "F14F2E8097E0CCDE93C4E871F4A4F26779FA03BB"
+GNUPG_HOME = "tests/gpg_ring/"
+environ["GNUPGHOME"] = GNUPG_HOME
 
 
 class TestAbstract(unittest.TestCase):
-    def _check_lines(self, o, lines: Union[str, Tuple[str, ...]] = (), longer: Union[int, Tuple[int, int]] = None,
-                     print_=False, not_in: Union[str, Tuple[str, ...]] = (), raises=(), result=None):
+    utf_header = Path("tests/eml/utf-header.eml")  # the file has encoded headers
+    quopri = Path("tests/eml/quopri.eml")  # the file has CRLF separators
+    eml = Path("tests/eml/mail.eml")
+
+    def check_lines(self, o, lines: Union[str, Tuple[str, ...]] = (), longer: Union[int, Tuple[int, int]] = None,
+                    debug=False, not_in: Union[str, Tuple[str, ...]] = (), raises=(), result=None):
         """ Converts Envelope objects to str and asserts that lines are present.
         :type lines: Assert in. These line/s must be found in the given order.
         :type not_in: Assert not in.
@@ -37,7 +44,7 @@ class TestAbstract(unittest.TestCase):
             # any line is not longer than 1000 characters
             self.assertFalse(any(line for line in output if len(line) > 999))
 
-        if print_:
+        if debug:
             print(o)
         output_tmp = output
         last_search = ""
@@ -63,28 +70,62 @@ class TestAbstract(unittest.TestCase):
         if longer:
             self.assertGreater(len(output), longer)
 
+    cmd = "python3", "-m", "envelope"
+
+    def bash(self, *cmd, file=None, piped=None, envelope=True, env=None, debug=False):
+        """
+
+        :param cmd: Any number of commands.
+        :param file: File piped to the program.
+        :param piped: Content piped to the program.
+        :param envelope: Prepend envelope module call before commands.
+        :param env: dict Modify environment variables.
+        :param debug: Print debug info.
+        :return:
+        """
+        if envelope:
+            cmd = self.cmd + cmd
+        if not file and not piped:
+            file = self.eml
+
+        if debug:
+            print("Cmd:")
+            r = [f"{' '.join(cmd)}"]
+            if file:
+                r.append(" < {file}")
+            elif piped:
+                r = [f'echo "{piped}" |'] + r
+            print(" ".join(r))
+
+        if env:
+            env = {**environ.copy(), **env}
+
+        p = Popen(cmd, stdout=PIPE, stdin=PIPE, stderr=STDOUT, env=env)
+        return p.communicate(input=file.read_bytes() if file else piped.encode("utf-8"))[0].decode()
+        # return p.stdout.read().decode()
+
 
 class TestEnvelope(TestAbstract):
     def test_message_generating(self):
-        self._check_lines(Envelope("dumb message")
-                          .subject("my subject")
-                          .send(False),
-                          ("Subject: my subject",
-                           "dumb message",), 10)
+        self.check_lines(Envelope("dumb message")
+                         .subject("my subject")
+                         .send(False),
+                         ("Subject: my subject",
+                          "dumb message",), 10)
 
     def test_1000_split(self):
-        self._check_lines(Envelope().message("short text").subject("my subject").send(False),
-                          ('Content-Transfer-Encoding: 7bit',
-                           "Subject: my subject",
-                           "short text"), 10)
+        self.check_lines(Envelope().message("short text").subject("my subject").send(False),
+                         ('Content-Transfer-Encoding: 7bit',
+                          "Subject: my subject",
+                          "short text"), 10)
 
         # this should be no more 7bit but base64 (or quoted-printable which is however not guaranteed)
         e = Envelope().message("Longer than thousand chars. " * 1000).subject("my subject").send(False)
-        self._check_lines(e,
-                          ("Content-Transfer-Encoding: base64",
-                           "Subject: my subject",), 100,
-                          not_in=('Content-Transfer-Encoding: 7bit',)
-                          )
+        self.check_lines(e,
+                         ("Content-Transfer-Encoding: base64",
+                          "Subject: my subject",), 100,
+                         not_in=('Content-Transfer-Encoding: 7bit',)
+                         )
         self.assertFalse(any(line for line in str(e).splitlines() if len(line) > 999))
 
     def test_1000_split_html(self):
@@ -95,43 +136,43 @@ class TestEnvelope(TestAbstract):
              .subject("my subject"))
 
         # 7bit both plain and html
-        self._check_lines(e.send(False),
-                          ("Subject: my subject",
-                           'Content-Transfer-Encoding: 7bit',
-                           "short text",
-                           "<b>html</b>"), 10)
+        self.check_lines(e.send(False),
+                         ("Subject: my subject",
+                          'Content-Transfer-Encoding: 7bit',
+                          "short text",
+                          "<b>html</b>"), 10)
 
         # 7bit html, base64 plain
-        self._check_lines(e.copy().message("Longer than thousand chars. " * 1000).send(False),
-                          ("Subject: my subject",
-                           "Content-Transfer-Encoding: base64",
-                           'Content-Transfer-Encoding: 7bit',
-                           "<b>html</b>"
-                           ), 100,
-                          not_in=('short text')
-                          )
+        self.check_lines(e.copy().message("Longer than thousand chars. " * 1000).send(False),
+                         ("Subject: my subject",
+                          "Content-Transfer-Encoding: base64",
+                          'Content-Transfer-Encoding: 7bit',
+                          "<b>html</b>"
+                          ), 100,
+                         not_in=('short text')
+                         )
 
         # 7bit plain, base64 html
-        self._check_lines(e.copy().message("Longer than thousand chars. " * 1000, alternative="html").send(False),
-                          ("Subject: my subject",
-                           'Content-Transfer-Encoding: 7bit',
-                           'short text',
-                           "Content-Transfer-Encoding: base64",
-                           ), 100,
-                          not_in="<b>html</b>"
-                          )
+        self.check_lines(e.copy().message("Longer than thousand chars. " * 1000, alternative="html").send(False),
+                         ("Subject: my subject",
+                          'Content-Transfer-Encoding: 7bit',
+                          'short text',
+                          "Content-Transfer-Encoding: base64",
+                          ), 100,
+                         not_in="<b>html</b>"
+                         )
 
         # base64 both plain and html
-        self._check_lines(e.copy().message("Longer than thousand chars. " * 1000, alternative="html")
-                          .message("Longer than thousand chars. " * 1000).send(False),
-                          ("Subject: my subject",
-                           "Content-Transfer-Encoding: base64",
-                           "Content-Transfer-Encoding: base64",
-                           ), 100,
-                          not_in=('Content-Transfer-Encoding: 7bit',
-                                  'short text',
-                                  "<b>html</b>")
-                          )
+        self.check_lines(e.copy().message("Longer than thousand chars. " * 1000, alternative="html")
+                         .message("Longer than thousand chars. " * 1000).send(False),
+                         ("Subject: my subject",
+                          "Content-Transfer-Encoding: base64",
+                          "Content-Transfer-Encoding: base64",
+                          ), 100,
+                         not_in=('Content-Transfer-Encoding: 7bit',
+                                 'short text',
+                                 "<b>html</b>")
+                         )
 
     def test_missing_message(self):
         self.assertEqual(Envelope().to("hello").preview(), "")
@@ -159,33 +200,33 @@ class TestSmime(TestAbstract):
         # MIIEggYJKoZIhvcNAQcCoIIEczCCBG8CAQExCzAJBgUrDgMCGgUAMAsGCSqGSIb3
         # DQEHAaCCAmwwggJoMIIB0aADAgECAhROmwkIH63oarp3NpQqFoKTy1Q3tTANBgkq
         # ... other lines changes every time
-        self._check_lines(Envelope("dumb message")
-                          .smime()
-                          .subject("my subject")
-                          .reply_to("test-reply@example.com")
-                          .signature(Path("tests/smime/key.pem"), cert=Path("tests/smime/cert.pem"))
-                          .send(False),
-                          ("Subject: my subject",
-                           "Reply-To: test-reply@example.com",
-                           "dumb message",
-                           'Content-Disposition: attachment; filename="smime.p7s"',
-                           "MIIEggYJKoZIhvcNAQcCoIIEczCCBG8CAQExCzAJBgUrDgMCGgUAMAsGCSqGSIb3",), 10)
+        self.check_lines(Envelope("dumb message")
+                         .smime()
+                         .subject("my subject")
+                         .reply_to("test-reply@example.com")
+                         .signature(Path("tests/smime/key.pem"), cert=Path("tests/smime/cert.pem"))
+                         .send(False),
+                         ("Subject: my subject",
+                          "Reply-To: test-reply@example.com",
+                          "dumb message",
+                          'Content-Disposition: attachment; filename="smime.p7s"',
+                          "MIIEggYJKoZIhvcNAQcCoIIEczCCBG8CAQExCzAJBgUrDgMCGgUAMAsGCSqGSIb3",), 10)
 
     def test_smime_key_cert_together(self):
-        self._check_lines(Envelope("dumb message")
-                          .smime()
-                          .signature(Path("tests/smime/key-cert-together.pem"))
-                          .sign(),
-                          ('Content-Disposition: attachment; filename="smime.p7s"',
-                           "MIIEggYJKoZIhvcNAQcCoIIEczCCBG8CAQExCzAJBgUrDgMCGgUAMAsGCSqGSIb3"))
+        self.check_lines(Envelope("dumb message")
+                         .smime()
+                         .signature(Path("tests/smime/key-cert-together.pem"))
+                         .sign(),
+                         ('Content-Disposition: attachment; filename="smime.p7s"',
+                          "MIIEggYJKoZIhvcNAQcCoIIEczCCBG8CAQExCzAJBgUrDgMCGgUAMAsGCSqGSIb3"))
 
     def test_smime_key_cert_together_passphrase(self):
-        self._check_lines(Envelope("dumb message")
-                          .smime()
-                          .signature(Path("tests/smime/key-cert-together-passphrase.pem"), passphrase=GPG_PASSPHRASE)
-                          .sign(),
-                          ('Content-Disposition: attachment; filename="smime.p7s"',
-                           "MIIEggYJKoZIhvcNAQcCoIIEczCCBG8CAQExCzAJBgUrDgMCGgUAMAsGCSqGSIb3"), 10)
+        self.check_lines(Envelope("dumb message")
+                         .smime()
+                         .signature(Path("tests/smime/key-cert-together-passphrase.pem"), passphrase=GPG_PASSPHRASE)
+                         .sign(),
+                         ('Content-Disposition: attachment; filename="smime.p7s"',
+                          "MIIEggYJKoZIhvcNAQcCoIIEczCCBG8CAQExCzAJBgUrDgMCGgUAMAsGCSqGSIb3"), 10)
 
     def test_smime_encrypt(self):
         # Message will look that way:
@@ -201,18 +242,18 @@ class TestSmime(TestAbstract):
         # nnXprxG2Q+/0GHJw48R1/B2d4Ln1sYJe5BXl3LVr7QWpwPb+62AZ1TN8793jSic6
         # jBl/v6gDTRoEEjnb8RAkyvDJ7d6OOokgFOfCfTAUOBoZhZrqMCsGCSqGSIb3DQEH
         # ATAUBggqhkiG9w0DBwQIt4seJLnZZW+ACBRKsu4Go7lm
-        self._check_lines(Envelope("dumb message")
-                          .smime()
-                          .reply_to("test-reply@example.com")
-                          .subject("my message")
-                          .encryption(Path("tests/smime/cert.pem"))
-                          .send(False),
-                          (
-                              'Content-Type: application/x-pkcs7-mime; smime-type=enveloped-data; name="smime.p7m"',
-                              "Subject: my message",
-                              "Reply-To: test-reply@example.com",
-                              "Z2l0cyBQdHkgTHRkAhROmwkIH63oarp3NpQqFoKTy1Q3tTANBgkqhkiG9w0BAQEF",
-                          ), 10)
+        self.check_lines(Envelope("dumb message")
+                         .smime()
+                         .reply_to("test-reply@example.com")
+                         .subject("my message")
+                         .encryption(Path("tests/smime/cert.pem"))
+                         .send(False),
+                         (
+                             'Content-Type: application/x-pkcs7-mime; smime-type=enveloped-data; name="smime.p7m"',
+                             "Subject: my message",
+                             "Reply-To: test-reply@example.com",
+                             "Z2l0cyBQdHkgTHRkAhROmwkIH63oarp3NpQqFoKTy1Q3tTANBgkqhkiG9w0BAQEF",
+                         ), 10)
 
     def test_multiple_recipients(self):
         from M2Crypto import SMIME, BIO
@@ -280,22 +321,22 @@ class TestGPG(TestAbstract):
         # =qCHO
         # -----END PGP SIGNATURE-----
 
-        self._check_lines(Envelope("dumb message")
-                          .gpg("tests/gpg_ring/")
-                          .sign(),
-                          ('dumb message',
-                           '-----BEGIN PGP SIGNATURE-----',
-                           '-----END PGP SIGNATURE-----',), 10)
+        self.check_lines(Envelope("dumb message")
+                         .gpg("tests/gpg_ring/")
+                         .sign(),
+                         ('dumb message',
+                          '-----BEGIN PGP SIGNATURE-----',
+                          '-----END PGP SIGNATURE-----',), 10)
 
     def test_gpg_auto_sign(self):
         # mail from "envelope-example-identity@example.com" is in ring
-        self._check_lines(Envelope("dumb message")
-                          .gpg("tests/gpg_ring/")
-                          .from_("envelope-example-identity@example.com")
-                          .sign("auto"),
-                          ('dumb message',
-                           '-----BEGIN PGP SIGNATURE-----',
-                           '-----END PGP SIGNATURE-----',), 10)
+        self.check_lines(Envelope("dumb message")
+                         .gpg("tests/gpg_ring/")
+                         .from_("envelope-example-identity@example.com")
+                         .sign("auto"),
+                         ('dumb message',
+                          '-----BEGIN PGP SIGNATURE-----',
+                          '-----END PGP SIGNATURE-----',), 10)
 
         # mail from "envelope-example-identity-not-stated-in-ring@example.com" should not be signed
         output = str(Envelope("dumb message")
@@ -311,10 +352,10 @@ class TestGPG(TestAbstract):
         self.assertIn('-----BEGIN PGP SIGNATURE-----', output)
 
         # force-signing without specifying a key and with sending from an e-mail which is not in the keyring must fail
-        self._check_lines(Envelope("dumb message")
-                          .gpg("tests/gpg_ring/")
-                          .from_("envelope-example-identity-not-stated-in-ring@example.com")
-                          .signature(True), raises=RuntimeError)
+        self.check_lines(Envelope("dumb message")
+                         .gpg("tests/gpg_ring/")
+                         .from_("envelope-example-identity-not-stated-in-ring@example.com")
+                         .signature(True), raises=RuntimeError)
 
     def test_gpg_encrypt_message(self):
         # Message will look like this:
@@ -327,12 +368,14 @@ class TestGPG(TestAbstract):
         # =rK+/
         # -----END PGP MESSAGE-----
 
-        self._check_lines(Envelope("dumb message")
-                          .gpg("tests/gpg_ring/")
-                          .from_("envelope-example-identity@example.com")
-                          .to("envelope-example-identity-2@example.com")
-                          .encrypt(),
-                          ("-----BEGIN PGP MESSAGE-----",), 10)
+        message = (Envelope("dumb message")
+                   .gpg(GNUPG_HOME)
+                   .from_("envelope-example-identity@example.com")
+                   .to("envelope-example-identity-2@example.com")
+                   .encrypt())
+        self.check_lines(message, ("-----BEGIN PGP MESSAGE-----",), 10)
+
+        self.assertIn("dumb message", self.bash("gpg", "--decrypt", piped=str(message), envelope=False))
 
     def test_gpg_encrypt(self):
         # Message will look like this:
@@ -365,142 +408,152 @@ class TestGPG(TestAbstract):
         #
         # --===============1001129828818615570==--
 
-        self._check_lines(Envelope("dumb message")
-                          .to("envelope-example-identity-2@example.com")
-                          .gpg("tests/gpg_ring/")
-                          .from_("envelope-example-identity@example.com")
-                          .subject("dumb subject")
-                          .encryption()
-                          .send(False),
-                          ("Encrypted subject: dumb subject",
-                           "Encrypted message: dumb message",
-                           "Subject: Encrypted message",
-                           'Content-Type: multipart/encrypted; protocol="application/pgp-encrypted";',
-                           "From: envelope-example-identity@example.com",
-                           "To: envelope-example-identity-2@example.com",
-                           ), 10)
+        e = str(Envelope("dumb message")
+                .to("envelope-example-identity-2@example.com")
+                .gpg("tests/gpg_ring/")
+                .from_("envelope-example-identity@example.com")
+                .subject("dumb subject")
+                .encryption())
+
+        self.check_lines(e,
+                         ("Encrypted subject: dumb subject",
+                          "Encrypted message: dumb message",
+                          "Subject: Encrypted message",
+                          'Content-Type: multipart/encrypted; protocol="application/pgp-encrypted";',
+                          "From: envelope-example-identity@example.com",
+                          "To: envelope-example-identity-2@example.com",
+                          ), 10, not_in='Subject: dumb subject')
+
+        lines = e.splitlines()
+        message = "\n".join(lines[lines.index("-----BEGIN PGP MESSAGE-----"):])
+        self.check_lines(self.bash("gpg", "--decrypt", piped=message, envelope=False),
+                         ('Content-Type: multipart/mixed; protected-headers="v1";',
+                          'Subject: dumb subject',
+                          'Content-Type: text/plain; charset="utf-8"',
+                          'dumb message'
+                          ))
 
     def test_gpg_auto_encrypt(self):
         # mail `from` "envelope-example-identity@example.com" is in ring
-        self._check_lines(Envelope("dumb message")
-                          .gpg("tests/gpg_ring/")
-                          .from_("envelope-example-identity@example.com")
-                          .to("envelope-example-identity@example.com")
-                          .encrypt("auto"),
-                          ('-----BEGIN PGP MESSAGE-----',
-                           '-----END PGP MESSAGE-----',), (10, 15), not_in="dumb message")
+        self.check_lines(Envelope("dumb message")
+                         .gpg("tests/gpg_ring/")
+                         .from_("envelope-example-identity@example.com")
+                         .to("envelope-example-identity@example.com")
+                         .encrypt("auto"),
+                         ('-----BEGIN PGP MESSAGE-----',
+                          '-----END PGP MESSAGE-----',), (10, 15), not_in="dumb message")
 
         # mail `to` "envelope-unknown@example.com" unknown, must be both signed and encrypted
-        self._check_lines(Envelope("dumb message")
-                          .gpg("tests/gpg_ring/")
-                          .from_("envelope-example-identity@example.com")
-                          .to("envelope-example-identity-2@example.com")
-                          .signature("auto")
-                          .encrypt("auto"),
-                          ('-----BEGIN PGP MESSAGE-----',
-                           '-----END PGP MESSAGE-----',), 20, not_in="dumb message")
+        self.check_lines(Envelope("dumb message")
+                         .gpg("tests/gpg_ring/")
+                         .from_("envelope-example-identity@example.com")
+                         .to("envelope-example-identity-2@example.com")
+                         .signature("auto")
+                         .encrypt("auto"),
+                         ('-----BEGIN PGP MESSAGE-----',
+                          '-----END PGP MESSAGE-----',), 20, not_in="dumb message")
 
         # mail `from` "envelope-unknown@example.com" unknown, must not be encrypted
-        self._check_lines(Envelope("dumb message")
-                          .gpg("tests/gpg_ring/")
-                          .from_("envelope-unknown@example.com")
-                          .to("envelope-example-identity@example.com")
-                          .encrypt("auto"),
-                          ('dumb message',), (0, 2), not_in='-----BEGIN PGP MESSAGE-----')
+        self.check_lines(Envelope("dumb message")
+                         .gpg("tests/gpg_ring/")
+                         .from_("envelope-unknown@example.com")
+                         .to("envelope-example-identity@example.com")
+                         .encrypt("auto"),
+                         ('dumb message',), (0, 2), not_in='-----BEGIN PGP MESSAGE-----')
 
         # mail `to` "envelope-unknown@example.com" unknown, must not be encrypted
-        self._check_lines(Envelope("dumb message")
-                          .gpg("tests/gpg_ring/")
-                          .from_("envelope-example-identity@example.com")
-                          .to("envelope-unknown@example.com")
-                          .encrypt("auto"),
-                          ('dumb message',), (0, 2), not_in='-----BEGIN PGP MESSAGE-----')
+        self.check_lines(Envelope("dumb message")
+                         .gpg("tests/gpg_ring/")
+                         .from_("envelope-example-identity@example.com")
+                         .to("envelope-unknown@example.com")
+                         .encrypt("auto"),
+                         ('dumb message',), (0, 2), not_in='-----BEGIN PGP MESSAGE-----')
 
         # force-encrypting without having key must return empty response
-        self._check_lines(Envelope("dumb message")
-                          .gpg("tests/gpg_ring/")
-                          .from_("envelope-example-identity@example.com")
-                          .to("envelope-unknown@example.com")
-                          .encryption(True), longer=(0, 1), result=False)
+        self.check_lines(Envelope("dumb message")
+                         .gpg("tests/gpg_ring/")
+                         .from_("envelope-example-identity@example.com")
+                         .to("envelope-unknown@example.com")
+                         .encryption(True), longer=(0, 1), result=False)
 
     def test_gpg_sign_passphrase(self):
-        self._check_lines(Envelope("dumb message")
-                          .to("envelope-example-identity-2@example.com")
-                          .gpg("tests/gpg_ring/")
-                          .from_("envelope-example-identity@example.com")
-                          .signature("3C8124A8245618D286CF871E94CE2905DB00CDB7", GPG_PASSPHRASE),  # passphrase needed
-                          ("-----BEGIN PGP SIGNATURE-----",), 10)
+        self.check_lines(Envelope("dumb message")
+                         .to("envelope-example-identity-2@example.com")
+                         .gpg("tests/gpg_ring/")
+                         .from_("envelope-example-identity@example.com")
+                         .signature("3C8124A8245618D286CF871E94CE2905DB00CDB7", GPG_PASSPHRASE),  # passphrase needed
+                         ("-----BEGIN PGP SIGNATURE-----",), 10)
 
     def test_auto_import(self):
         temp = TemporaryDirectory()
 
         # no signature - empty ring
-        self._check_lines(Envelope("dumb message")
-                          .gpg(temp.name)
-                          .signature(),
-                          raises=RuntimeError)
+        self.check_lines(Envelope("dumb message")
+                         .gpg(temp.name)
+                         .signature(),
+                         raises=RuntimeError)
 
         # import key to the ring
-        self._check_lines(Envelope("dumb message")
-                          .gpg(temp.name)
-                          .sign(Path("tests/gpg_keys/envelope-example-identity@example.com.key")),
-                          ('dumb message',
-                           '-----BEGIN PGP SIGNATURE-----',
-                           '-----END PGP SIGNATURE-----',), 10)
+        self.check_lines(Envelope("dumb message")
+                         .gpg(temp.name)
+                         .sign(Path("tests/gpg_keys/envelope-example-identity@example.com.key")),
+                         ('dumb message',
+                          '-----BEGIN PGP SIGNATURE-----',
+                          '-----END PGP SIGNATURE-----',), 10)
 
         # key in the ring from last time
-        self._check_lines(Envelope("dumb message")
-                          .gpg(temp.name)
-                          .signature(),
-                          ('dumb message',
-                           '-----BEGIN PGP SIGNATURE-----',
-                           '-----END PGP SIGNATURE-----',), 10)
+        self.check_lines(Envelope("dumb message")
+                         .gpg(temp.name)
+                         .signature(),
+                         ('dumb message',
+                          '-----BEGIN PGP SIGNATURE-----',
+                          '-----END PGP SIGNATURE-----',), 10)
 
         # cannot encrypt for identity-2
-        self._check_lines(Envelope("dumb message")
-                          .gpg(temp.name)
-                          .from_("envelope-example-identity@example.com")
-                          .to("envelope-example-identity-2@example.com")
-                          .encryption(),
-                          result=False)
+        self.check_lines(Envelope("dumb message")
+                         .gpg(temp.name)
+                         .from_("envelope-example-identity@example.com")
+                         .to("envelope-example-identity-2@example.com")
+                         .encryption(),
+                         result=False)
 
         # signing should fail since we have not imported key for identity-2
-        self._check_lines(Envelope("dumb message")
-                          .gpg(temp.name)
-                          .from_("envelope-example-identity-2@example.com")
-                          .signature(),
-                          raises=RuntimeError)
+        self.check_lines(Envelope("dumb message")
+                         .gpg(temp.name)
+                         .from_("envelope-example-identity-2@example.com")
+                         .signature(),
+                         raises=RuntimeError)
 
         # however it should pass when we explicitly use an existing GPG key to be signed with
-        self._check_lines(Envelope("dumb message")
-                          .gpg(temp.name)
-                          .from_("envelope-example-identity-2@example.com")
-                          .signature(GPG_IDENTITY_1_FINGERPRINT),
-                          ('dumb message',
-                           '-----BEGIN PGP SIGNATURE-----',
-                           '-----END PGP SIGNATURE-----',), 10, result=True)
+        self.check_lines(Envelope("dumb message")
+                         .gpg(temp.name)
+                         .from_("envelope-example-identity-2@example.com")
+                         .signature(GPG_IDENTITY_1_FINGERPRINT),
+                         ('dumb message',
+                          '-----BEGIN PGP SIGNATURE-----',
+                          '-----END PGP SIGNATURE-----',), 10, result=True)
 
         # import encryption key - no passphrase needed while importing or using public key
-        self._check_lines(Envelope("dumb message")
-                          .gpg(temp.name)
-                          .from_("envelope-example-identity@example.com")
-                          .to("envelope-example-identity-2@example.com")
-                          .encryption(Path("tests/gpg_keys/envelope-example-identity-2@example.com.key")),
-                          result=True)
+        self.check_lines(Envelope("dumb message")
+                         .gpg(temp.name)
+                         .from_("envelope-example-identity@example.com")
+                         .to("envelope-example-identity-2@example.com")
+                         .encryption(Path("tests/gpg_keys/envelope-example-identity-2@example.com.key")),
+                         result=True)
 
         # signing with an invalid passphrase should fail for identity-2
-        self._check_lines(Envelope("dumb message")
-                          .gpg(temp.name)
-                          .from_("envelope-example-identity-2@example.com")
-                          .signature(passphrase="INVALID PASSPHRASE"),
-                          result=False)
+        self.check_lines(Envelope("dumb message")
+                         .gpg(temp.name)
+                         .from_("envelope-example-identity-2@example.com")
+                         .signature(passphrase="INVALID PASSPHRASE"),
+                         result=False)
 
         # signing with a valid passphrase should pass
-        self._check_lines(Envelope("dumb message")
-                          .gpg(temp.name)
-                          .from_("envelope-example-identity-2@example.com")
-                          .signature(passphrase=GPG_PASSPHRASE),
-                          result=True)
+        self.check_lines(Envelope("dumb message")
+                         .gpg(temp.name)
+                         .from_("envelope-example-identity-2@example.com")
+                         .signature(passphrase=GPG_PASSPHRASE),
+                         result=True)
 
         temp.cleanup()
 
@@ -526,25 +579,25 @@ Third
 
     def test_plain(self):
         pl = self.mime_plain
-        self._check_lines(Envelope().message(self.plain).mime("plain", "auto"), pl)
-        self._check_lines(Envelope().message(self.plain), pl)
-        self._check_lines(Envelope().message(self.html).mime("plain"), pl)
+        self.check_lines(Envelope().message(self.plain).mime("plain", "auto"), pl)
+        self.check_lines(Envelope().message(self.plain), pl)
+        self.check_lines(Envelope().message(self.html).mime("plain"), pl)
 
     def test_html(self):
         m = self.mime_html
-        self._check_lines(Envelope().message(self.plain).mime("html", "auto"), m)
-        self._check_lines(Envelope().message(self.html), m)
-        self._check_lines(Envelope().message(self.html_without_line_break), m)
+        self.check_lines(Envelope().message(self.plain).mime("html", "auto"), m)
+        self.check_lines(Envelope().message(self.html), m)
+        self.check_lines(Envelope().message(self.html_without_line_break), m)
 
     def test_nl2br(self):
         nobr = "Second"
         br = "Second<br>"
-        self._check_lines(Envelope().message(self.html), nobr)  # there already is a <br> tag so nl2br "auto" should not convert it
-        self._check_lines(Envelope().message(self.html).mime(nl2br=True), br)
+        self.check_lines(Envelope().message(self.html), nobr)  # there already is a <br> tag so nl2br "auto" should not convert it
+        self.check_lines(Envelope().message(self.html).mime(nl2br=True), br)
 
-        self._check_lines(Envelope().message(self.html_without_line_break), br)
-        self._check_lines(Envelope().message(self.html_without_line_break).mime("plain", True), nobr)  # nl2br disabled in "plain"
-        self._check_lines(Envelope().message(self.html_without_line_break).mime(nl2br=False), nobr)
+        self.check_lines(Envelope().message(self.html_without_line_break), br)
+        self.check_lines(Envelope().message(self.html_without_line_break).mime("plain", True), nobr)  # nl2br disabled in "plain"
+        self.check_lines(Envelope().message(self.html_without_line_break).mime(nl2br=False), nobr)
 
     def test_alternative(self):
         boundary = "=====envelope-test===="
@@ -555,10 +608,10 @@ Third
         self.assertEqual(e1, e2)
 
         # HTML variant is always the last even if defined before plain variant
-        self._check_lines(e1, ('Content-Type: text/plain; charset="utf-8"',
-                               "Hello",
-                               'Content-Type: text/html; charset="utf-8"',
-                               "He<b>llo</b>"))
+        self.check_lines(e1, ('Content-Type: text/plain; charset="utf-8"',
+                              "Hello",
+                              'Content-Type: text/html; charset="utf-8"',
+                              "He<b>llo</b>"))
 
     def test_only_2_alternatives_allowed(self):
         e1 = Envelope().message("He<b>llo</b>").message("Hello", alternative="plain")
@@ -573,24 +626,24 @@ class TestFrom(TestAbstract):
     def test_from(self):
         id1 = "identity-1@example.com"
         id2 = "identity-2@example.com"
-        self._check_lines(Envelope("dumb message").sender(id1),
-                          f"From: {id1}", not_in=f"Sender: {id1}")
-        self._check_lines(Envelope("dumb message", sender=id1),
-                          f"From: {id1}", not_in=f"Sender: {id1}")
+        self.check_lines(Envelope("dumb message").sender(id1),
+                         f"From: {id1}", not_in=f"Sender: {id1}")
+        self.check_lines(Envelope("dumb message", sender=id1),
+                         f"From: {id1}", not_in=f"Sender: {id1}")
 
-        self._check_lines(Envelope("dumb message", from_=id1),
-                          f"From: {id1}", not_in=f"Sender: {id1}")
-        self._check_lines(Envelope("dumb message").from_(id1),
-                          f"From: {id1}", not_in=f"Sender: {id1}")
+        self.check_lines(Envelope("dumb message", from_=id1),
+                         f"From: {id1}", not_in=f"Sender: {id1}")
+        self.check_lines(Envelope("dumb message").from_(id1),
+                         f"From: {id1}", not_in=f"Sender: {id1}")
 
-        self._check_lines(Envelope("dumb message")
-                          .from_(id1)
-                          .sender(id2),
-                          (f"From: {id1}", f"Sender: {id2}"))
-        self._check_lines(Envelope("dumb message")
-                          .sender(id2)
-                          .from_(id1),
-                          (f"From: {id1}", f"Sender: {id2}"))
+        self.check_lines(Envelope("dumb message")
+                         .from_(id1)
+                         .sender(id2),
+                         (f"From: {id1}", f"Sender: {id2}"))
+        self.check_lines(Envelope("dumb message")
+                         .sender(id2)
+                         .from_(id1),
+                         (f"From: {id1}", f"Sender: {id2}"))
 
 
 class TestSubject(TestAbstract):
@@ -598,10 +651,10 @@ class TestSubject(TestAbstract):
         s1 = "Test"
         s2 = "Another"
         e = Envelope("dumb message").subject(s1)
-        self._check_lines(e, f"Subject: {s1}")
+        self.check_lines(e, f"Subject: {s1}")
 
         e.subject(s2)
-        self._check_lines(e, f"Subject: {s2}")
+        self.check_lines(e, f"Subject: {s2}")
 
 
 class TestHeaders(TestAbstract):
@@ -637,13 +690,13 @@ class TestHeaders(TestAbstract):
             .subject(s) \
             .header("custom", "1") \
             .cc(id1)  # set headers via their specific methods
-        self.assertEqual(e.header("subject"), s)  # access via .header
-        self.assertEqual(e.subject(), s)  # access via specific method .subject
-        self.assertIs(e.header("subject", replace=True), e)
-        self.assertIs(e.header("subject"), None)
-        self.assertEqual(e.header("subject", s).subject(), s)  # set via generic method
+        self.assertEqual(s, e.header("subject"))  # access via .header
+        self.assertEqual(s, e.subject())  # access via specific method .subject
+        self.assertIs(e, e.header("subject", replace=True))
+        self.assertIs(None, e.header("subject"))
+        self.assertEqual(s, e.header("subject", s).subject())  # set via generic method
 
-        self.assertEqual(e.header("cc", id2).header("cc"), [id1, id2])  # access via .header
+        self.assertEqual([id1, id2], e.header("cc", id2).header("cc"))  # access via .header
         self.assertEqual(e.cc(), [id1, id2])
         self.assertIs(e.header("cc", replace=True), e)
         self.assertEqual(e.cc(), [])
@@ -674,7 +727,7 @@ class TestHeaders(TestAbstract):
         self.assertEqual(1, len(e.cc()))
         self.assertEqual(10, len(e.recipients()))
         self.assertEqual(str, type(",".join(e.to())))  # we can join elements as strings
-        self.assertIn("person6@example.com <Sixth>", e.to())  # we can compare look up specific recipient
+        self.assertIn("Sixth <person6@example.com>", e.to())  # we can compare look up specific recipient
 
     def test_invalid_email_addresses(self):
         """ If we discard silently every invalid e-mail address received,
@@ -712,29 +765,15 @@ class TestDefault(TestAbstract):
 
 
 class TestBash(TestAbstract):
-    eml = Path("tests/eml/mail.eml")
-    quopri = Path("tests/eml/quopri.eml")  # the file has CRLF separators
-    utf_header = Path("tests/eml/utf-header.eml")  # the file has encoded headers
-
     text_attachment = "tests/eml/generic.txt"
-    cmd = "python3", "-m", "envelope"
-
-    def _output(self, *cmd, file=None, see=False):
-        cmd = self.cmd + cmd
-        if not file:
-            file = self.eml
-        if see:
-            print(f"Cmd: {' '.join(cmd)} < {file}")
-        p = Popen(cmd, stdout=PIPE, stdin=PIPE, stderr=STDOUT)
-        return p.communicate(input=file.read_bytes())[0].decode()
 
     def test_bcc(self):
-        self.assertIn("Bcc: person@example.com", self._output("--bcc", "person@example.com", "--preview"))
-        self.assertNotIn("person@example.com", self._output("--bcc", "person@example.com", "--send", "off"))
+        self.assertIn("Bcc: person@example.com", self.bash("--bcc", "person@example.com", "--preview"))
+        self.assertNotIn("person@example.com", self.bash("--bcc", "person@example.com", "--send", "off"))
 
     def test_attachment(self):
-        self.assertIn(f"Attachment: {self.text_attachment}", self._output("--attachment", self.text_attachment, "--preview"))
-        o = self._output("--attachment", self.text_attachment, "--send", "0")
+        self.assertIn(f"Attachment: {self.text_attachment}", self.bash("--attachment", self.text_attachment, "--preview"))
+        o = self.bash("--attachment", self.text_attachment, "--send", "0")
         self.assertNotIn(f"Attachment: {self.text_attachment}", o)
         self.assertIn('Content-Disposition: attachment; filename="generic.txt"', o)
 
@@ -758,14 +797,14 @@ class TestLoad(TestBash):
         self.assertEqual(e.from_(), "Jiří <jiri@example.com>")
 
     def test_load_bash(self):
-        self.assertIn("Hello world subject", self._output())
+        self.assertIn("Hello world subject", self.bash())
 
     def test_bash_display(self):
-        self.assertEqual("Hello world subject", self._output("--subject").strip())
+        self.assertEqual("Hello world subject", self.bash("--subject").strip())
 
     def test_multiline_folded_header(self):
         self.assertEqual("Very long text Very long text Very long text Very long text Ver Very long text Very long text",
-                         self._output("--subject", file=self.quopri).strip())
+                         self.bash("--subject", file=self.quopri).strip())
 
 
 class TestTransfer(TestBash):
@@ -796,7 +835,7 @@ class TestTransfer(TestBash):
 
     def test_quoted_printable_bash(self):
         """ Envelope is able to load the text that is already quoted in a file. """
-        self.assertEqual(self.long_text, self._output("--message", file=self.quopri).strip())
+        self.assertEqual(self.long_text, self.bash("--message", file=self.quopri).strip())
 
     def test_base64(self):
         hello = "aGVsbG8gd29ybGQ="

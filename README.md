@@ -215,15 +215,18 @@ If the GPG encryption fails, it tries to determine which recipient misses the ke
             * Any attainable contents with the key to be encrypted with (will be imported into keyring)
             * "auto" for turning on encrypting if there is a matching key for every recipient
         * S/MIME any attainable contents with certificate to be encrypted with or their list
-    * **--encrypt key**: (for `key` see above) Put 0/false/no to disable `encrypt-path`.
+    * **--encrypt [key]**: (for `key` see above) Put 0/false/no to disable `encrypt-path`.
     * **--encrypt-path** *(CLI only)*: Filename(s) with the recipient\'s public key. (Alternative to `encrypt` parameter.)
     * **.encrypt(key=True, sign=, key_path=)**:
         * **`sign`** You may specify boolean or default signing key ID/fingerprint or "auto" for GPG or any attainable contents with S/MIME key + signing certificate.
         * **`key_path`**: Key/certificate contents (alternative to `key` parameter)
     * **.encryption(key=True, key_path=)**: Encrypt later (when launched with *.sign()*, *.encrypt()* or *.send()* functions. If needed, in the parameters specify Any attainable contents with GPG encryption key or S/MIME encryption certificate. 
     ```bash
-    # message gets encrypted for multiple certificates
+    # message gets encrypted for multiple S/MIME certificates
     envelope --smime --encrypt-path recipient1.pem recipient2.pem --message "Hello"
+    
+    # message gets encrypted with the default GPG key
+    envelope  --message "Encrypted GPG message!" --subject "Secret subject will not be shown" --encrypt --from person@example.com --to person@example.com
     ```
     * **Envelope(encrypt=)**: Any attainable contents
   * **to**: E-mail or list. When encrypting, we use keys of these identities. Multiple addresses may be given in a string, delimited by comma (or semicolon). (The same is valid for `to`, `cc`, `bcc` and `reply-to`.)
@@ -250,11 +253,11 @@ If the GPG encryption fails, it tries to determine which recipient misses the ke
     * **Envelope(sender=)** *(see --sender)*
     ```python3
     # These statement are identic.
-    Envelope(from_ = "identity@example.com")    
-    Envelope(sender = "identity@example.com")
+    Envelope(from_="identity@example.com")    
+    Envelope(sender="identity@example.com")
   
     # This statement produces both From header and Sender header.
-    Envelope(from_ = "identity@example.com", sender="identity2@example.com")        
+    Envelope(from_="identity@example.com", sender="identity2@example.com")        
     ```
 ### Sending
   * **send**: Send the message to the recipients by e-mail. True (blank in *CLI*) to send now or False to print out debug information.

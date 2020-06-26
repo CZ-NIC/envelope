@@ -616,7 +616,8 @@ class Envelope:
                 if k in ("sender", "from"):
                     self._prepare_from()
                 return self
-            val = policy.header_store_parse(k, val)[1]  # Subject '=?UTF-8?Q?Re=3a_text?=' -> 'Re: text'
+            if type(val) is str:  # None has to stay None
+                val = policy.header_store_parse(k, val)[1]  # Subject '=?UTF-8?Q?Re=3a_text?=' -> 'Re: text'
             return specific_interface[k](val)
 
         if replace:
@@ -1312,13 +1313,18 @@ class Envelope:
             email = EmailMessage()
             email.set_type("multipart/mixed")
             email.set_param("protected-headers", "v1")
-
-            msg_headers = EmailMessage()
-            msg_headers.set_param("protected-headers", "v1")
-            msg_headers.set_content(f"Subject: {self._subject}")
-            msg_headers.set_type("text/rfc822-headers")  # must be set after set_content, otherwise reset to text/plain
-
-            email.attach(msg_headers)
+            # In Thunderbird 68.8 or earlier,
+            # encrypted subject worked with "multipart/mixed" directly rather then with "text/rfc822-headers" as tested before.
+            # However, I will let the code here for the case it will be needed again in the future or till when we can explain
+            # why that worked before and why that stopped working now.
+            #
+            # msg_headers = EmailMessage()
+            # msg_headers.set_param("protected-headers", "v1")
+            # msg_headers.set_content(f"Subject: {self._subject}")
+            # msg_headers.set_type("text/rfc822-headers")  # must be set after set_content, otherwise reset to text/plain
+            #
+            # email.attach(msg_headers)
+            email["Subject"] = self._subject
             email.attach(msg_text)
         else:  # plain message, smime or gpg-signed message
             email = msg_text
