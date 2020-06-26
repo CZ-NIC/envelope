@@ -17,9 +17,9 @@ from getpass import getpass
 from itertools import chain
 from pathlib import Path
 from quopri import decodestring
-from typing import Union, List, Set
+from typing import Union, List, Set, Any
 
-from .utils import Address, AutoSubmittedHeader, SMTP, is_gpg_fingerprint, assure_list, assure_fetched
+from .utils import Address, AutoSubmittedHeader, SMTP, _Message, is_gpg_fingerprint, assure_list, assure_fetched
 
 try:
     import gnupg
@@ -53,6 +53,8 @@ gpg(message="Hello world",
 logger = logging.getLogger(__name__)
 CRLF = '\r\n'
 AUTO = "auto"
+PLAIN = "plain"
+HTML = "html"
 SIMULATION = "simulation"
 
 
@@ -87,13 +89,22 @@ class Envelope:
         """
         l = []
         quote = lambda x: '"' + x.replace('"', r'\"') + '"' if type(x) is str else x
-        [l.append(f'{k}={quote(v)}') for k, v in {"subject": self._subject,
-                                                  "from_": self._from,
-                                                  "to": self._to,
-                                                  "cc": self._cc,
-                                                  "bcc": self._bcc,
-                                                  "reply-to": self._reply_to,
-                                                  "message": self._message}.items() if v]
+
+        text, html = self._message.get()
+        message = {}
+        if text and html:
+            message = {"message(html)": html,
+                       "message(plain)": text}
+        elif text or html:
+            message = {"message": text or html}
+        l.extend(f'{k}={quote(v)}' for k, v in {"subject": self._subject,
+                                                "from_": self._from,
+                                                "to": self._to,
+                                                "cc": self._cc,
+                                                "bcc": self._bcc,
+                                                "reply_to": self._reply_to,
+                                                **message
+                                                }.items() if v)
 
         if not l:
             return super().__repr__()
@@ -107,8 +118,11 @@ class Envelope:
     def __eq__(self, other):
         if not self._result:
             str(self)
+        me = assure_fetched(self._get_result_str(), bytes)
         if type(other) in [str, bytes]:
-            return assure_fetched(self._get_result_str(), bytes) == assure_fetched(other, bytes)
+            return me == assure_fetched(other, bytes)
+        elif isinstance(other, Envelope):
+            return me == bytes(other)
 
     def preview(self):
         """ Returns the string of the message or data as a human-readable text.
@@ -140,7 +154,12 @@ class Envelope:
             else:
                 result.append(r)
 
-        result.append(self.message())
+        text, html = self._message.get()
+        if text and html:
+            result.extend(["* MESSAGE VARIANT text/plain:", text.decode("utf-8"), "",
+                           "* MESSAGE VARIANT text/html:", html.decode("utf-8")])
+        else:
+            result.append(self.message())
         return "\n".join(result)
 
     def _get_result_str(self):
@@ -253,7 +272,7 @@ class Envelope:
         :param sender: Alias for "from" if not set. Otherwise appends header "Sender".
         """
         # user defined variables
-        self._message = None  # bytes
+        self._message = _Message()
         self._output = None
         self._gpg: Union[str, bool, None] = None
         #   GPG: (True, key contents, fingerprint, AUTO, None) → will be converted to key fingerprint or None,
@@ -265,10 +284,10 @@ class Envelope:
         #   GPG: (True, key contents, fingerprint, None)
         #   SMIME: certificate contents
         self._encrypt = None
-        self._from: Address = None
-        self.__from: Address = None
-        self._sender: Address = None
-        self.__sender: Address = None
+        self._from: Union[Address, False] = None
+        self.__from: Union[Address, False] = None
+        self._sender: Union[Address, False] = None
+        self.__sender: Union[Address, False] = None
         self._to: List[Address] = []
         self._cc: List[Address] = []
         self._bcc: List[Address] = []
@@ -315,7 +334,7 @@ class Envelope:
                 if not hasattr(self, "default"):
                     continue
                 v = copy(getattr(self.default, self._get_private_var(k)))  # ex `v = copy(self.default._message)`
-                if v is None:
+                if v is None or type(v) is _Message and v.is_empty():  # the default value is empty
                     continue
 
             if k == "passphrase":
@@ -334,6 +353,8 @@ class Envelope:
                 self.signature(v)
             elif k == "encrypt":
                 self.encryption(v)
+            elif k == "_Message":  # internal stuff
+                continue
             elif v is not None and v != []:  # "to" will receive [] by default
                 getattr(self, k)(v)  # ex: self.message(message)
 
@@ -389,27 +410,74 @@ class Envelope:
         """ An alias of .message """
         return self.message(text=text, path=path)
 
-    def message(self, text=None, *, path=None):
-        """ Message to be ciphered / e-mail body text. """
+    def message(self, text=None, *, path=None, alternative=AUTO, boundary=None) -> Union["Envelope", Any]:
+        """
+        Message to be ciphered / e-mail body text.
+        :param text: Any attainable contents.
+        :param path: Path to the file.
+        :param alternative: "auto", "html", "plain" You may specify e-mail text alternative.
+         Some e-mail readers prefer to display plain text version over HTML.
+          By default, we try to determine content type automatically (see *mime*).
+        :param boundary: When specifying alternative, you may set e-mail boundary if you do not wish a random one to be created.
+
+        Example:
+            print(Envelope().message("He<b>llo</b>").message("Hello", alternative="plain"))
+
+            # (output shortened)
+            # Content-Type: multipart/alternative;
+            #  boundary="===============0590677381100492396=="
+            #
+            # --===============0590677381100492396==
+            # Content-Type: text/plain; charset="utf-8"
+            # Hello
+            #
+            # --===============0590677381100492396==
+            # Content-Type: text/html; charset="utf-8"
+            # He<b>llo</b>
+
+        :return: Envelope if text or path is set
+            else return anything that has been inserted to the .message() before (probably str, bytes)
+        """
+        # XX make preview default over send(0) when no action is given?
+        if boundary is not None:
+            self._message.boundary = boundary
+        if alternative not in (AUTO, PLAIN, HTML):
+            raise ValueError(f"Invalid alternative {alternative} for message, choose one of the: {AUTO}, {PLAIN}, {HTML}")
         if text is path is None:
             # reading value
+            s = getattr(self._message, alternative)
+
             transfer = self._headers.get("Content-Transfer-Encoding")
-            # XX make preview default over send(0) when no action is given?
+            # Useful for reading loaded EML that might have been encoded.
+            # When loading an EML, everything was loaded into `self._message.auto`.
+            # XX When loading an EML, everything is under .auto so that quering alternative="html"|"plain" would return None here!
             if transfer == "base64":
                 try:
-                    return b64decode(self._message).decode("utf-8")
+                    return b64decode(s).decode("utf-8")
                 except binascii.Error:
                     pass
             elif transfer == "quoted-printable":
                 try:
-                    return decodestring(self._message).decode("utf-8")
+                    return decodestring(s).decode("utf-8")
                 except ValueError:
                     pass
-            return self._message
+
+            if not s and alternative == AUTO:  # prefer reading HTML over plain text if alternative set
+                s = self._message.html or self._message.plain
+            return s or ""  # `s` might be None
+
+        # write value
+        if type(text) is _Message:  # constructor internally adopts default's self.default._message
+            self._message = text
+            return self
+
         if path:
             text = Path(path)
-        self._message = text
+        setattr(self._message, alternative, text)
         return self
+
+        # self._message = text
+        # return self
 
     def date(self, date):
         """
@@ -429,14 +497,14 @@ class Envelope:
         """  Alias for "from" if not set. Otherwise appends header "Sender". If None, current `Sender` returned. """
         if email is None:
             return str(self.__sender)
-        self._sender = Address.parse(email, single=True)
+        self._sender = Address.parse(email, single=True, allow_false=True)
         self._prepare_from()
         return self
 
     def from_(self, email=None):
         if email is None:
             return str(self.__from)
-        self._from = Address.parse(email, single=True)
+        self._from = Address.parse(email, single=True, allow_false=True)
         self._prepare_from()
         return self
 
@@ -596,7 +664,9 @@ class Envelope:
                 except KeyError as e:
                     raise FileNotFoundError(f"INI file {ini} exists but section [SMTP] is missing") from e
 
-        if type(host) is dict:  # ex: {"host": "localhost", "port": 1234}
+        if type(host) is SMTP:  # constructor internally adopts default's self.default._smtp
+            self._smtp = host
+        elif type(host) is dict:  # ex: {"host": "localhost", "port": 1234}
             self._smtp = SMTP(**host)
         elif type(host) is list:  # ex: ["localhost", 1234]
             self._smtp = SMTP(*host)
@@ -615,6 +685,8 @@ class Envelope:
         :param filename: Mime type OR file name of the attachment.
         :param path: Path to the file that should be attached.
         """
+        # XX if needed, we may add parameter cid=str so that we may reference image from within HTML with multipart/related.
+        # Or cid=True so that cid = filename.
         if type(attachment) is list:
             if path or mimetype or filename:
                 raise ValueError("Cannot specify both path, mimetype or filename and put list in attachment_or_list.")
@@ -781,13 +853,71 @@ class Envelope:
             return
 
         # assure streams are fetched and files are read from their paths
-        data = assure_fetched(self._message, bytes)
+        text, html = self._message.get()
+
         # we need a message
-        if data is None:
+        if not any((text, html)):
             logger.error("Missing message")
             return
 
         # determine if we are using gpg or smime
+        encrypt, sign, gpg_on = self._determine_gpg(encrypt, sign)
+
+        # if we plan to send later, convert text message to the email message object
+        email = None
+        if send is not None or html:  # `html` means the user wants a 'multipart/alternative' e-mail message
+            email = self._prepare_email(text, html, encrypt and gpg_on, sign and gpg_on, sign)
+            if not email:
+                return
+            data = email.as_bytes()
+        else:
+            data = text
+
+        # with GPG, encrypt or sign either text message or email message object
+        micalg = None
+        if encrypt or sign:
+            if gpg_on:
+                if encrypt:
+                    data = self._encrypt_gpg_now(data, sign)
+                elif sign:
+                    data, micalg = self._sign_gpg_now(data, sign, send)
+            else:
+                d = self._encrypt_smime_now(data, sign, encrypt)
+                email = BytesParser().parsebytes(d.strip())  # smime always produces a Message object, not raw data
+            if (gpg_on and not data) or (not gpg_on and not email):
+                logger.error("Signing/encrypting failed.")
+                return
+
+        # sending email message object
+        self._result.clear()
+        self._result_cache = None
+        self._result_cache_hash = self._param_hash()
+        if send is not None:
+            if gpg_on:
+                if encrypt:
+                    email = self._compose_gpg_encrypted(data)
+                elif sign:  # gpg
+                    email = self._compose_gpg_signed(email, data, micalg)
+            elif encrypt or sign:  # smime
+                # smime does not need additional EmailMessage to be included in, just restore Subject that has been
+                # consumed in _encrypt_smime_now. It's interesting that I.E. "Reply-To" is not consumed there.
+                email["Subject"] = self._subject
+            email = self._send_now(email, encrypt, gpg_on, send)
+            if not email:
+                return
+
+        # output to file or display
+        if email or data:
+            self._result.append(email if email else assure_fetched(data, str))
+            if self._output:
+                with open(self._output, "wb") as f:
+                    f.write(email.as_bytes() if email else data)
+            self._status = True
+
+        return email
+
+    def _determine_gpg(self, encrypt, sign):
+        """ determine if we are using gpg or smime"""
         gpg_on = None
         if encrypt or sign:
             if self._gpg is not None:
@@ -833,57 +963,7 @@ class Envelope:
                     elif encrypt is not True and not is_gpg_fingerprint(encrypt):
                         # XX multiple keys in list may be allowed
                         self._gnupg.import_keys(assure_fetched(encrypt, bytes))
-
-        # if we plan to send later, convert text message to the email message object
-        email = None
-        if send is not None:
-            email = self._prepare_email(data, encrypt and gpg_on, sign and gpg_on, sign)
-            if not email:
-                return
-            data = email.as_bytes()
-
-        # with GPG, encrypt or sign either text message or email message object
-        micalg = None
-        if encrypt or sign:
-            if gpg_on:
-                if encrypt:
-                    data = self._encrypt_gpg_now(data, sign)
-                elif sign:
-                    data, micalg = self._sign_gpg_now(data, sign, send)
-            else:
-                d = self._encrypt_smime_now(data, sign, encrypt)
-                email = BytesParser().parsebytes(d.strip())  # smime always produces a Message object, not raw data
-            if (gpg_on and not data) or (not gpg_on and not email):
-                logger.error("Signing/encrypting failed.")
-                return
-
-        # sending email message object
-        self._result.clear()
-        self._result_cache = None
-        self._result_cache_hash = self._param_hash()
-        if send is not None:
-            if gpg_on:
-                if encrypt:
-                    email = self._compose_gpg_encrypted(data)
-                elif sign:  # gpg
-                    email = self._compose_gpg_signed(email, data, micalg)
-            elif encrypt or sign:  # smime
-                # smime does not need additional EmailMessage to be included in, just restore Subject that has been
-                # consumed in _encrypt_smime_now. It's interesting that I.E. "Reply-To" is not consumed there.
-                email["Subject"] = self._subject
-            email = self._send_now(email, encrypt, gpg_on, send)
-            if not email:
-                return
-
-        # output to file or display
-        if email or data:
-            self._result.append(email if email else assure_fetched(data, str))
-            if self._output:
-                with open(self._output, "wb") as f:
-                    f.write(email.as_bytes() if email else data)
-            self._status = True
-
-        return email
+        return encrypt, sign, gpg_on
 
     def _get_gnupg_home(self, readable=False):
         return self._gpg if type(self._gpg) is str else ("default" if readable else None)
@@ -934,8 +1014,8 @@ class Envelope:
                 return False
         else:
             if send != SIMULATION:
-                self._result.append(f"{'*' * 100}\nHave not been sent from {(self.__from or '')}"
-                                    f" to {', '.join(self.recipients())}")
+                self._result.append(f"{'*' * 100}\nHave not been sent from {(self.__from or '-')}"
+                                    f" to {', '.join(self.recipients()) or '-'}")
             if encrypt:
                 if encrypted_subject:
                     self._result.append(f"Encrypted subject: {self._subject}")
@@ -1118,7 +1198,7 @@ class Envelope:
         email.attach(msg_text)
         return email
 
-    def _prepare_email(self, text: bytes, encrypt_gpg, sign_gpg, sign):
+    def _prepare_email(self, text: bytes, html: bytes, encrypt_gpg, sign_gpg, sign):
         """
         :type sign: If GPG, this should be the key fingerprint.
         """
@@ -1129,35 +1209,62 @@ class Envelope:
         if "MIME-Version" in self._headers:
             msg_text["MIME-Version"] = self._headers["MIME-Version"]
         if "Content-Type" not in self._headers:
-            t = text.decode("utf-8")
             # determine mime subtype and maybe do nl2br
             mime, nl2br = self._mime, self._nl2br
+
+            if text is None:
+                text, html = html, None
+                mime = HTML
+
+            t: str = text.decode("utf-8")
             if mime == AUTO:
-                tags = [x for x in ("<br", "<b>", "<i>", "<p", "<img") if x in t]
-                if magic.Magic(mime=True).from_buffer(t) == "text/html" or len(tags):
+                if html:
+                    mime = PLAIN
+                elif magic.Magic(mime=True).from_buffer(t) == "text/html" \
+                        or any(x for x in ("<br", "<b>", "<i>", "<p", "<img") if x in t):
                     # magic will determine a short text is HTML if there is '<a href=' but a mere '<br>' is not sufficient.
-                    mime = "html"
+                    mime = HTML
                 else:
-                    mime = "plain"
-            if mime == "html":
+                    mime = PLAIN
+            if mime == HTML:
                 if nl2br == AUTO and not len([x for x in ("<br", "<p") if x in t]):
                     nl2br = True
                 if nl2br is True:
                     t = f"<br>{CRLF}".join(t.splitlines())
 
-            # if a line is longer than 1000 characters, force EmailMessage to encode it
+            # if a line is longer than 1000 characters, force EmailMessage to encode whole message
             if any(line for line in t.splitlines() if len(line) >= 1000):
                 # passing bytes to EmailMessage makes its ContentManager to transfer it via base64 or quoted-printable
                 # rather than plain text. Which could cause a transferring SMTP server to include line breaks and spaces
                 # that might break up DKIM.
-                msg_text.set_content(t.encode("utf-8"), maintype="text", subtype=mime)
+                msg_text.set_content(t.encode("utf-8"), maintype="text", subtype=mime)  # text as bytes
             else:
-                msg_text.set_content(t, subtype=mime)
+                msg_text.set_content(t, subtype=mime)  # text as string
         else:
             msg_text["Content-Type"] = self._headers["Content-Type"]
             if "Content-Transfer-Encoding" in self._headers:
                 msg_text["Content-Transfer-Encoding"] = self._headers["Content-Transfer-Encoding"]
+            # When the user sets Content-Type as multipart, they signalize they want to create sub-message themselves,
+            # if they do not do that, the message looks badly. Ex: the text should contain boundaries and sub-messages.
             msg_text.set_payload(text, "utf-8")
+
+        if html:
+            try:
+                # if a line is longer than 1000 characters, force EmailMessage to encode whole message
+                if any(line for line in html.splitlines() if len(line) >= 1000):
+                    # passing bytes to EmailMessage makes its ContentManager to transfer it via base64 or quoted-printable
+                    # rather than plain text. Which could cause a transferring SMTP server to include line breaks and spaces
+                    # that might break up DKIM.
+                    msg_text.add_alternative(html, maintype="text", subtype='html')  # `html` as bytes
+                else:
+                    msg_text.add_alternative(html.decode("utf-8"), subtype='html')  # `html` as string
+            except (ValueError, TypeError):
+                # Content-Type: multipart/mixed -> ValueError: Cannot convert mixed to alternative
+                # Content-Type: multipart/alternative -> TypeError: Attach is not valid on a message with a non-multipart payload
+                raise ValueError("Failed to add HTML alternative to the message. Try not setting Content-Type.")
+            else:
+                if self._message.boundary:
+                    msg_text.set_boundary(self._message.boundary)
 
         if self._attach_key:
             # send your public key as an attachment (so that it can be imported before it propagates on the server)

@@ -134,7 +134,7 @@ def main():
 
     # we explicitly say we do not want to decipher later if encrypting
     if args["no_sender"]:
-        args["sender"] = False
+        args["from_"] = False
     del args["no_sender"]
 
     # user is saying that encryption key has been already imported

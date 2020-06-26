@@ -32,7 +32,9 @@ class Address:
         return self.__str__()
 
     @staticmethod
-    def parse(email_or_list, single=False):
+    def parse(email_or_list, single=False, allow_false=False):
+        if allow_false and email_or_list is False:
+            return False
         l = [Address(real_name, address) for real_name, address in getaddresses(assure_list(email_or_list))
              if not (real_name == address == "")]
         if single:
@@ -79,6 +81,35 @@ class AutoSubmittedHeader:
         return self("auto-generated")
 
 
+class _Message:
+    auto: bytes = None
+    plain: bytes = None
+    html: bytes = None
+    boundary: str = None  # you may specify e-mail boundary used when multiple alternatives present
+
+    def get(self):
+        """
+            :return text, html generator they are assured to be fetched. Raises is there is anything left in `auto`.
+        """
+        i = iter((self.auto,))
+        ret = (assure_fetched(x, bytes) for x in (self.plain or next(i, None), self.html or next(i, None)))
+        if next(i, False):
+            raise ValueError("Specified all of message alternative=plain, alternative=html and alternative=auto,"
+                             " choose only two.")
+        return ret
+
+    def is_empty(self):
+        return tuple(self.get()) == (None, None)
+
+    def __str__(self):
+        text, html = self.get()
+        if text and html:
+            return " ".join("(text/plain)", text.decode("utf-8"), "(text/html)", html.decode("utf-8"))
+        else:
+            return (text or html).decode("utf-8")
+
+
+
 class SMTP:
     # cache of different smtp connections.
     # Usecase: user passes smtp server info in dict in a loop but we do want it connects just once
@@ -117,20 +148,6 @@ class SMTP:
                 except smtplib.SMTPAuthenticationError as e:
                     logger.error(f"SMTP authentication failed: {self.key}.\n{e}")
                     return False
-        except TypeError:
-            # TypeError: getaddrinfo() argument 1 must be string or None
-            # XX I should handle this better.
-            # We get here without specifying SMTP.
-            # $ envelope  --send 1 --message "Hello" --subject "Test" --from person@example.com
-            # SMTP connection invalid: {'host': <envelope.utils.SMTP object at 0x7fbfe5384c10>,
-            #       'port': 25, 'user': None, 'password': None, 'security': None}.
-            #
-            # Whereas that one will give us ConnectionError.
-            # $ envelope  --send 1 --message "Hello" --subject "Test" --from person@example.com  --smtp localhost
-            #
-            # Why there is the default object in the host, rather than normal word "localhost"?
-            logger.error(f"SMTP connection invalid: {self.key}.")
-            return False
         except smtplib.SMTPException as e:
             logger.error(f"SMTP connection failed: {self.key}.\n{e}")
             return False

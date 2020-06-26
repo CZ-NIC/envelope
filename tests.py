@@ -19,7 +19,7 @@ class TestAbstract(unittest.TestCase):
     def _check_lines(self, o, lines: Union[str, Tuple[str, ...]] = (), longer: Union[int, Tuple[int, int]] = None,
                      print_=False, not_in: Union[str, Tuple[str, ...]] = (), raises=(), result=None):
         """ Converts Envelope objects to str and asserts that lines are present.
-        :type lines: Assert in.
+        :type lines: Assert in. These line/s must be found in the given order.
         :type not_in: Assert not in.
         :type longer: If int → result must be longer than int. If tuple → result line count must be within tuple range.
         """
@@ -34,12 +34,23 @@ class TestAbstract(unittest.TestCase):
         else:
             output = str(o).splitlines()
 
+            # any line is not longer than 1000 characters
+            self.assertFalse(any(line for line in output if len(line) > 999))
+
         if print_:
             print(o)
-        for line in lines:
-            self.assertIn(line, output)
-        for line in not_in:
-            self.assertNotIn(line, output)
+        output_tmp = output
+        last_search = ""
+        for search in lines:
+            try:
+                index = output_tmp.index(search)
+            except ValueError:
+                message = f"is in the wrong order (above the line '{last_search}' )" if search in output else "not found"
+                self.fail(f"Line '{search}' {message} in the output:\n{o}")
+            output_tmp = output_tmp[index + 1:]
+            last_search = search
+        for search in not_in:
+            self.assertNotIn(search, output)
 
         # result state
         if result is not None:
@@ -63,17 +74,67 @@ class TestEnvelope(TestAbstract):
 
     def test_1000_split(self):
         self._check_lines(Envelope().message("short text").subject("my subject").send(False),
-                          ("Subject: my subject",
-                           'Content-Transfer-Encoding: 7bit',
+                          ('Content-Transfer-Encoding: 7bit',
+                           "Subject: my subject",
                            "short text"), 10)
 
         # this should be no more 7bit but base64 (or quoted-printable which is however not guaranteed)
         e = Envelope().message("Longer than thousand chars. " * 1000).subject("my subject").send(False)
         self._check_lines(e,
-                          ("Subject: my subject",), 100,
+                          ("Content-Transfer-Encoding: base64",
+                           "Subject: my subject",), 100,
                           not_in=('Content-Transfer-Encoding: 7bit',)
                           )
         self.assertFalse(any(line for line in str(e).splitlines() if len(line) > 999))
+
+    def test_1000_split_html(self):
+        # the same is valid for HTML alternative too
+        e = (Envelope()
+             .message("short text")
+             .message("<b>html</b>", alternative="html")
+             .subject("my subject"))
+
+        # 7bit both plain and html
+        self._check_lines(e.send(False),
+                          ("Subject: my subject",
+                           'Content-Transfer-Encoding: 7bit',
+                           "short text",
+                           "<b>html</b>"), 10)
+
+        # 7bit html, base64 plain
+        self._check_lines(e.copy().message("Longer than thousand chars. " * 1000).send(False),
+                          ("Subject: my subject",
+                           "Content-Transfer-Encoding: base64",
+                           'Content-Transfer-Encoding: 7bit',
+                           "<b>html</b>"
+                           ), 100,
+                          not_in=('short text')
+                          )
+
+        # 7bit plain, base64 html
+        self._check_lines(e.copy().message("Longer than thousand chars. " * 1000, alternative="html").send(False),
+                          ("Subject: my subject",
+                           'Content-Transfer-Encoding: 7bit',
+                           'short text',
+                           "Content-Transfer-Encoding: base64",
+                           ), 100,
+                          not_in="<b>html</b>"
+                          )
+
+        # base64 both plain and html
+        self._check_lines(e.copy().message("Longer than thousand chars. " * 1000, alternative="html")
+                          .message("Longer than thousand chars. " * 1000).send(False),
+                          ("Subject: my subject",
+                           "Content-Transfer-Encoding: base64",
+                           "Content-Transfer-Encoding: base64",
+                           ), 100,
+                          not_in=('Content-Transfer-Encoding: 7bit',
+                                  'short text',
+                                  "<b>html</b>")
+                          )
+
+    def test_missing_message(self):
+        self.assertEqual(Envelope().to("hello").preview(), "")
 
 
 class TestSmime(TestAbstract):
@@ -104,11 +165,11 @@ class TestSmime(TestAbstract):
                           .reply_to("test-reply@example.com")
                           .signature(Path("tests/smime/key.pem"), cert=Path("tests/smime/cert.pem"))
                           .send(False),
-                          ('Content-Disposition: attachment; filename="smime.p7s"',
-                           "MIIEggYJKoZIhvcNAQcCoIIEczCCBG8CAQExCzAJBgUrDgMCGgUAMAsGCSqGSIb3",
+                          ("Subject: my subject",
+                           "Reply-To: test-reply@example.com",
                            "dumb message",
-                           "Subject: my subject",
-                           "Reply-To: test-reply@example.com"), 10)
+                           'Content-Disposition: attachment; filename="smime.p7s"',
+                           "MIIEggYJKoZIhvcNAQcCoIIEczCCBG8CAQExCzAJBgUrDgMCGgUAMAsGCSqGSIb3",), 10)
 
     def test_smime_key_cert_together(self):
         self._check_lines(Envelope("dumb message")
@@ -146,10 +207,12 @@ class TestSmime(TestAbstract):
                           .subject("my message")
                           .encryption(Path("tests/smime/cert.pem"))
                           .send(False),
-                          ('Content-Type: application/x-pkcs7-mime; smime-type=enveloped-data; name="smime.p7m"',
-                           "Z2l0cyBQdHkgTHRkAhROmwkIH63oarp3NpQqFoKTy1Q3tTANBgkqhkiG9w0BAQEF",
-                           "Subject: my message",
-                           "Reply-To: test-reply@example.com"), 10)
+                          (
+                              'Content-Type: application/x-pkcs7-mime; smime-type=enveloped-data; name="smime.p7m"',
+                              "Subject: my message",
+                              "Reply-To: test-reply@example.com",
+                              "Z2l0cyBQdHkgTHRkAhROmwkIH63oarp3NpQqFoKTy1Q3tTANBgkqhkiG9w0BAQEF",
+                          ), 10)
 
     def test_multiple_recipients(self):
         from M2Crypto import SMIME, BIO
@@ -309,12 +372,12 @@ class TestGPG(TestAbstract):
                           .subject("dumb subject")
                           .encryption()
                           .send(False),
-                          ("Encrypted message: dumb message",
-                           "Encrypted subject: dumb subject",
+                          ("Encrypted subject: dumb subject",
+                           "Encrypted message: dumb message",
                            "Subject: Encrypted message",
-                           "To: envelope-example-identity-2@example.com",
+                           'Content-Type: multipart/encrypted; protocol="application/pgp-encrypted";',
                            "From: envelope-example-identity@example.com",
-                           'Content-Type: multipart/encrypted; protocol="application/pgp-encrypted";'
+                           "To: envelope-example-identity-2@example.com",
                            ), 10)
 
     def test_gpg_auto_encrypt(self):
@@ -482,6 +545,28 @@ Third
         self._check_lines(Envelope().message(self.html_without_line_break), br)
         self._check_lines(Envelope().message(self.html_without_line_break).mime("plain", True), nobr)  # nl2br disabled in "plain"
         self._check_lines(Envelope().message(self.html_without_line_break).mime(nl2br=False), nobr)
+
+    def test_alternative(self):
+        boundary = "=====envelope-test===="
+
+        # alternative="auto" can become both "html" and "plain"
+        e1 = Envelope().message("He<b>llo</b>").message("Hello", alternative="plain", boundary=boundary)
+        e2 = Envelope().message("He<b>llo</b>", alternative="html").message("Hello", boundary=boundary)
+        self.assertEqual(e1, e2)
+
+        # HTML variant is always the last even if defined before plain variant
+        self._check_lines(e1, ('Content-Type: text/plain; charset="utf-8"',
+                               "Hello",
+                               'Content-Type: text/html; charset="utf-8"',
+                               "He<b>llo</b>"))
+
+    def test_only_2_alternatives_allowed(self):
+        e1 = Envelope().message("He<b>llo</b>").message("Hello", alternative="plain")
+        # we can replace alternative
+        e1.copy().message("Test").message("Test", alternative="plain")
+
+        # but in the moment we set all three and call send or preview, we should fail
+        self.assertRaises(ValueError, e1.copy().message("Test", alternative="html").preview)
 
 
 class TestFrom(TestAbstract):

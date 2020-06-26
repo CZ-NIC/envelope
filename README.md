@@ -123,17 +123,35 @@ All parameters are optional.
 * **.param(value=)** denotes a keyword argument
 * **Envelope(param=)** is a one-liner argument
  
-Any attainable contents means plain text, bytes or stream (ex: from open()). In *module interface*, you may use Path object to the file. In *CLI interface*, additional flags are provided.         
+Any attainable contents means plain **text**, **bytes** or **stream** (ex: from open()). In *module interface*, you may use a **`Path`** object to the file. In *CLI interface*, additional flags are provided instead.         
 
 ### Input / Output
   * **message**: Message / body text.
     If no string is set, message gets read. Besides, when "Content-Transfer-Encoding" is set to "base64" or "quoted-printable", it gets decoded (useful when quickly reading an EML file content `cat file.eml | envelope --message`).
     * **--message**: String
     * **--input**: *(CLI only)* Path to the message file. (Alternative to `--message` parameter.)
-    * **.message(text)**:  String or stream.
-    * **.message(path=None)**: Path to the file.
-    * **.body**: Alias of `.message`
-    * **.text**: Alias of `.message`
+    * **.message(text)**: Any attainable contents.
+    * **.message(path=None, alternative="auto", boundary=None)**
+        * `path`: Path to the file.
+        * `alternative`: "auto", "html", "plain" You may specify e-mail text alternative. Some e-mail readers prefer to display plain text version over HTML. By default, we try to determine content type automatically (see *mime*).
+            ```python3
+            print(Envelope().message("He<b>llo</b>").message("Hello", alternative="plain"))
+                   
+            # (output shortened)
+            # Content-Type: multipart/alternative;
+            #  boundary="===============0590677381100492396=="
+            # 
+            # --===============0590677381100492396==
+            # Content-Type: text/plain; charset="utf-8"
+            # Hello
+            # 
+            # --===============0590677381100492396==
+            # Content-Type: text/html; charset="utf-8"
+            # He<b>llo</b>
+            ```
+        * *boundary*: When specifying alternative, you may set e-mail boundary if you do not wish a random one to be created.            
+    * **.body(path=None)**: Alias of `.message` (without `alternative` and `boundary` parameter)
+    * **.text(path=None)**: Alias of `.message` (without `alternative` and `boundary` parameter)
     * **Envelope(message=)**: Any attainable contents
     
     Equivalents for setting a string (in *Python* and in *Bash*).
@@ -249,7 +267,7 @@ If the GPG encryption fails, it tries to determine which recipient misses the ke
     ```bash
     $ envelope --to "user@example.org" --message "Hello world" --send 0
     ****************************************************************************************************
-    Have not been sent from  to user@example.org
+    Have not been sent from - to user@example.org
     
     Content-Type: text/html; charset="utf-8"
     Content-Transfer-Encoding: 7bit
@@ -447,7 +465,7 @@ Envelope().auto_submitted.no()  # mark message as human produced
             $ envelope --load email.eml --subject
             testing message          
             ```
-        * (*bash*) piped in content XXX, envelope executable used with no argument    
+        * (*bash*) piped in content, envelope executable used with no argument    
             ```bash
             $ echo "Subject: testing message" | envelope
             Content-Type: text/plain; charset="utf-8"
@@ -456,6 +474,8 @@ Envelope().auto_submitted.no()  # mark message as human produced
             Subject: testing message
            
            $ cat email.eml | envelope
+          
+           $ envelope < email.eml
            ```
    
 ## Default values
