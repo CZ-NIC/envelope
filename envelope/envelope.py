@@ -617,7 +617,11 @@ class Envelope:
                     self._prepare_from()
                 return self
             if type(val) is str:  # None has to stay None
-                val = policy.header_store_parse(k, val)[1]  # Subject '=?UTF-8?Q?Re=3a_text?=' -> 'Re: text'
+                # We have to type the value to `str` due to this strange fact:
+                # `key = "subject"; email["Subject"] = policy.header_store_parse(key, "hello")[1];`
+                #   would force `str(email)` output 'subject: hello' (small 's'!)
+                # Interestingly, setting `key = "anything else";` would output correct 'Subject: hello'
+                val = str(policy.header_store_parse(k, val)[1])  # Subject '=?UTF-8?Q?Re=3a_text?=' -> 'Re: text'
             return specific_interface[k](val)
 
         if replace:

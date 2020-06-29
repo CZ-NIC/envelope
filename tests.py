@@ -796,6 +796,14 @@ class TestLoad(TestBash):
         self.assertEqual(e.subject(), "Re: text")
         self.assertEqual(e.from_(), "Jiří <jiri@example.com>")
 
+        # Test header case-sensitive parsing in .header().
+        # We have to type the value to `str` due to this strange fact:
+        # `key = "subject"; email["Subject"] = policy.header_store_parse(key, "hello")[1];`
+        #   would force `str(email)` output 'subject: hello' (small 's'!)
+        # Interestingly, setting `key = "anything else";` would output correct 'Subject: hello'
+        # val = str(policy.header_store_parse(k, val)[1])
+        self.assertIn("Subject: Re: text", str(e))
+
     def test_load_bash(self):
         self.assertIn("Hello world subject", self.bash())
 
