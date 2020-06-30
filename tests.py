@@ -693,7 +693,7 @@ class TestHeaders(TestAbstract):
         self.assertEqual(s, e.header("subject"))  # access via .header
         self.assertEqual(s, e.subject())  # access via specific method .subject
         self.assertIs(e, e.header("subject", replace=True))
-        self.assertIs(None, e.header("subject"))
+        self.assertIs("", e.header("subject"))
         self.assertEqual(s, e.header("subject", s).subject())  # set via generic method
 
         self.assertEqual([id1, id2], e.header("cc", id2).header("cc"))  # access via .header
@@ -757,7 +757,7 @@ class TestSupportive(TestAbstract):
 
 class TestDefault(TestAbstract):
     def test_default(self):
-        self.assertEqual(Envelope().subject(), None)
+        self.assertEqual(Envelope().subject(), "")
 
         Envelope.default.subject("bar")
         self.assertEqual(Envelope().subject("foo").subject(), "foo")

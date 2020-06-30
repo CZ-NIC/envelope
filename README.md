@@ -285,7 +285,7 @@ If the GPG encryption fails, it tries to determine which recipient misses the ke
     ```
   * **subject**: Mail subject. Gets encrypted with GPG, stays visible with S/MIME.
     * **--subject**
-    * **.subject(text)**: If None, current subject returned.     
+    * **.subject(text)**: If None, current subject returned.
     * **Envelope(subject=)**
   * **cc**: E-mail or their list. Multiple addresses may be given in a string, delimited by comma (or semicolon). (The same is valid for `to`, `cc`, `bcc` and `reply-to`.)
     * **--cc**

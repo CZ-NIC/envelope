@@ -32,6 +32,31 @@ class Address:
         return self.__str__()
 
     @staticmethod
+    def get(o: "Address", name=None, address=None) -> str:
+        # XX method is not used yet
+        if not o:
+            return ""
+        if name is None and address is False:
+            name = True
+        elif name is False and address is None:
+            address = True
+        elif name is None and address is None:
+            name = address = True
+
+        if name and address:
+            return str(o)
+        if name and not address:
+            s = o.real_name
+            # 'John <person@example.com>' -> 'John'
+            # 'person@example.com>' -> '' (address=False) or 'John' (name=True)
+            if not s and address is not False:
+                return o.address
+            return s
+        if not name and address:
+            return o.address
+        raise TypeError("Specify at least one of the `name` and `address` arguments.")
+
+    @staticmethod
     def parse(email_or_list, single=False, allow_false=False):
         if allow_false and email_or_list is False:
             return False

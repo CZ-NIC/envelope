@@ -370,18 +370,29 @@ class Envelope:
     def _parse_addresses(registry, email_or_list):
         registry += (a for a in Address.parse(email_or_list) if a not in registry)
 
-    def to(self, email_or_list=None) -> Union["Envelope", List[str]]:
+    def to(self, email_or_list=None, name=None, address=None) -> Union["Envelope", List[str]]:
         """ Multiple addresses may be given in a string, delimited by comma (or semicolon).
          (The same is valid for `to`, `cc`, `bcc` and `reply-to`.)
 
-            Envelope()
+            e = (Envelope()
                 .to("person1@example.com")
                 .to("person1@example.com, John <person2@example.com>")
                 .to(["person3@example.com"])
-                .to()  # ["person1@example.com", "John <person2@example.com>", "person3@example.com"]
+                .to())  # ["person1@example.com", "John <person2@example.com>", "person3@example.com"]
+
+            XXX `name` and `address` are undocumented and untested features yet. How would they work?
+            XX what should be the value if no real_name given? Address or ""? Or should this be specifiable?
+                Or should we return Address object directly?
+            e.to(address=False)  # ["", "John", ""]
+            e.to(name=True)  # ["person1@example.com", "John", "person3@example.com"] # returns address if no name given
+            e.to(address=True)  # ["person1@example.com", "person2@example.com", "person3@example.com"]  # address only
+            :param email_or_list: str|List[str] Set e-mail address/es. If None, we are reading.
+            :param address: bool Include e-mail addresses in the reading result.
+            :param name: bool Include e-mail names in the reading result.
+
         """
         if email_or_list is None:
-            return [str(x) for x in self._to]
+            return [Address.get(x, name, address) for x in self._to]
         self._parse_addresses(self._to, email_or_list)
         return self
 
