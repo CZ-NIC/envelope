@@ -91,7 +91,7 @@ class Envelope:
         l = []
         quote = lambda x: '"' + x.replace('"', r'\"') + '"' if type(x) is str else x
 
-        text, html = self._message.get()
+        text, html = self._message.get()  # XX we should get str[] type here. But first implement double-X in def message().
         message = {}
         if text and html:
             message = {"message(html)": html,
@@ -370,7 +370,7 @@ class Envelope:
     def _parse_addresses(registry, email_or_list):
         registry += (a for a in Address.parse(email_or_list) if a not in registry)
 
-    def to(self, email_or_list=None):
+    def to(self, email_or_list=None) -> Union["Envelope", List[str]]:
         """ Multiple addresses may be given in a string, delimited by comma (or semicolon).
          (The same is valid for `to`, `cc`, `bcc` and `reply-to`.)
 
@@ -385,19 +385,19 @@ class Envelope:
         self._parse_addresses(self._to, email_or_list)
         return self
 
-    def cc(self, email_or_list=None):
+    def cc(self, email_or_list=None) -> Union["Envelope", List[str]]:
         if email_or_list is None:
             return [str(x) for x in self._cc]
         self._parse_addresses(self._cc, email_or_list)
         return self
 
-    def bcc(self, email_or_list=None):
+    def bcc(self, email_or_list=None) -> Union["Envelope", List[str]]:
         if email_or_list is None:
             return [str(x) for x in self._bcc]
         self._parse_addresses(self._bcc, email_or_list)
         return self
 
-    def reply_to(self, email_or_list=None):
+    def reply_to(self, email_or_list=None) -> Union["Envelope", List[str]]:
         if email_or_list is None:
             return [str(x) for x in self._reply_to]
         self._parse_addresses(self._reply_to, email_or_list)
@@ -465,11 +465,13 @@ class Envelope:
 
             if not s and alternative == AUTO:  # prefer reading HTML over plain text if alternative set
                 s = self._message.html or self._message.plain
+            # XX this should return str or bytes
+            # We prefer string. But we want to keep it as encoding agnostic as possible so bytes might be better.
             return s or ""  # `s` might be None
 
         # write value
         if type(text) is _Message:  # constructor internally adopts default's self.default._message
-            self._message = text
+            self._message: _Message = text
             return self
 
         if path:
@@ -494,17 +496,17 @@ class Envelope:
             self.header("Date", date)
         return self
 
-    def sender(self, email=None):
+    def sender(self, email=None) -> Union["Envelope", str]:
         """  Alias for "from" if not set. Otherwise appends header "Sender". If None, current `Sender` returned. """
         if email is None:
-            return str(self.__sender)
+            return str(self.__sender or "")
         self._sender = Address.parse(email, single=True, allow_false=True)
         self._prepare_from()
         return self
 
-    def from_(self, email=None):
+    def from_(self, email=None) -> Union["Envelope", str]:
         if email is None:
-            return str(self.__from)
+            return str(self.__from or "")
         self._from = Address.parse(email, single=True, allow_false=True)
         self._prepare_from()
         return self
@@ -524,10 +526,10 @@ class Envelope:
         self._gpg = False
         return self
 
-    def subject(self, subject=None):
+    def subject(self, subject=None) -> Union[str]:
         if subject is None:
-            return self._subject
-        self._subject = subject
+            return str(self._subject or "")
+        self._subject: str = subject
         return self
 
     def mime(self, subtype=AUTO, nl2br=AUTO):
