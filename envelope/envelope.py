@@ -157,8 +157,8 @@ class Envelope:
 
         text, html = self._message.get()
         if text and html:
-            result.extend(["* MESSAGE VARIANT text/plain:", text.decode("utf-8"), "",
-                           "* MESSAGE VARIANT text/html:", html.decode("utf-8")])
+            result.extend(["* MESSAGE VARIANT text/plain:", text, "",
+                           "* MESSAGE VARIANT text/html:", html])
         else:
             result.append(self.message())
         return "\n".join(result)
@@ -197,7 +197,7 @@ class Envelope:
             message = str(message)
 
         header_row = re.compile(r"([^\t:]+):(.*)")
-        text = assure_fetched(message)
+        text = assure_fetched(message, str)
         is_header = True
         header = []  # [whole line, header name, header val]
         body = []
@@ -487,7 +487,8 @@ class Envelope:
 
         if path:
             text = Path(path)
-        setattr(self._message, alternative, text)
+
+        setattr(self._message, alternative, assure_fetched(text, str))
         return self
 
         # self._message = text
@@ -741,7 +742,7 @@ class Envelope:
             pass
         elif key is not None:
             # GPG: True, AUTO, fingerprint, or attainable contents, S/MIME: attainable bytes
-            self._sign = key
+            self._sign = assure_fetched(key)  # possible types: True, AUTO, str, bytes
         if passphrase is not None:
             self._passphrase = passphrase
         if attach_key is not None:
@@ -795,7 +796,8 @@ class Envelope:
             # (and not just "True")
             pass
         elif key is not None:
-            self._encrypt = key
+            # possible types: True, AUTO, str, bytes, list of bytes
+            self._encrypt = [assure_fetched(k, bytes) for k in key] if isinstance(key, list) else assure_fetched(key)
         return self
 
     def encrypt(self, key=True, sign=None, *, key_path=None):
@@ -855,6 +857,10 @@ class Envelope:
         """ Start processing. Either sign, encrypt or send the message and possibly set bool status of the object to True.
         * send == SIMULATION is the same as send == False but the message "have not been sent" will not be produced
         """
+        text: str
+        html: str
+        data: bytes
+
         self._status = False
         if sign is not None:
             self.signature(sign)
@@ -892,7 +898,7 @@ class Envelope:
                 return
             data = email.as_bytes()
         else:
-            data = text
+            data = text.encode("utf-8")
 
         # with GPG, encrypt or sign either text message or email message object
         micalg = None
@@ -1123,6 +1129,10 @@ class Envelope:
         return set(x.address for x in self._to + self._cc + self._bcc + ([self.__from] if self.__from else []))
 
     def _encrypt_smime_now(self, email, sign, encrypt):
+        """
+
+        :type encrypt: Union[None, False, bytes, list[bytes]]
+        """
         with warnings.catch_warnings():
             # m2crypto.py:13: DeprecationWarning: the imp module is deprecated in favour of importlib;
             # see the module's documentation for alternative uses import imp
@@ -1168,7 +1178,7 @@ class Envelope:
             sk = X509.X509_Stack()
             if type(encrypt) is not list:
                 encrypt = [encrypt]
-            [sk.push(X509.load_cert_string(assure_fetched(e, bytes))) for e in encrypt]
+            [sk.push(X509.load_cert_string(e)) for e in encrypt]
             # XX certificates might be loaded from a directory by from, to, sender:
             # X509.load_cert_string(assure_fetched(e, bytes)).get_subject() ->
             # 'C=CZ, ST=State, L=City, O=Organisation, OU=Unit, CN=my-name/emailAddress=email@example.com'
@@ -1219,7 +1229,7 @@ class Envelope:
         email.attach(msg_text)
         return email
 
-    def _prepare_email(self, text: bytes, html: bytes, encrypt_gpg, sign_gpg, sign):
+    def _prepare_email(self, text: str, html: str, encrypt_gpg, sign_gpg, sign):
         """
         :type sign: If GPG, this should be the key fingerprint.
         """
@@ -1237,7 +1247,7 @@ class Envelope:
                 text, html = html, None
                 mime = HTML
 
-            t: str = text.decode("utf-8")
+            t: str = text
             if mime == AUTO:
                 if html:
                     mime = PLAIN
@@ -1276,9 +1286,9 @@ class Envelope:
                     # passing bytes to EmailMessage makes its ContentManager to transfer it via base64 or quoted-printable
                     # rather than plain text. Which could cause a transferring SMTP server to include line breaks and spaces
                     # that might break up DKIM.
-                    msg_text.add_alternative(html, maintype="text", subtype='html')  # `html` as bytes
+                    msg_text.add_alternative(html.encode("utf-8"), maintype="text", subtype='html')  # `html` as bytes
                 else:
-                    msg_text.add_alternative(html.decode("utf-8"), subtype='html')  # `html` as string
+                    msg_text.add_alternative(html, subtype='html')  # `html` as string
             except (ValueError, TypeError):
                 # Content-Type: multipart/mixed -> ValueError: Cannot convert mixed to alternative
                 # Content-Type: multipart/alternative -> TypeError: Attach is not valid on a message with a non-multipart payload

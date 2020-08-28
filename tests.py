@@ -177,6 +177,21 @@ class TestEnvelope(TestAbstract):
     def test_missing_message(self):
         self.assertEqual(Envelope().to("hello").preview(), "")
 
+    def test_contents_fetching(self):
+        t = "Small sample text attachment.\n"
+        with open("tests/eml/generic.txt") as f:
+            e1 = Envelope(f)
+            e2 = e1.copy()  # stays intact even if copied to another instance
+            self.assertEqual(e1.message(), t)
+            self.assertEqual(e2.message(), t)
+        self.assertEqual(e2.copy().message(), t)
+
+    def test_preview(self):
+        self.check_lines(Envelope(Path("tests/eml/generic.txt")).preview(),
+                         ('Content-Type: text/plain; charset="utf-8"',
+                          "Subject:",
+                          "Small sample text attachment."))
+
 
 class TestSmime(TestAbstract):
     # create a key and its certificate valid for 100 years

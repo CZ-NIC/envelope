@@ -112,12 +112,12 @@ class _Message:
     html: bytes = None
     boundary: str = None  # you may specify e-mail boundary used when multiple alternatives present
 
-    def get(self):
+    def get(self) -> (str, str):
         """
             :return text, html generator they are assured to be fetched. Raises is there is anything left in `auto`.
         """
         i = iter((self.auto,))
-        ret = (assure_fetched(x, bytes) for x in (self.plain or next(i, None), self.html or next(i, None)))
+        ret = self.plain or next(i, None), self.html or next(i, None)
         if next(i, False):
             raise ValueError("Specified all of message alternative=plain, alternative=html and alternative=auto,"
                              " choose only two.")
@@ -129,9 +129,9 @@ class _Message:
     def __str__(self):
         text, html = self.get()
         if text and html:
-            return " ".join("(text/plain)", text.decode("utf-8"), "(text/html)", html.decode("utf-8"))
+            return " ".join("(text/plain)", text, "(text/html)", html)
         else:
-            return (text or html).decode("utf-8")
+            return text or html
 
 
 
@@ -222,14 +222,16 @@ def assure_list(l):
     return l
 
 
-def assure_fetched(message, retyped=str):
+def assure_fetched(message, retyped=None):
     """ Accepts object, returns its string or bytes.
     If object is
-        * stream or bytes, we consider this is the file contents
+        * str or bytes, we consider this is the file contents
         * Path, we load the file
+        * stream, we read it
         * bool or none, it is returned as is.
     :type message: object to be converted
-    :type retyped: str or bytes to assure str/bytes are returned
+    :type retyped: * str or bytes to assure str/bytes are returned.
+                   * None does not perform retyping.
     """
     if message is None:
         return None

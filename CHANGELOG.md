@@ -6,6 +6,7 @@
 - proper e-mail addresses handling: they can be in a string delimited by comma (or semicolon)
 - text alternatives
 - fix encoded headers
+- fix attainable contents fetching
 
 ## 1.2 (2020-06-18)
 - fix: smtplib.SMTP_SSL handshake operation timed out caught
