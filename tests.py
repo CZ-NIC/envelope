@@ -802,7 +802,7 @@ class TestAttachment(TestAbstract):
     def test_different_order(self):
         e = Envelope() \
             .attach(Path(self.text_attachment), "text/csv", "foo") \
-            .attach(mimetype="text/csv", filename="foo", path=self.text_attachment) \
+            .attach(mimetype="text/csv", name="foo", path=self.text_attachment) \
             .attach(Path(self.text_attachment), "foo", "text/csv")
         self.assertTrue(all(repr(a) == repr(e._attachments[0]) for a in e._attachments))
 
@@ -862,7 +862,7 @@ class TestAttachment(TestAbstract):
         # Getting a name from the file name when contents is given
         custom_filename = "filename.gif"
         e6 = e().message(f"Hi <img src='cid:{custom_filename}'/>") \
-            .attach(Path(image).read_bytes(), filename=custom_filename, inline=True)
+            .attach(Path(image).read_bytes(), name=custom_filename, inline=True)
         self.check_lines(e6,
                          (*single_alternative,
                           "Hi <img src='cid:filename.gif'/>",
@@ -874,7 +874,7 @@ class TestAttachment(TestAbstract):
         # Setting a name of an inline image
         custom_filename = "filename.jpg"
         e7 = e().message(f"Hi <img src='cid:{custom_cid}'/>") \
-            .attach(Path(image).read_bytes(), filename=custom_filename, inline=custom_cid)
+            .attach(Path(image).read_bytes(), name=custom_filename, inline=custom_cid)
         self.check_lines(e7,
                          (*single_alternative,
                           "Hi <img src='cid:custom-name.jpg'/>",

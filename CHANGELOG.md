@@ -1,6 +1,7 @@
 # CHANGELOG
 
 ## 1.3 (unreleased)
+- CHANGED: `.attach(filename=)` renamed to `.attach(name=)`
 - `.as_message` -> Message
 - e-mail validation
 - proper e-mail addresses handling: they can be in a string delimited by comma (or semicolon)

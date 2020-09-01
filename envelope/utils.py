@@ -85,7 +85,7 @@ class Attachment:
 
     def __init__(self, contents):
         """ get contents, user-defined name, user-defined mimetype and possibly True for being inline
-        :type contents: data/Path [,mimetype] [,filename] [,True for inline]
+        :type contents: data/Path [,mimetype] [,name] [,True for inline]
         """
         name = mimetype = inline = None
         if type(contents) is tuple:

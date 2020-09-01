@@ -701,13 +701,13 @@ class Envelope:
             self._smtp = SMTP(host, port, user, password, security)
         return self
 
-    def attach(self, attachment=None, mimetype=None, filename=None, inline=None, *, path=None):
+    def attach(self, attachment=None, mimetype=None, name=None, inline=None, *, path=None):
         """
 
         :type attachment: Any attainable contents that should be added as an attachment or their list.
                 The list may contain tuples: `any_attainable_contents [,mime type] [,file name] [, True for inline]`.
         :param mimetype: Mime type OR file name of the attachment.
-        :param filename: Mime type OR file name of the attachment.
+        :param name: Mime type OR file name of the attachment.
         :param path: Path to the file that should be attached.
         :param inline: Set parameter content-id (CID) so that we may reference image from within HTML message body.
                        * str: The attachment will get this CID.
@@ -718,12 +718,12 @@ class Envelope:
                            .attach("file.jpg", inline="foo") -> <img src='cid:foo' />
         """
         if type(attachment) is list:
-            if path or mimetype or filename:
-                raise ValueError("Cannot specify both path, mimetype or filename and put list in attachment_or_list.")
+            if path or mimetype or name:
+                raise ValueError("Cannot specify both path, mimetype or name and put list in attachment_or_list.")
         else:
             if path:
                 attachment = Path(path)
-            attachment = attachment, mimetype, filename, inline
+            attachment = attachment, mimetype, name, inline
         self._attachments += [Attachment(o) for o in assure_list(attachment)]
         return self
 

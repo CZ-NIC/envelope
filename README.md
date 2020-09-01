@@ -10,7 +10,7 @@ Just single line of code. With the great help of the examples below.
 Envelope("my message")
     .subject("hello world")
     .to("example@example.com")
-    .attach(file_contents, filename="attached-file.txt")
+    .attach(file_contents, name="attached-file.txt")
     .smtp("localhost", 587, "user", "pass", "starttls")
     .signature()
     .send()
@@ -340,10 +340,10 @@ If the GPG encryption fails, it tries to determine which recipient misses the ke
     ```bash
     envelope --attachment "/tmp/file.txt" "displayed-name.txt" "text/plain" --attachment "/tmp/another-file.txt"
     ```
-    * **.attach(attachment=, mimetype=, filename=, path=, inline=)**:
+    * **.attach(attachment=, mimetype=, name=, path=, inline=)**:
         * Three different usages when specifying contents:
-            * **.attach(attachment=, mimetype=, filename=)**: You can put any attainable contents of a single attachment into *attachment* and optionally add mime type or displayed file name.
-            * **.attach(mimetype=, filename=, path=)**: You can specify path and optionally mime type or displayed file name.
+            * **.attach(attachment=, mimetype=, name=)**: You can put any attainable contents of a single attachment into *attachment* and optionally add mime type or displayed file name.
+            * **.attach(mimetype=, name=, path=)**: You can specify path and optionally mime type or displayed file name.
             * **.attach(attachment=)**: You can put a list of attachments. The list may contain tuples: `contents [,mime type] [,file name] [, True for inline]`.
         ```python3
         Envelope().attach(path="/tmp/file.txt").attach(path="/tmp/another-file.txt")
@@ -353,7 +353,7 @@ If the GPG encryption fails, it tries to determine which recipient misses the ke
            * str: The attachment will get this CID.
            ```python3                     
            Envelope().attach("file.jpg", inline=True) # <img src='cid:file.jpg' />
-           Envelope().attach(b"GIF89a\x03\x00\x03...", filename="file.gif", inline=True) # <img src='cid:file.gif' />
+           Envelope().attach(b"GIF89a\x03\x00\x03...", name="file.gif", inline=True) # <img src='cid:file.gif' />
            Envelope().attach("file.jpg", inline="foo") # <img src='cid:foo' />
           
            # Reference it like: .message("Hey, this is an inline image: <img src='cid:foo' />")
@@ -596,15 +596,15 @@ Envelope(message="Hello world", to="user@example.org", send=True, smtp={"host":"
 ## Attachment
 You can attach a file in many different ways. Pick the one that suits you the best.
 ```python3
-Envelope(attachment=Path("/tmp/file.txt"))  # filename will be 'file.txt'
+Envelope(attachment=Path("/tmp/file.txt"))  # file name will be 'file.txt'
 
 with open("/tmp/file.txt") as f:
-    Envelope(attachment=f)  # filename will be 'file.txt'
+    Envelope(attachment=f)  # file name will be 'file.txt'
     
 with open("/tmp/file.txt") as f:
     Envelope(attachment=(f, "filename.txt"))
     
-Envelope().attach(path="/tmp/file.txt",filename="filename.txt")
+Envelope().attach(path="/tmp/file.txt", name="filename.txt")
 ```
 
 ## Inline images
