@@ -9,6 +9,7 @@ from tempfile import TemporaryDirectory
 from typing import Tuple, Union
 
 from envelope import Envelope
+from envelope.envelope import HTML, PLAIN
 
 logging.basicConfig(stream=sys.stderr, level=logging.WARNING)
 
@@ -22,6 +23,8 @@ class TestAbstract(unittest.TestCase):
     utf_header = Path("tests/eml/utf-header.eml")  # the file has encoded headers
     quopri = Path("tests/eml/quopri.eml")  # the file has CRLF separators
     eml = Path("tests/eml/mail.eml")
+    text_attachment = "tests/eml/generic.txt"
+    image_file = "tests/eml/image.gif"
 
     def check_lines(self, o, lines: Union[str, Tuple[str, ...]] = (), longer: Union[int, Tuple[int, int]] = None,
                     debug=False, not_in: Union[str, Tuple[str, ...]] = (), raises=(), result=None):
@@ -777,20 +780,107 @@ class TestDefault(TestAbstract):
         Envelope.default.subject("bar")
         self.assertEqual(Envelope().subject("foo").subject(), "foo")
         self.assertEqual(Envelope().subject(), "bar")
+        Envelope.default.subject("")  # restore previous state
 
 
 class TestBash(TestAbstract):
-    text_attachment = "tests/eml/generic.txt"
 
     def test_bcc(self):
         self.assertIn("Bcc: person@example.com", self.bash("--bcc", "person@example.com", "--preview"))
         self.assertNotIn("person@example.com", self.bash("--bcc", "person@example.com", "--send", "off"))
 
     def test_attachment(self):
-        self.assertIn(f"Attachment: {self.text_attachment}", self.bash("--attachment", self.text_attachment, "--preview"))
+        preview_text = f"Attachment generic.txt (text/plain): Small sample text at..."
+        self.assertIn(preview_text, self.bash("--attachment", self.text_attachment, "--preview"))
         o = self.bash("--attachment", self.text_attachment, "--send", "0")
-        self.assertNotIn(f"Attachment: {self.text_attachment}", o)
+        self.assertNotIn(preview_text, o)
         self.assertIn('Content-Disposition: attachment; filename="generic.txt"', o)
+
+
+class TestAttachment(TestAbstract):
+
+    def test_different_order(self):
+        e = Envelope() \
+            .attach(Path(self.text_attachment), "text/csv", "foo") \
+            .attach(mimetype="text/csv", filename="foo", path=self.text_attachment) \
+            .attach(Path(self.text_attachment), "foo", "text/csv")
+        self.assertTrue(all(repr(a) == repr(e._attachments[0]) for a in e._attachments))
+
+    def test_inline(self):
+        def e():
+            return Envelope().subject("Inline image message")
+
+        image = self.image_file
+        name = Path(self.image_file).name
+
+        # Specified the only HTML alternative, no plain text
+        e1 = e().message(f"Hi <img src='cid:{name}'/>", alternative=HTML).attach(Path(image), inline=True)
+        single_alternative = ("Content-Type: multipart/related;",
+                              "Subject: Inline image message",
+                              'Content-Type: text/html; charset="utf-8"')
+        img_msg = "Content-Disposition: inline", "R0lGODlhAwADAKEDAAIJAvz9/v///wAAACH+EUNyZWF0ZWQgd2l0aCBHSU1QACwAAAAAAwADAAAC"
+        image_gif = "Hi <img src='cid:image.gif'/>", "Content-Type: image/gif", "Content-ID: image.gif", *img_msg
+        multiple_alternatives = ('Content-Type: text/plain; charset="utf-8"',
+                                 "Plain alternative",
+                                 "Content-Type: multipart/related;",
+                                 'Content-Type: text/html; charset="utf-8"')
+        compare_lines = *single_alternative, *image_gif
+        self.check_lines(e1, compare_lines)
+
+        # Not specifying the only HTML alternative
+        e2 = e().message(f"Hi <img src='cid:{name}'/>").attach(path=image, inline=True)
+        self.check_lines(e2, compare_lines)
+
+        # Two message alternatives, the plain is specified
+        e3 = e().message(f"Hi <img src='cid:{name}'/>").message("Plain alternative", alternative=PLAIN, boundary="bound") \
+            .attach(Path(image), inline=True)
+        self.check_lines(e3, (
+            'Content-Type: multipart/alternative; boundary="bound"',
+            "Subject: Inline image message",
+            "--bound",
+            *multiple_alternatives,
+            *image_gif))
+
+        # Two message alternatives, the HTML is specified
+        e4 = e().message(f"Hi <img src='cid:{name}'/>", alternative=HTML).message("Plain alternative") \
+            .attach(path=image, inline=True)
+        self.check_lines(e4, ("Content-Type: multipart/alternative;",
+                              "Subject: Inline image message",
+                              *multiple_alternatives,
+                              *image_gif))
+
+        # Setting a name of an inline image
+        custom_cid = "custom-name.jpg"
+        e5 = e().message(f"Hi <img src='cid:{custom_cid}'/>").attach(path=image, inline=custom_cid)
+        self.check_lines(e5,
+                         (*single_alternative,
+                          "Hi <img src='cid:custom-name.jpg'/>",
+                          "Content-Type: image/gif",
+                          "Content-ID: custom-name.jpg",
+                          *img_msg))
+
+        # Getting a name from the file name when contents is given
+        custom_filename = "filename.gif"
+        e6 = e().message(f"Hi <img src='cid:{custom_filename}'/>") \
+            .attach(Path(image).read_bytes(), filename=custom_filename, inline=True)
+        self.check_lines(e6,
+                         (*single_alternative,
+                          "Hi <img src='cid:filename.gif'/>",
+                          "Content-Type: image/gif",
+                          "Content-ID: filename.gif",
+                          *img_msg))
+
+        # Getting a name from the file name when contents is given
+        # Setting a name of an inline image
+        custom_filename = "filename.jpg"
+        e7 = e().message(f"Hi <img src='cid:{custom_cid}'/>") \
+            .attach(Path(image).read_bytes(), filename=custom_filename, inline=custom_cid)
+        self.check_lines(e7,
+                         (*single_alternative,
+                          "Hi <img src='cid:custom-name.jpg'/>",
+                          "Content-Type: image/gif",
+                          "Content-ID: custom-name.jpg",
+                          *img_msg))
 
 
 class TestLoad(TestBash):

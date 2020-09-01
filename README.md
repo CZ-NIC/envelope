@@ -3,7 +3,7 @@
 [![Build Status](https://travis-ci.org/CZ-NIC/envelope.svg?branch=master)](https://travis-ci.org/CZ-NIC/envelope)
 
 Quick layer over [python-gnupg](https://bitbucket.org/vinay.sajip/python-gnupg/src), [M2Crypto](https://m2crypto.readthedocs.io/), [smtplib](https://docs.python.org/3/library/smtplib.html), [magic](https://pypi.org/project/python-magic/) and [email](https://docs.python.org/3/library/email.html?highlight=email#module-email) handling packages. Their common usecases merged into a single function. Want to sign a text and tired of forgetting how to do it right? You do not need to know everything about GPG or S/MIME, you do not have to bother with importing keys. Do not hassle with reconnecting SMTP server. Do not study various headers meanings to let your users unsubscribe via a URL.  
-You insert a message and attachments and receive signed and/or encrypted output to the file or to your recipients' e-mail.  
+You insert a message, attachments and inline images and receive signed and/or encrypted output to the file or to your recipients' e-mail.  
 Just single line of code. With the great help of the examples below.  
 
 ```python3
@@ -37,6 +37,7 @@ Envelope("my message")
   * [Signing and encrypting](#signing-and-encrypting)
   * [Sending](#sending-1)
   * [Attachment](#attachment)
+  * [Inline images](#inline-images)
   * [Complex example](#complex-example)
 - [Related affairs](#related-affairs)
   * [Configure your SMTP](#configure-your-smtp)
@@ -339,14 +340,26 @@ If the GPG encryption fails, it tries to determine which recipient misses the ke
     ```bash
     envelope --attachment "/tmp/file.txt" "displayed-name.txt" "text/plain" --attachment "/tmp/another-file.txt"
     ```
-    * **.attach(attachment=, mimetype=, filename=, path=)**: Three different usages.
-        * **.attach(attachment=, mimetype=, filename=)**: You can put any attainable contents of a single attachment into *attachment* and optionally add mime type or displayed file name.
-        * **.attach(mimetype=, filename=, path=)**: You can specify path and optionally mime type or displayed file name.
-        * **.attach(attachment=)**: You can put a list of attachments. The list may contain tuples: `contents [,mimetype/filename] [,mimetype/filename]`.
-    ```python3
-    Envelope().attach(path="/tmp/file.txt").attach(path="/tmp/another-file.txt")
-    ```
-    * **Envelope(attachments=)**: Attachment or their list. Attachment is defined by any attainable contents, optionally in tuple with the file name to be used in the e-mail and/or mime type: `contents [,mimetype/filename] [,mimetype/filename]`
+    * **.attach(attachment=, mimetype=, filename=, path=, inline=)**:
+        * Three different usages when specifying contents:
+            * **.attach(attachment=, mimetype=, filename=)**: You can put any attainable contents of a single attachment into *attachment* and optionally add mime type or displayed file name.
+            * **.attach(mimetype=, filename=, path=)**: You can specify path and optionally mime type or displayed file name.
+            * **.attach(attachment=)**: You can put a list of attachments. The list may contain tuples: `contents [,mime type] [,file name] [, True for inline]`.
+        ```python3
+        Envelope().attach(path="/tmp/file.txt").attach(path="/tmp/another-file.txt")
+        ```
+        * **.attach(inline=True|str)**: Specify content-id (CID) to reference the image from within HTML message body.
+           * True: Filename or attachment or path file name is set as CID.
+           * str: The attachment will get this CID.
+           ```python3                     
+           Envelope().attach("file.jpg", inline=True) # <img src='cid:file.jpg' />
+           Envelope().attach(b"GIF89a\x03\x00\x03...", filename="file.gif", inline=True) # <img src='cid:file.gif' />
+           Envelope().attach("file.jpg", inline="foo") # <img src='cid:foo' />
+          
+           # Reference it like: .message("Hey, this is an inline image: <img src='cid:foo' />")
+          ```
+    
+    * **Envelope(attachments=)**: Attachment or their list. Attachment is defined by any attainable contents, optionally in tuple with the file name to be used in the e-mail and/or mime type and/or True for being inline: `contents [,mime type] [,file name] [, True for inline]`
     ```python3
     Envelope(attachments=[(Path("/tmp/file.txt"), "displayed-name.txt", "text/plain"), Path("/tmp/another-file.txt"])
     ```    
@@ -592,6 +605,14 @@ with open("/tmp/file.txt") as f:
     Envelope(attachment=(f, "filename.txt"))
     
 Envelope().attach(path="/tmp/file.txt",filename="filename.txt")
+```
+
+## Inline images
+The only thing you have to do is to set the `inline=True` parameter of the attachment. Then, you can reference the image from within your message, with the help of `cid` keyword. For more details, see *attachments* in the [Sending](#sending) section. 
+```python3
+(Envelope()
+    .attach(path="/tmp/file.jpg", inline=True)
+    .message("Hey, this is an inline image: <img src='cid:file.jpg' />"))
 ```
 
 ## Complex example

@@ -20,7 +20,7 @@ from pathlib import Path
 from quopri import decodestring
 from typing import Union, List, Set, Any
 
-from .utils import Address, AutoSubmittedHeader, SMTP, _Message, is_gpg_fingerprint, assure_list, assure_fetched
+from .utils import Address, Attachment, AutoSubmittedHeader, SMTP, _Message, is_gpg_fingerprint, assure_list, assure_fetched
 
 try:
     import gnupg
@@ -91,7 +91,7 @@ class Envelope:
         l = []
         quote = lambda x: '"' + x.replace('"', r'\"') + '"' if type(x) is str else x
 
-        text, html = self._message.get()  # XX we should get str[] type here. But first implement double-X in def message().
+        text, html = self._message.get()
         message = {}
         if text and html:
             message = {"message(html)": html,
@@ -133,9 +133,12 @@ class Envelope:
         if not self._result:
             str(self)
         result = []
-
         for a in self._attachments:  # include attachments info as they are removed with the payload later
-            result.append("Attachment: " + ", ".join(str(s) for s in a))
+            if a.inline:
+                s = f"Inline attachment {a.name} ({a.mimetype}): <img src='cid:{a.inline}'/>"
+            else:
+                s = f"Attachment {a.name} ({a.mimetype}): {a.get_sample()}"
+            result.append(s)
 
         if self._bcc:  # as bcc is not included as an e-mail header, we explicitly states it here
             result.append("Bcc: " + ", ".join(map(str, self._bcc)))
@@ -295,7 +298,7 @@ class Envelope:
         self._reply_to: List[Address] = []
         self._subject: str = None
         self._smtp = None
-        self._attachments = []
+        self._attachments: List[Attachment] = []
         self._mime = AUTO
         self._nl2br = AUTO
         self._headers = EmailMessage()  # object for storing headers the most standard way possible
@@ -538,7 +541,7 @@ class Envelope:
         self._gpg = False
         return self
 
-    def subject(self, subject=None) -> Union[str]:
+    def subject(self, subject=None) -> Union["Envelope", str]:
         if subject is None:
             return str(self._subject or "")
         self._subject: str = subject
@@ -698,25 +701,30 @@ class Envelope:
             self._smtp = SMTP(host, port, user, password, security)
         return self
 
-    def attach(self, attachment=None, mimetype=None, filename=None, *, path=None):
+    def attach(self, attachment=None, mimetype=None, filename=None, inline=None, *, path=None):
         """
 
         :type attachment: Any attainable contents that should be added as an attachment or their list.
-                The list may contain tuples: `any_attainable_contents [,mime type] [,file name]`.
+                The list may contain tuples: `any_attainable_contents [,mime type] [,file name] [, True for inline]`.
         :param mimetype: Mime type OR file name of the attachment.
         :param filename: Mime type OR file name of the attachment.
         :param path: Path to the file that should be attached.
+        :param inline: Set parameter content-id (CID) so that we may reference image from within HTML message body.
+                       * str: The attachment will get this CID.
+                       * True: Filename or attachment or path file name is set as CID.
+                       Example:
+                           .attach("file.jpg", inline=True) -> <img src='cid:file.jpg' />
+                           .attach(b"GIF89a\x03\x00\x03...", filename="file.gif", inline=True) -> <img src='cid:file.gif' />
+                           .attach("file.jpg", inline="foo") -> <img src='cid:foo' />
         """
-        # XX if needed, we may add parameter cid=str so that we may reference image from within HTML with multipart/related.
-        # Or cid=True so that cid = filename.
         if type(attachment) is list:
             if path or mimetype or filename:
                 raise ValueError("Cannot specify both path, mimetype or filename and put list in attachment_or_list.")
         else:
             if path:
                 attachment = Path(path)
-            attachment = attachment, mimetype, filename
-        self._attachments += assure_list(attachment)
+            attachment = attachment, mimetype, filename, inline
+        self._attachments += [Attachment(o) for o in assure_list(attachment)]
         return self
 
     def signature(self, key=True, passphrase=None, attach_key=None, cert=None, *, key_path=None):
@@ -1278,6 +1286,7 @@ class Envelope:
             # When the user sets Content-Type as multipart, they signalize they want to create sub-message themselves,
             # if they do not do that, the message looks badly. Ex: the text should contain boundaries and sub-messages.
             msg_text.set_payload(text, "utf-8")
+            # msg_text.add_alternative(text, "utf-8")
 
         if html:
             try:
@@ -1297,6 +1306,16 @@ class Envelope:
                 if self._message.boundary:
                     msg_text.set_boundary(self._message.boundary)
 
+        if any(a for a in self._attachments if a.inline):
+            # we have to convert the HTML alternative to the multipart/relative content-type.
+            # This is either the latter of the two alternatives (if the payload is a list, thus both are specified),
+            # or the whole `msg_text` message, if the payload is a mere text (message contents).
+            o = msg_text.get_payload()[-1] if isinstance(msg_text.get_payload(), list) else msg_text
+            o.make_related()
+            [o.add_related(a.data,
+                           **dict(zip(("maintype", "subtype"), a.mimetype.split("/"))),
+                           cid=a.name) for a in self._attachments if a.inline]
+
         if self._attach_key:
             # send your public key as an attachment (so that it can be imported before it propagates on the server)
             contents = self._gnupg.export_keys(sign)
@@ -1305,34 +1324,10 @@ class Envelope:
             self.attach(contents, "public-key.asc")
 
         failed = False
-        for contents in self._attachments:
-            # get contents, user defined name and user defined mimetype
-            # "path"/Path, [mimetype/filename], [mimetype/filename]
-            name = mimetype = None
-            if type(contents) is tuple:
-                for s in contents[1:]:
-                    if not s:
-                        continue
-                    elif "/" in s:
-                        mimetype = s
-                    else:
-                        name = s
-                contents = contents[0]
-            if not name and isinstance(contents, Path):
-                name = contents.name
-            try:
-                data = assure_fetched(contents, bytes)
-            except FileNotFoundError:
-                logger.error(f"Could not fetch file {contents.absolute()}")
-                failed = True
-                continue
-            if not mimetype:
-                mimetype = getattr(magic.Magic(mime=True), "from_file" if isinstance(contents, Path) else "from_buffer")(
-                    str(contents))
-            msg_text.add_attachment(data,
-                                    maintype=mimetype.split("/")[0],
-                                    subtype=mimetype.split("/")[1],
-                                    filename=name or "attachment.txt")
+        [msg_text.add_attachment(a.data,
+                                 **dict(zip(("maintype", "subtype"), a.mimetype.split("/"))),
+                                 filename=a.name) for a in self._attachments if not a.inline]
+
         if failed:
             return False
         if encrypt_gpg:  # GPG inner message definition
@@ -1378,6 +1373,11 @@ class Envelope:
             self._bcc.clear()
             return self
         return {str(x) for x in set(self._to + self._cc + self._bcc)}
+
+    # Possibly build an attachment reader
+    # Will make sense if .load() will be able to parse attachments.
+    # def attachments(self):
+    #     return self._attachments
 
     def check(self, check_mx=True, check_smtp=True) -> bool:
         """

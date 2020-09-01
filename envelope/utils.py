@@ -6,6 +6,7 @@ from email.utils import getaddresses
 from pathlib import Path
 from socket import gaierror, timeout
 
+import magic
 from validate_email import validate_email  # package py3-validate-email
 
 logger = logging.getLogger(__name__)
@@ -78,6 +79,59 @@ class Address:
             logger.warning(f"MX check failed for: '{self}'")
             return False
         return True
+
+
+class Attachment:
+
+    def __init__(self, contents):
+        """ get contents, user-defined name, user-defined mimetype and possibly True for being inline
+        :type contents: data/Path [,mimetype] [,filename] [,True for inline]
+        """
+        name = mimetype = inline = None
+        if type(contents) is tuple:
+            for s in contents[1:]:
+                if not s:
+                    continue
+                elif s is True:
+                    inline = True
+                elif "/" in s:
+                    mimetype = s
+                else:
+                    name = s
+            if len(contents) == 4 and contents[3] and not inline:
+                # (path, None, None, "cid.jpg") -> whereas name = "cid.jpg", inline is still not defined
+                inline = True
+            contents = contents[0]
+        if not name and isinstance(contents, Path):
+            name = contents.name
+        if not name:
+            name = "attachment.txt"
+
+        try:
+            data = assure_fetched(contents, bytes)
+        except FileNotFoundError:
+            logger.error(f"Could not fetch file {contents.absolute()}")
+            raise
+        if not mimetype:
+            m = magic.Magic(mime=True)
+            mimetype = m.from_file(str(contents)) if isinstance(contents, Path) else m.from_buffer(contents)
+
+        self.data = data
+        self.mimetype = mimetype
+        self.name = name
+        self.inline = inline
+
+    def __repr__(self):
+        l = [self.get_sample(), self.mimetype, self.name]
+        if self.inline:
+            l.append(self.inline)
+        return f"Attachment({', '.join(l)})"
+
+    def get_sample(self):
+        sample = self.data.decode("utf-8", "ignore").replace("\n", "")
+        if len(sample) > 24:
+            sample = sample[:20].strip() + "..."
+        return sample
 
 
 class AutoSubmittedHeader:
