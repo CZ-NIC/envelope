@@ -425,6 +425,9 @@ Envelope().auto_submitted.no()  # mark message as human produced
 ### Supportive
   * **.recipients()**: Return set of all recipients – `To`, `Cc`, `Bcc`
     * **.recipients(clear=True)**: All `To`, `Cc` and `Bcc` recipients are removed and the `Envelope` object is returned.
+  * **.attachments(name=None, inline=None)**: Access the list attachments.
+    * **name** (str): Set the name of the only desired attachment to be returned.
+    * **inline** (bool): Filter inline/enclosed attachments only.            
   * **.copy()**: Return deep copy of the instance to be used independently. 
   ```python3    
     factory = Envelope().cc("original@example.com").copy
@@ -460,9 +463,12 @@ Envelope().auto_submitted.no()  # mark message as human produced
     print(type(e), e.get_payload())  # <class 'email.message.EmailMessage'> hello\n 
     ```
  * **load**: Parse any attainable contents (including email.message.Message) like an EML file to build an Envelope object.
-    * Limitation: it cannot read an attachment which stays a mere part of the body, it cannot decrypt.
+    * It can decrypt the message and parse its (inline or enclosed) attachments.
     * Note that if you will send this reconstructed message, you might not probably receive it due to the Message-ID duplication. Delete at least Message-ID header prior to re-sending. 
-    * (*static*) **.load(message)**
+    * (*static*) **.load(message, \*, path=None, key=None, cert=None)**
+        * **message**: Any attainable contents.
+        * **path**: Path to the file, alternative to the `message`
+        * **key**, **cert**: Specify when decrypting an S/MIME message (may be bundled together to the `key`)
         ```python3
         Envelope.load("Subject: testing message").subject()  # "testing message"
         ```

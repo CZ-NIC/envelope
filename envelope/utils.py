@@ -128,6 +128,8 @@ class Attachment:
         return f"Attachment({', '.join(l)})"
 
     def get_sample(self):
+        if self.data is None:
+            raise ValueError(f"Empty attachment {self.name}")
         sample = self.data.decode("utf-8", "ignore").replace("\n", "")
         if len(sample) > 24:
             sample = sample[:20].strip() + "..."

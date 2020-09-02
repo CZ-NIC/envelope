@@ -1,0 +1,46 @@
+Subject: Encrypted message
+MIME-Version: 1.0
+Content-Type: multipart/encrypted; protocol="application/pgp-encrypted";
+ boundary="===============3336161924245818535=="
+From: envelope-example-identity@example.com
+To: envelope-example-identity-2@example.com
+Date: Wed, 02 Sep 2020 17:41:58 +0200
+
+--===============3336161924245818535==
+Content-Type: application/pgp-encrypted
+
+Version: 1
+--===============3336161924245818535==
+Content-Type: application/octet-stream; name="encrypted.asc"
+Content-Description: OpenPGP encrypted message
+Content-Disposition: inline; filename="encrypted.asc"
+
+-----BEGIN PGP MESSAGE-----
+
+hQGMAywOWgAjVNqOAQwArwWpshqMd5jXHCd4d/PjTAY9CtqDceYxg9TmpDE6Vpyo
+YajqDHnCmlpUGfbEzU9Ri4hksA538KzotkWd2Mf5Q0UPl/orwr3CdwYmJ1jTJcu/
+sWoyKZFslhPWYDjneIxTRMyiKBlNu1wreW78A7LMDgsBmSrAVULq9psg7AUkCjpk
+16Oi5FhLWvzCeuILsD+hVYUxPbbeNiDsWlg5c2aq3k0gkNDwB9S6WbA8wmj8m8Gb
+dNSkowzpyTBTD09YhiU0qZU/OF3hm3MU2XA8+I3v6b01Qx50e9jGfNZqz36Q4ak8
+eYzuLJ13FqX05FJXbT2ZHeHu+IBUM5Lp9crjsImYU9xk/z4deiiuwhFNQlzy+QS0
+B/8pxK2yG2R1XmAGYU76ThnD7m11s2VKZidTNqNiVDZEI0vYzbVKwFXVCUEeXt/m
+S8wDGAwknF+nll5p5EhgrXgFGIvXZAG4PpEh8fHVm3XhkDpn7MTrQ4BJ/gKD3YMI
+fMb0TBZ1/EccgDHD+H2GhQGMA9ig68HPFWOpAQv+NYm0gVUtoAVg392zAkeMFqFF
+Go/ld0uqGvPEJeS+O3OWiHXt7Jnba+2TfbwuoG3Xhn8lMzP5rvpUToqVo710YGAl
+VIdh4SVDIwhIu/naqRleJ/2+HMpChavvSd+cBegV1vTdJxChH0f/8Sx1FfxEFdhn
+6KOUZGAMHdsucJPLpQCJh11YlQWca9prw+qRCANgPF8cqzXYbljNrUduBXELxql0
+CfJdqCFYEad+H02qzEpKcEhAHPp/xHHsY0vNmgroErZL7Da3RpWD6EyGECHxn34X
+I9Ia5JKJIpSC99mtlpmzE9c//ijTP+VSrlr0SB5onvTedSRxDWd2Ubji92dOXtN/
+JE1TmimfgdTQH2W2TXEdSUad1x9Xi9jxSr6/eqgZc1hTT5F91CaawSk4cNMoQBpK
+nzDMH2rxIHi82UTGOkX+Ml/mSUtwGs/2ZI0vXgJ5cMcyiV0XCzdOTkweyC8K2gAC
+MZUB/ZY2d6cApVTYeADncpFT0lxllH/c1uPN+NZX0sBHAdn7hI3O8GGOro3yguOU
+gpAIxeT0OoLpJneYwdZbe9qRJ+JXZvrseh5Pp2waEqkXiScsv/Q9wqO5erRQUTX6
+ZSHD5EXWjCM4qtFhJbsc6gPauztt/JgsHbZLMIXotIkkAvp4AH5mD/1DJp5SFA3G
+uAG4SlYGo9n6IIanCDzGVHVdnZeFoWojYGR9nrAjjuvFRsxbsFyn2hhr+8aBe6Hh
+kP207w6VVFwTRhPCqXy9Fu9eW+85a8u1y87raP+k2hdsbo5MQIZ+76SfZa16k3vv
+d0L/9byAl/ZL44Pjolz0+YpbR0ud+qWNhGVEYoBH6U9to9TT/zGvoHFQafL/rZRy
+jRdaeB7t+Ug=
+=zvCc
+-----END PGP MESSAGE-----
+
+--===============3336161924245818535==--

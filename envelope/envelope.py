@@ -10,7 +10,7 @@ import warnings
 from base64 import b64decode
 from configparser import ConfigParser
 from copy import copy, deepcopy
-from email import message_from_bytes
+from email import message_from_bytes, message_from_string
 from email.message import EmailMessage, Message
 from email.parser import BytesParser
 from email.policy import default as policy
@@ -188,17 +188,17 @@ class Envelope:
     @staticmethod
     def load(message=None, *, path=None, key=None, cert=None) -> "Envelope":
         """
-        XX make it capable to decrypt and verify signatures?
-        XX make it capable to read an "attachment" - now it's a mere part of the body. .attachments() method is needed.
-        XXXX Document that we parse attachments.
+        XX make it capable to verify signatures
+        XX option to specify the GPG decrypting key
+        XX make key and cert work from bash too and do some tests
 
         Note that if you will send this reconstructed message, you might not probably receive it due to the Message-ID duplication.
         Delete at least Message-ID header prior to re-sending.
 
         :param message: Any attainable contents to build an Envelope object from, including email.message.Message.
         :param path: (Alternative to `message`.) Path to the file that should be loaded.
-        :param key: S/MIME key to decrypt with. XXX Undocumented yet
-        :param cert: S/MIME cert to decrypt with. XXX Undocumented yet
+        :param key: S/MIME key to decrypt with.
+        :param cert: S/MIME cert to decrypt with. (If not bundled with the key.)
         """
         if path:
             message = Path(path)
@@ -208,11 +208,11 @@ class Envelope:
         o = message_from_bytes(assure_fetched(message, bytes))
         e = Envelope()
         for k, val in o.items():
-            if k in ("Content-Type",):
+            if k in ("Content-Type", "Content-Transfer-Encoding"):
                 continue
             e.header(k, " ".join(x.strip() for x in val.splitlines()))
         try:
-            return Parser(e, key=key, cert=cert).parse(o)
+            return Parser(e, key=key, cert=cert, gnupg_home=e._get_gnupg_home()).parse(o)
         except ValueError as e:
             logger.warning(f"Message might not have been loaded correctly. {e}")
 
@@ -491,6 +491,8 @@ class Envelope:
                     return b64decode(s).decode("utf-8")
                 except binascii.Error:
                     pass
+                except UnicodeDecodeError:
+                    raise TypeError(f"Cannot base64-decode the message: {s}")
             elif transfer == "quoted-printable":
                 try:
                     return decodestring(s).decode("utf-8")
@@ -1392,10 +1394,23 @@ class Envelope:
             return self
         return {str(x) for x in set(self._to + self._cc + self._bcc)}
 
-    # Possibly build an attachment reader
-    # Will make sense if .load() will be able to parse attachments.
-    # def attachments(self):
-    #     return self._attachments
+    def attachments(self, name=None, inline=None) -> Union[Attachment, List[Attachment]]:
+        """ Access the attachments.
+            XX make available from CLI too
+                --attachments(-inline)(-enclosed) [name]
+            :type name: str Set the name of the only desired attachment to be returned.
+            :type inline: bool Filter inline/enclosed attachments only.
+            :return Attachment when a name is set, otherwise list of all the attachments.
+        """
+        attachments = [a for a in self._attachments if bool(a.inline) == inline] if inline is not None else self._attachments
+
+        if name is not None:
+            for a in attachments:
+                if a.name == name:
+                    return a
+            else:
+                return False
+        return attachments
 
     def check(self, check_mx=True, check_smtp=True) -> bool:
         """
@@ -1468,41 +1483,62 @@ class Envelope:
 
 class Parser:
 
-    def __init__(self, envelope: Envelope, key=None, cert=None):
+    def __init__(self, envelope: Envelope = None, key=None, cert=None, gnupg_home=None):
         self.e = envelope
         self.key = key
         self.cert = cert
+        self.gnupg_home = gnupg_home
 
     def parse(self, o: Message):
         maintype, subtype = o.get_content_type().split("/")
-        payload: Union[List[Message], str, bytes] = o.get_payload()
-        if maintype == "multipart":
+        if o.is_multipart():
+            payload: List[Message] = o.get_payload()
             if subtype == "alternative":
                 [self.parse(x) for x in payload]
             elif subtype in ("related", "mixed"):
                 for p in payload:
-                    if p.get_content_maintype() == "text":
+                    if p.get_content_maintype() in ["text", "multipart"] and p.get_content_disposition() != "attachment":
                         self.parse(p)
                     else:
                         # decode=True -> strip CRLFs, convert base64 transfer encoding to bytes etc
                         self.e.attach(p.get_payload(decode=True),
                                       mimetype=p.get_content_type(),
-                                      name=p["Content-ID"],
+                                      name=p["Content-ID"] or p.get_filename(),
                                       inline=bool(subtype == "related"))
+            elif subtype == "signed":
+                for p in payload:
+                    if p.get_content_type() == o.get_param("protocol"):  # ex: application/x-pkcs7-signature
+                        continue  # XX we might verify signature
+                    else:
+                        self.parse(p)
+            elif subtype == "encrypted":
+                for p in payload:
+                    if p.get_content_type() == o.get_param("protocol"):  # ex: application/pgp-encrypted
+                        continue
+                    elif p.get_content_type() == "application/octet-stream":
+                        self.parse(message_from_string(self.gpg_decrypt(p.get_payload(decode=True))))
+                    else:
+                        raise ValueError(f"Cannot decrypt.")
             else:
                 raise ValueError(f"Subtype {subtype} not implemented")
         elif maintype == "text":
             if subtype in (HTML, PLAIN):
-                # XXXX what about multiline base64? Will there not stay CRLFs?
-                self.e.message(payload.strip(), alternative=subtype)
+                self.e.message(o.get_payload(decode=True).strip(), alternative=subtype)
             else:
                 raise ValueError(f"Unknown subtype: {subtype}")
-        elif maintype == "application" and subtype == "x-pkcs7-mime":
+        elif maintype == "application" and subtype == "x-pkcs7-mime":  # decrypting S/MIME
             self.parse(message_from_bytes(self.smime_decrypt(o.as_bytes())))
         else:
-            # XXX implement GPG and S/MIME signed/encrypted
             raise ValueError(f"Unknown maintype: {maintype}")
         return self.e
+
+    def gpg_decrypt(self, data):
+        g = gnupg.GPG(gnupghome=self.gnupg_home)
+        output = g.decrypt(data)
+        if output.ok:
+            return str(output)
+        else:
+            raise ValueError(f"Cannot decrypt GPG data. " + output.status)
 
     def smime_decrypt(self, data):
         key = self.key

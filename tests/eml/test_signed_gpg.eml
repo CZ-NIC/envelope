@@ -1,0 +1,37 @@
+Subject: Hello world
+MIME-Version: 1.0
+Content-Type: multipart/signed; protocol="application/pgp-signature";
+ micalg="pgp-sha512"; boundary="===============3519927524193187579=="
+From: envelope-example-identity@example.com
+To: example@example.com
+Date: Wed, 02 Sep 2020 17:39:23 +0200
+Message-ID: <159906116383.9502.10706373558645636414@promyka>
+
+--===============3519927524193187579==
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 7bit
+MIME-Version: 1.0
+
+dumb message
+
+--===============3519927524193187579==
+Content-Type: application/pgp-signature; name="signature.asc"
+Content-Description: OpenPGP digital signature
+Content-Disposition: attachment; filename="signature.asc"
+
+-----BEGIN PGP SIGNATURE-----
+
+iQGzBAEBCgAdFiEE8U8ugJfgzN6TxOhx9KTyZ3n6A7sFAl9PvKsACgkQ9KTyZ3n6
+A7sKsAv/YurIRRESCkGhItRcXhRhBC4XnDXIoWgp2X/IsQZDLmxkq6MnzK/IiUKd
+VnbCrI7nnZPd0/XcDKigE+9s/Qz6jzlNxhe94psMK6Ct9BAEyaiJposWRnKjzW0B
+ultbsWJSfO18XahlE8PPgYuJL5d39BFF8ATEmmRFMWjONmEjyFN1B9nX3LxOdArq
+XY9FeYDFDlRPHDZ//VAy6VdWV9VxGPU/Zl1UBDFFXhI0jEc0SkCRpn9TS6ULlmWY
+KT4J8rdwPxAA3+Ke1Zdo/ajS69WeutP4I5yRbHsq7TU9xBTeUKWnx8+35/fB9FzO
+AKfbw7gRrlsbmz5iHHO4gq8ORRWj5jDFV/CaWBxpQvLA23YF4X+OWRwhi2LQYXqc
++SOYzhTCZ/eymWYn8EI1KIyNoZ2tNzzFNTKI0qGVNFHz1CJy008RqmtouSuVdtPK
+mkkI2nTklkI0xI32Ocizev7htQRbjY06cV16/+Itm4TmGh1IeB6xztBX15GbvKiF
+0O1rAEBf
+=8DKN
+-----END PGP SIGNATURE-----
+
+--===============3519927524193187579==--

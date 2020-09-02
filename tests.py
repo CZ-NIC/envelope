@@ -1,4 +1,3 @@
-import inspect
 import logging
 import sys
 import unittest
@@ -10,7 +9,7 @@ from tempfile import TemporaryDirectory
 from typing import Tuple, Union
 
 from envelope import Envelope
-from envelope.envelope import HTML, PLAIN
+from envelope.envelope import HTML, PLAIN, Parser
 
 logging.basicConfig(stream=sys.stderr, level=logging.WARNING)
 
@@ -20,8 +19,8 @@ GNUPG_HOME = "tests/gpg_ring/"
 environ["GNUPGHOME"] = GNUPG_HOME
 
 
-def save(s):
-    Path("/tmp/ram/" + inspect.stack()[1][3] + ".eml").write_text(str(s))
+# def save(s):  # XX may be removed when all testing-related cipher-file are produced
+#    Path("/tmp/ram/" + inspect.stack()[1][3] + ".eml").write_text(str(s))
 
 
 class TestAbstract(unittest.TestCase):
@@ -109,8 +108,7 @@ class TestAbstract(unittest.TestCase):
             env = {**environ.copy(), **env}
 
         p = Popen(cmd, stdout=PIPE, stdin=PIPE, stderr=STDOUT, env=env)
-        return p.communicate(input=file.read_bytes() if file else piped.encode("utf-8"))[0].decode()
-        # return p.stdout.read().decode()
+        return p.communicate(input=file.read_bytes() if file else piped.encode("utf-8"))[0].decode().rstrip()
 
 
 class TestEnvelope(TestAbstract):
@@ -207,6 +205,7 @@ class TestSmime(TestAbstract):
 
     smime_key = 'tests/smime/key.pem'
     smime_cert = 'tests/smime/cert.pem'
+    key_cert_together = Path("tests/smime/key-cert-together.pem")
 
     def test_smime_sign(self):
         # Message will look that way:
@@ -230,7 +229,7 @@ class TestSmime(TestAbstract):
                          .smime()
                          .subject("my subject")
                          .reply_to("test-reply@example.com")
-                         .signature(Path("tests/smime/key.pem"), cert=Path("tests/smime/cert.pem"))
+                         .signature(Path("tests/smime/key.pem"), cert=Path(self.smime_cert))
                          .send(False),
                          ("Subject: my subject",
                           "Reply-To: test-reply@example.com",
@@ -241,7 +240,7 @@ class TestSmime(TestAbstract):
     def test_smime_key_cert_together(self):
         self.check_lines(Envelope("dumb message")
                          .smime()
-                         .signature(Path("tests/smime/key-cert-together.pem"))
+                         .signature(self.key_cert_together)
                          .sign(),
                          ('Content-Disposition: attachment; filename="smime.p7s"',
                           "MIIEggYJKoZIhvcNAQcCoIIEczCCBG8CAQExCzAJBgUrDgMCGgUAMAsGCSqGSIb3"))
@@ -272,7 +271,7 @@ class TestSmime(TestAbstract):
                          .smime()
                          .reply_to("test-reply@example.com")
                          .subject("my message")
-                         .encryption(Path("tests/smime/cert.pem"))
+                         .encryption(Path(self.smime_cert))
                          .send(False),
                          (
                              'Content-Type: application/x-pkcs7-mime; smime-type=enveloped-data; name="smime.p7m"',
@@ -282,17 +281,13 @@ class TestSmime(TestAbstract):
                          ), 10)
 
     def test_multiple_recipients(self):
-        from M2Crypto import SMIME, BIO
+        from M2Crypto import SMIME
         msg = "dumb message"
+        msg_b = bytes(msg, "utf-8")
 
-        def is_decryptable(key, cert, text):
-            # XXXXX -> parser
-            # Load private key and cert and decrypt
-            s = SMIME.SMIME()
-            s.load_key(key, cert)
-            p7, data = SMIME.smime_load_pkcs7_bio(BIO.MemoryBuffer(bytes(text)))
+        def decrypt(key, cert, text):
             try:
-                return s.decrypt(p7) == bytes(msg, "utf-8")
+                return Parser(key=key, cert=cert).smime_decrypt(text)
             except SMIME.PKCS7_Error:
                 return False
 
@@ -301,27 +296,24 @@ class TestSmime(TestAbstract):
                   .smime()
                   .reply_to("test-reply@example.com")
                   .subject("my message")
-                  .encrypt([Path("tests/smime/cert.pem"), Path("tests/smime/smime-identity@example.com-cert.pem")]))
+                  .encrypt([Path(self.smime_cert), Path("tests/smime/smime-identity@example.com-cert.pem")]))
 
-        print("--------", output, "********")
-        Envelope.load(output)
-        self.assertTrue(is_decryptable('tests/smime/smime-identity@example.com-key.pem',
-                                       'tests/smime/smime-identity@example.com-cert.pem',
-                                       output))
-        self.assertTrue(is_decryptable(self.smime_key, self.smime_cert, output))
+        self.assertEqual(msg_b, decrypt('tests/smime/smime-identity@example.com-key.pem',
+                                        'tests/smime/smime-identity@example.com-cert.pem',
+                                        output))
+        self.assertEqual(msg_b, decrypt(self.smime_key, self.smime_cert, output))
 
         # encrypt for single key only
         output = (Envelope(msg)
                   .smime()
                   .reply_to("test-reply@example.com")
                   .subject("my message")
-                  .encrypt([Path("tests/smime/cert.pem")]))
+                  .encrypt([Path(self.smime_cert)]))
 
-        self.assertFalse(is_decryptable('tests/smime/smime-identity@example.com-key.pem',
-                                        'tests/smime/smime-identity@example.com-cert.pem',
-                                        output))
-        self.assertTrue(is_decryptable('tests/smime/key.pem', 'tests/smime/cert.pem',
-                                       output))
+        self.assertFalse(decrypt('tests/smime/smime-identity@example.com-key.pem',
+                                 'tests/smime/smime-identity@example.com-cert.pem',
+                                 output))
+        self.assertEqual(msg_b, decrypt(self.smime_key, self.smime_cert, output))
 
 
 class TestGPG(TestAbstract):
@@ -373,7 +365,7 @@ class TestGPG(TestAbstract):
                      .sign("auto")).splitlines()
         self.assertNotIn('-----BEGIN PGP SIGNATURE-----', output)
 
-        # force-signing without specifying a key nor sending address shuold produce a message signed with a first-found key
+        # force-signing without specifying a key nor sending address should produce a message signed with a first-found key
         output = str(Envelope("dumb message")
                      .gpg("tests/gpg_ring/")
                      .sign(True)).splitlines()
@@ -814,7 +806,8 @@ class TestAttachment(TestAbstract):
             .attach(Path(self.text_attachment), "text/csv", "foo") \
             .attach(mimetype="text/csv", name="foo", path=self.text_attachment) \
             .attach(Path(self.text_attachment), "foo", "text/csv")
-        self.assertTrue(all(repr(a) == repr(e._attachments[0]) for a in e._attachments))
+        model = repr(e.attachments()[0])
+        self.assertTrue(all(repr(a) == model for a in e.attachments()))
 
     def test_inline(self):
         def e():
@@ -925,11 +918,11 @@ class TestLoad(TestBash, TestSmime):
         self.assertIn("Hello world subject", self.bash())
 
     def test_bash_display(self):
-        self.assertEqual("Hello world subject", self.bash("--subject").strip())
+        self.assertEqual("Hello world subject", self.bash("--subject"))
 
     def test_multiline_folded_header(self):
         self.assertEqual("Very long text Very long text Very long text Very long text Ver Very long text Very long text",
-                         self.bash("--subject", file=self.quopri).strip())
+                         self.bash("--subject", file=self.quopri))
 
     def test_alternative_and_related(self):
         e = Envelope.load(path=self.inline_image)
@@ -937,13 +930,58 @@ class TestLoad(TestBash, TestSmime):
         self.assertEqual("Inline image message", e.subject())
         self.assertEqual("Plain alternative", e.message(alternative=PLAIN))
 
-        # XX ._attachments convert to a public method when available
-        self.assertEqual(self.image_file.read_bytes(), e._attachments[0].data)
+        self.assertEqual(self.image_file.read_bytes(), e.attachments()[0].data)
 
     def test_smime_decrypt(self):
         e = Envelope.load(path="tests/eml/smime_encrypt.eml", key=self.smime_key, cert=self.smime_cert)
         self.assertEqual("dumb message", e.message())
-        # XXX test SMIME decryption with attachments
+
+    def test_smime_decrypt_attachments(self):
+        body = "an encrypted message with the attachments"  # note that the inline image is not referenced in the text
+        encrypted_envelope = (Envelope(body)
+                              .smime()
+                              .reply_to("test-reply@example.com")
+                              .subject("my message")
+                              .encryption(Path(self.smime_cert))
+                              .attach(path=self.text_attachment)
+                              .attach(self.image_file, inline=True)
+                              .as_message().as_string()
+                              )
+
+        e = Envelope.load(encrypted_envelope, key=self.smime_key, cert=self.smime_cert)
+
+        # body stayed the same
+        self.assertEqual(body, e.message())
+
+        # attachments are as expected
+        self.assertEqual(2, len(e.attachments()))
+        self.assertEqual(1, len(e.attachments(inline=True)))
+        self.assertEqual(e.attachments(inline=True)[0].data, self.image_file.read_bytes())
+        self.assertEqual(Path(self.text_attachment).read_bytes(), e.attachments("generic.txt").data)
+
+    # XX smime_sign.eml is not used right now.
+    # Make signature verification possible first.
+    # def test_smime_sign(self):
+    #     e = Envelope.load(path="tests/eml/smime_sign.eml", key=self.smime_key, cert=self.smime_cert)
+    #     self.assertEqual("dumb message", e.message())
+
+    def test_smime_key_cert_together(self):
+        # XX verify signature
+        e = Envelope.load(path="tests/eml/smime_key_cert_together.eml", key=self.key_cert_together)
+        self.assertEqual("dumb message", e.message())
+
+    def test_signed_gpg(self):
+        # XX we might test signature verification
+        e = Envelope.load(path="tests/eml/test_signed_gpg.eml", key=self.key_cert_together)
+        self.assertEqual("dumb message", e.message())
+
+    def test_encrypted_gpg(self):
+        e = Envelope.load(path="tests/eml/test_encrypted_gpg.eml", key=self.key_cert_together)
+        self.assertEqual("dumb encrypted message", e.message())
+
+    def test_encrypted_signed_gpg(self):
+        e = Envelope.load(path="tests/eml/test_encrypted_signed_gpg.eml", key=self.key_cert_together)
+        self.assertEqual("dumb encrypted and signed message", e.message())
 
 
 class TestTransfer(TestBash):
@@ -974,7 +1012,7 @@ class TestTransfer(TestBash):
 
     def test_quoted_printable_bash(self):
         """ Envelope is able to load the text that is already quoted in a file. """
-        self.assertEqual(self.long_text, self.bash("--message", file=self.quopri).strip())
+        self.assertEqual(self.long_text, self.bash("--message", file=self.quopri))
 
     def test_base64(self):
         hello = "aGVsbG8gd29ybGQ="
