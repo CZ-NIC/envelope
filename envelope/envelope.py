@@ -23,6 +23,8 @@ from typing import Union, List, Set, Any
 
 from .utils import Address, Attachment, AutoSubmittedHeader, SMTP, _Message, is_gpg_fingerprint, assure_list, assure_fetched
 
+smime_import_error = "Cannot import M2Crypto. Run: `sudo apt install swig && pip3 install M2Crypto`"
+
 try:
     import gnupg
 except ImportError:
@@ -184,7 +186,7 @@ class Envelope:
         return self._start(send=SIMULATION)
 
     @staticmethod
-    def load(message=None, *, path=None) -> "Envelope":
+    def load(message=None, *, path=None, key=None, cert=None) -> "Envelope":
         """
         XX make it capable to decrypt and verify signatures?
         XX make it capable to read an "attachment" - now it's a mere part of the body. .attachments() method is needed.
@@ -195,6 +197,8 @@ class Envelope:
 
         :param message: Any attainable contents to build an Envelope object from, including email.message.Message.
         :param path: (Alternative to `message`.) Path to the file that should be loaded.
+        :param key: S/MIME key to decrypt with. XXX Undocumented yet
+        :param cert: S/MIME cert to decrypt with. XXX Undocumented yet
         """
         if path:
             message = Path(path)
@@ -203,14 +207,14 @@ class Envelope:
 
         o = message_from_bytes(assure_fetched(message, bytes))
         e = Envelope()
-        for key, val in o.items():
-            if key in ("Content-Type",):
+        for k, val in o.items():
+            if k in ("Content-Type",):
                 continue
-            e.header(key, " ".join(x.strip() for x in val.splitlines()))
+            e.header(k, " ".join(x.strip() for x in val.splitlines()))
         try:
-            return Parser(e).parse(o)
-        except ValueError:
-            logger.warning("Message might not have been loaded correctly.")
+            return Parser(e, key=key, cert=cert).parse(o)
+        except ValueError as e:
+            logger.warning(f"Message might not have been loaded correctly. {e}")
 
         # emergency body loading when parsing failed
         header_row = re.compile(r"([^\t:]+):(.*)")
@@ -1162,7 +1166,7 @@ class Envelope:
             try:
                 from M2Crypto import BIO, Rand, SMIME, X509, EVP  # we save up to 30 - 120 ms to load it here
             except ImportError:
-                raise ImportError("Cannot import M2Crypto. Run: `sudo apt install swig && pip3 install M2Crypto`")
+                raise ImportError(smime_import_error)
         output_buffer = BIO.MemoryBuffer()
         signed_buffer = BIO.MemoryBuffer()
         content_buffer = BIO.MemoryBuffer(email)
@@ -1464,8 +1468,10 @@ class Envelope:
 
 class Parser:
 
-    def __init__(self, envelope: Envelope):
+    def __init__(self, envelope: Envelope, key=None, cert=None):
         self.e = envelope
+        self.key = key
+        self.cert = cert
 
     def parse(self, o: Message):
         maintype, subtype = o.get_content_type().split("/")
@@ -1491,6 +1497,26 @@ class Parser:
                 self.e.message(payload.strip(), alternative=subtype)
             else:
                 raise ValueError(f"Unknown subtype: {subtype}")
+        elif maintype == "application" and subtype == "x-pkcs7-mime":
+            self.parse(message_from_bytes(self.smime_decrypt(o.as_bytes())))
         else:
-            raise ValueError(f"Unknown maintype: {maintype}") # XXX
+            # XXX implement GPG and S/MIME signed/encrypted
+            raise ValueError(f"Unknown maintype: {maintype}")
         return self.e
+
+    def smime_decrypt(self, data):
+        key = self.key
+        cert = self.cert
+        try:
+            from M2Crypto import BIO, Rand, SMIME, X509, EVP  # we save up to 30 - 120 ms to load it here
+        except ImportError:
+            raise ImportError(smime_import_error)
+
+        # Load private key and cert and decrypt
+        s = SMIME.SMIME()
+        s.load_key(key, cert)
+        p7, data = SMIME.smime_load_pkcs7_bio(BIO.MemoryBuffer(bytes(data)))
+        try:
+            return s.decrypt(p7)
+        except SMIME.PKCS7_Error:
+            return False

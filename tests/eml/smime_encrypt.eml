@@ -1,0 +1,18 @@
+MIME-Version: 1.0
+Content-Disposition: attachment; filename="smime.p7m"
+Content-Type: application/x-pkcs7-mime; smime-type=enveloped-data; name="smime.p7m"
+Content-Transfer-Encoding: base64
+Subject: my message
+Reply-To: test-reply@example.com
+Date: Wed, 02 Sep 2020 16:42:40 +0200
+
+MIIBvwYJKoZIhvcNAQcDoIIBsDCCAawCAQAxgfcwgfQCAQAwXTBFMQswCQYDVQQG
+EwJBVTETMBEGA1UECAwKU29tZS1TdGF0ZTEhMB8GA1UECgwYSW50ZXJuZXQgV2lk
+Z2l0cyBQdHkgTHRkAhROmwkIH63oarp3NpQqFoKTy1Q3tTANBgkqhkiG9w0BAQEF
+AASBgD3KVbKsXF1brrv76mcyonYHZwPVNAjhoBN5u1dZ/V45JonIluO/pepFrAVe
+F+Teo6Rsklq7Sr997lFZWCGzuLBRmHDUFjRyq/fwrJZ3Z/zykgQaZ53IHuv3/DMV
+pfT6Vj6uNhmGC0lFlu03Mj5hXB6nHRCZMH8r/TjKte1k71vjMIGsBgkqhkiG9w0B
+BwEwFAYIKoZIhvcNAwcECGeLWuaYo+OKgIGIJ6kG9euk553RgL8y+rsxVDf0wD8P
+Rm5AEy5gf0HQYLNG9B49jYv170TnPRoUjWbAmJzS1sNQg5aijNl0ckz6R9cwp9aa
+xX05zTkGG85v2jOWyfuUKjM1hRzjM6O0RhminN7H1Cw06duufswli8jsi2elHvoC
+CbzSMVglwW6sU2wzxmQc1THZjg==

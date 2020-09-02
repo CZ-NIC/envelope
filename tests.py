@@ -205,6 +205,9 @@ class TestSmime(TestAbstract):
     # create a key and its certificate valid for 100 years
     # openssl req -newkey rsa:1024 -nodes -x509 -days 36500 -out certificate.pem
 
+    smime_key = 'tests/smime/key.pem'
+    smime_cert = 'tests/smime/cert.pem'
+
     def test_smime_sign(self):
         # Message will look that way:
         # MIME-Version: 1.0
@@ -278,17 +281,12 @@ class TestSmime(TestAbstract):
                              "Z2l0cyBQdHkgTHRkAhROmwkIH63oarp3NpQqFoKTy1Q3tTANBgkqhkiG9w0BAQEF",
                          ), 10)
 
-        # save(Envelope("dumb message")
-        #                  .smime()
-        #                  .reply_to("test-reply@example.com")
-        #                  .subject("my message")
-        #                  .encryption(Path("tests/smime/cert.pem")))
-
     def test_multiple_recipients(self):
         from M2Crypto import SMIME, BIO
         msg = "dumb message"
 
         def is_decryptable(key, cert, text):
+            # XXXXX -> parser
             # Load private key and cert and decrypt
             s = SMIME.SMIME()
             s.load_key(key, cert)
@@ -305,11 +303,12 @@ class TestSmime(TestAbstract):
                   .subject("my message")
                   .encrypt([Path("tests/smime/cert.pem"), Path("tests/smime/smime-identity@example.com-cert.pem")]))
 
+        print("--------", output, "********")
+        Envelope.load(output)
         self.assertTrue(is_decryptable('tests/smime/smime-identity@example.com-key.pem',
                                        'tests/smime/smime-identity@example.com-cert.pem',
                                        output))
-        self.assertTrue(is_decryptable('tests/smime/key.pem', 'tests/smime/cert.pem',
-                                       output))
+        self.assertTrue(is_decryptable(self.smime_key, self.smime_cert, output))
 
         # encrypt for single key only
         output = (Envelope(msg)
@@ -895,7 +894,7 @@ class TestAttachment(TestAbstract):
                           *img_msg))
 
 
-class TestLoad(TestBash):
+class TestLoad(TestBash, TestSmime):
     inline_image = "tests/eml/inline_image.eml"
 
     def test_load(self):
@@ -940,6 +939,11 @@ class TestLoad(TestBash):
 
         # XX ._attachments convert to a public method when available
         self.assertEqual(self.image_file.read_bytes(), e._attachments[0].data)
+
+    def test_smime_decrypt(self):
+        e = Envelope.load(path="tests/eml/smime_encrypt.eml", key=self.smime_key, cert=self.smime_cert)
+        self.assertEqual("dumb message", e.message())
+        # XXX test SMIME decryption with attachments
 
 
 class TestTransfer(TestBash):
