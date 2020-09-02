@@ -1,3 +1,4 @@
+import inspect
 import logging
 import sys
 import unittest
@@ -19,12 +20,16 @@ GNUPG_HOME = "tests/gpg_ring/"
 environ["GNUPGHOME"] = GNUPG_HOME
 
 
+def save(s):
+    Path("/tmp/ram/" + inspect.stack()[1][3] + ".eml").write_text(str(s))
+
+
 class TestAbstract(unittest.TestCase):
     utf_header = Path("tests/eml/utf-header.eml")  # the file has encoded headers
     quopri = Path("tests/eml/quopri.eml")  # the file has CRLF separators
     eml = Path("tests/eml/mail.eml")
     text_attachment = "tests/eml/generic.txt"
-    image_file = "tests/eml/image.gif"
+    image_file = Path("tests/eml/image.gif")
 
     def check_lines(self, o, lines: Union[str, Tuple[str, ...]] = (), longer: Union[int, Tuple[int, int]] = None,
                     debug=False, not_in: Union[str, Tuple[str, ...]] = (), raises=(), result=None):
@@ -272,6 +277,12 @@ class TestSmime(TestAbstract):
                              "Reply-To: test-reply@example.com",
                              "Z2l0cyBQdHkgTHRkAhROmwkIH63oarp3NpQqFoKTy1Q3tTANBgkqhkiG9w0BAQEF",
                          ), 10)
+
+        # save(Envelope("dumb message")
+        #                  .smime()
+        #                  .reply_to("test-reply@example.com")
+        #                  .subject("my message")
+        #                  .encryption(Path("tests/smime/cert.pem")))
 
     def test_multiple_recipients(self):
         from M2Crypto import SMIME, BIO
@@ -811,10 +822,11 @@ class TestAttachment(TestAbstract):
             return Envelope().subject("Inline image message")
 
         image = self.image_file
-        name = Path(self.image_file).name
+        image_path = image.absolute()
+        name = image.name
 
         # Specified the only HTML alternative, no plain text
-        e1 = e().message(f"Hi <img src='cid:{name}'/>", alternative=HTML).attach(Path(image), inline=True)
+        e1 = e().message(f"Hi <img src='cid:{name}'/>", alternative=HTML).attach(image, inline=True)
         single_alternative = ("Content-Type: multipart/related;",
                               "Subject: Inline image message",
                               'Content-Type: text/html; charset="utf-8"')
@@ -828,12 +840,12 @@ class TestAttachment(TestAbstract):
         self.check_lines(e1, compare_lines)
 
         # Not specifying the only HTML alternative
-        e2 = e().message(f"Hi <img src='cid:{name}'/>").attach(path=image, inline=True)
+        e2 = e().message(f"Hi <img src='cid:{name}'/>").attach(path=image_path, inline=True)
         self.check_lines(e2, compare_lines)
 
         # Two message alternatives, the plain is specified
         e3 = e().message(f"Hi <img src='cid:{name}'/>").message("Plain alternative", alternative=PLAIN, boundary="bound") \
-            .attach(Path(image), inline=True)
+            .attach(image, inline=True)
         self.check_lines(e3, (
             'Content-Type: multipart/alternative; boundary="bound"',
             "Subject: Inline image message",
@@ -843,7 +855,7 @@ class TestAttachment(TestAbstract):
 
         # Two message alternatives, the HTML is specified
         e4 = e().message(f"Hi <img src='cid:{name}'/>", alternative=HTML).message("Plain alternative") \
-            .attach(path=image, inline=True)
+            .attach(path=image.absolute(), inline=True)
         self.check_lines(e4, ("Content-Type: multipart/alternative;",
                               "Subject: Inline image message",
                               *multiple_alternatives,
@@ -851,7 +863,7 @@ class TestAttachment(TestAbstract):
 
         # Setting a name of an inline image
         custom_cid = "custom-name.jpg"
-        e5 = e().message(f"Hi <img src='cid:{custom_cid}'/>").attach(path=image, inline=custom_cid)
+        e5 = e().message(f"Hi <img src='cid:{custom_cid}'/>").attach(path=image_path, inline=custom_cid)
         self.check_lines(e5,
                          (*single_alternative,
                           "Hi <img src='cid:custom-name.jpg'/>",
@@ -862,7 +874,7 @@ class TestAttachment(TestAbstract):
         # Getting a name from the file name when contents is given
         custom_filename = "filename.gif"
         e6 = e().message(f"Hi <img src='cid:{custom_filename}'/>") \
-            .attach(Path(image).read_bytes(), name=custom_filename, inline=True)
+            .attach(image.read_bytes(), name=custom_filename, inline=True)
         self.check_lines(e6,
                          (*single_alternative,
                           "Hi <img src='cid:filename.gif'/>",
@@ -874,7 +886,7 @@ class TestAttachment(TestAbstract):
         # Setting a name of an inline image
         custom_filename = "filename.jpg"
         e7 = e().message(f"Hi <img src='cid:{custom_cid}'/>") \
-            .attach(Path(image).read_bytes(), name=custom_filename, inline=custom_cid)
+            .attach(image.read_bytes(), name=custom_filename, inline=custom_cid)
         self.check_lines(e7,
                          (*single_alternative,
                           "Hi <img src='cid:custom-name.jpg'/>",
@@ -884,6 +896,7 @@ class TestAttachment(TestAbstract):
 
 
 class TestLoad(TestBash):
+    inline_image = "tests/eml/inline_image.eml"
 
     def test_load(self):
         self.assertEqual(Envelope.load("Subject: testing message").subject(), "testing message")
@@ -918,6 +931,15 @@ class TestLoad(TestBash):
     def test_multiline_folded_header(self):
         self.assertEqual("Very long text Very long text Very long text Very long text Ver Very long text Very long text",
                          self.bash("--subject", file=self.quopri).strip())
+
+    def test_alternative_and_related(self):
+        e = Envelope.load(path=self.inline_image)
+        self.assertEqual("Hi <img src='cid:image.gif'/>", e.message())
+        self.assertEqual("Inline image message", e.subject())
+        self.assertEqual("Plain alternative", e.message(alternative=PLAIN))
+
+        # XX ._attachments convert to a public method when available
+        self.assertEqual(self.image_file.read_bytes(), e._attachments[0].data)
 
 
 class TestTransfer(TestBash):

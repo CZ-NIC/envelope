@@ -1,0 +1,40 @@
+Return-Path: <person@example.com>
+Delivered-To: person@example.com
+MIME-Version: 1.0
+Content-Type: multipart/alternative;
+ boundary="===============9190601028743418465=="
+Subject: Inline image message
+From: person@example.com
+To: person@example.com
+Date: Tue, 01 Sep 2020 16:16:55 +0200
+
+--===============9190601028743418465==
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 7bit
+
+Plain alternative
+
+--===============9190601028743418465==
+MIME-Version: 1.0
+Content-Type: multipart/related;
+ boundary="===============5753081140035158363=="
+
+--===============5753081140035158363==
+Content-Type: text/html; charset="utf-8"
+Content-Transfer-Encoding: 7bit
+
+Hi <img src='cid:image.gif'/>
+
+--===============5753081140035158363==
+Content-Type: image/gif
+Content-Transfer-Encoding: base64
+Content-ID: image.gif
+MIME-Version: 1.0
+Content-Disposition: inline
+
+R0lGODlhAwADAKEDAAIJAvz9/v///wAAACH+EUNyZWF0ZWQgd2l0aCBHSU1QACwAAAAAAwADAAAC
+BERsEVIAOw==
+
+--===============5753081140035158363==--
+
+--===============9190601028743418465==--

@@ -10,6 +10,7 @@ import warnings
 from base64 import b64decode
 from configparser import ConfigParser
 from copy import copy, deepcopy
+from email import message_from_bytes
 from email.message import EmailMessage, Message
 from email.parser import BytesParser
 from email.policy import default as policy
@@ -187,6 +188,7 @@ class Envelope:
         """
         XX make it capable to decrypt and verify signatures?
         XX make it capable to read an "attachment" - now it's a mere part of the body. .attachments() method is needed.
+        XXXX Document that we parse attachments.
 
         Note that if you will send this reconstructed message, you might not probably receive it due to the Message-ID duplication.
         Delete at least Message-ID header prior to re-sending.
@@ -199,10 +201,22 @@ class Envelope:
         elif isinstance(message, Message):
             message = str(message)
 
+        o = message_from_bytes(assure_fetched(message, bytes))
+        e = Envelope()
+        for key, val in o.items():
+            if key in ("Content-Type",):
+                continue
+            e.header(key, " ".join(x.strip() for x in val.splitlines()))
+        try:
+            return Parser(e).parse(o)
+        except ValueError:
+            logger.warning("Message might not have been loaded correctly.")
+
+        # emergency body loading when parsing failed
         header_row = re.compile(r"([^\t:]+):(.*)")
         text = assure_fetched(message, str)
         is_header = True
-        header = []  # [whole line, header name, header val]
+        header = []  # [whole line, header name, header val] XX header is not used, deprecated
         body = []
         for line in text.splitlines():
             if is_header:  # we are parsing e-mail template header first
@@ -225,9 +239,9 @@ class Envelope:
             if not is_header:
                 body.append(line)
 
-        e = Envelope().message(CRLF.join(body))
-        for _, key, val in header:
-            e.header(key, val)
+        e.message(CRLF.join(body))
+        # for _, key, val in header:
+        #     e.header(key, val)
         return e
 
     def __init__(self, message=None, from_=None, to=None, subject=None, headers=None,
@@ -461,6 +475,8 @@ class Envelope:
         if text is path is None:
             # reading value
             s = getattr(self._message, alternative)
+            if not s and alternative == AUTO:  # prefer reading HTML over plain text if alternative set
+                s = self._message.html or self._message.plain
 
             transfer = self._headers.get("Content-Transfer-Encoding")
             # Useful for reading loaded EML that might have been encoded.
@@ -477,8 +493,6 @@ class Envelope:
                 except ValueError:
                     pass
 
-            if not s and alternative == AUTO:  # prefer reading HTML over plain text if alternative set
-                s = self._message.html or self._message.plain
             # XX this should return str or bytes
             # We prefer string. But we want to keep it as encoding agnostic as possible so bytes might be better.
             return s or ""  # `s` might be None
@@ -1446,3 +1460,37 @@ class Envelope:
             print("Trying to connect to the SMTP...")
             passed *= bool(self._smtp.connect())  # check SMTP
         return passed
+
+
+class Parser:
+
+    def __init__(self, envelope: Envelope):
+        self.e = envelope
+
+    def parse(self, o: Message):
+        maintype, subtype = o.get_content_type().split("/")
+        payload: Union[List[Message], str, bytes] = o.get_payload()
+        if maintype == "multipart":
+            if subtype == "alternative":
+                [self.parse(x) for x in payload]
+            elif subtype in ("related", "mixed"):
+                for p in payload:
+                    if p.get_content_maintype() == "text":
+                        self.parse(p)
+                    else:
+                        # decode=True -> strip CRLFs, convert base64 transfer encoding to bytes etc
+                        self.e.attach(p.get_payload(decode=True),
+                                      mimetype=p.get_content_type(),
+                                      name=p["Content-ID"],
+                                      inline=bool(subtype == "related"))
+            else:
+                raise ValueError(f"Subtype {subtype} not implemented")
+        elif maintype == "text":
+            if subtype in (HTML, PLAIN):
+                # XXXX what about multiline base64? Will there not stay CRLFs?
+                self.e.message(payload.strip(), alternative=subtype)
+            else:
+                raise ValueError(f"Unknown subtype: {subtype}")
+        else:
+            raise ValueError(f"Unknown maintype: {maintype}") # XXX
+        return self.e

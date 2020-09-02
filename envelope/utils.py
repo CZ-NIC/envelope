@@ -124,7 +124,7 @@ class Attachment:
     def __repr__(self):
         l = [self.get_sample(), self.mimetype, self.name]
         if self.inline:
-            l.append(self.inline)
+            l.append("inline=True")
         return f"Attachment({', '.join(l)})"
 
     def get_sample(self):
@@ -186,7 +186,6 @@ class _Message:
             return " ".join("(text/plain)", text, "(text/html)", html)
         else:
             return text or html
-
 
 
 class SMTP:
