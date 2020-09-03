@@ -10,7 +10,7 @@ _envelope()
   cmd=( ${COMP_WORDS[@]} )
 
   if [[ "$cur" == -* ]]; then
-    COMPREPLY=( $( compgen -W "--help --message --input --output --gpg --smime --check --sign --cert --passphrase --sign-path --cert-path --encrypt --encrypt-path --to --cc --bcc --reply-to --from --sender --sender --no-sender --attachment --attach-key --send --subject --smtp --smtp --header" -- $cur ) )
+    COMPREPLY=( $( compgen -W "--help --message --input --output --gpg --smime --check --sign --cert --passphrase --sign-path --cert-path --encrypt --encrypt-path --to --cc --bcc --reply-to --from --sender --sender --no-sender --attach --attachments --attach-key --send --subject --smtp --smtp --header" -- $cur ) )
     return 0
   fi
 }

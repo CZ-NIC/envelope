@@ -6,6 +6,7 @@ from pathlib import Path
 from jsonpickle import decode
 
 from .envelope import Envelope
+from .utils import Attachment
 
 
 class SmartFormatter(argparse.HelpFormatter):
@@ -83,10 +84,12 @@ def main():
     group_send.add_argument('--sender', help="E-mail – needed to choose our key if encrypting", metavar="E-MAIL")
     group_send.add_argument('--no-sender', action="store_true",
                             help="We explicitly say we do not want to decipher later if encrypting.")
-    group_send.add_argument('-a', '--attachment',
-                            help="Path to the attachment, followed by optional file name to be used and/or mimetype."
+    group_send.add_argument('-a', '--attach',
+                            help="Path to the attachment, followed by an optional file name to be used and/or mimetype."
                                  " This parameter may be used multiple times.",
                             nargs="+", action="append")
+                            # XX True for inline
+                            # XXX rename to --attach
     group_send.add_argument('--header',
                             help="Any e-mail header in the form `name value`. Flag may be used multiple times.",
                             nargs=2, action="append", metavar=("NAME", "VALUE"))
@@ -104,6 +107,9 @@ def main():
                                               " here the output will be plain", action="store_true")
     group_supp.add_argument('--check', action="store_true", help='Check SMTP server connection')
     group_supp.add_argument('--load', help="Path to the file to build an Envelope object from.", metavar="FILE")
+    group_supp.add_argument('--attachments', help="Read the attachment", metavar="NAME",
+                            nargs="?", dest="read_attachments", action=BlankTrue)
+    # XXXgroup_supp.add_argument('--attachments-inline', help="Path to the file to build an Envelope object from.", metavar="FILE")
     group_supp.add_argument('-q', '--quiet', help="Quiet output", action="store_true")
 
     args = vars(parser.parse_args())
@@ -183,12 +189,12 @@ def main():
 
     # convert to the module-style attachments `/tmp/file.txt text/plain` → (Path("/tmp/file.txt"), "text/plain")
     args["attachments"] = []
-    if args["attachment"]:
-        for attachment in args["attachment"]:
+    if args["attach"]:
+        for attachment in args["attach"]:
             attachment[0] = Path(attachment[0])  # path-only (no direct content) allowed in CLI
             # we cast to tuple so that single attachment is not mistaken for list of attachments
             args["attachments"].append(tuple(attachment))
-    del args["attachment"]
+    del args["attach"]
 
     args["headers"] = args["header"]
     del args["header"]
@@ -199,6 +205,7 @@ def main():
 
     check = args.pop("check")
     preview = args.pop("preview")
+    read_attachments = args.pop("read_attachments")
     if check:
         del args["sign"]
         del args["encrypt"]
@@ -217,16 +224,27 @@ def main():
     else:
         # XX allow any header to be displayed, ex: `--header Received` will display all Received headers
         read_method = None
+        read_val = None
         if args["subject"] is True:
             read_method = "subject"
             del args["subject"]
         if args["message"] is True:
             read_method = "message"
             del args["message"]
+        if read_attachments:
+            read_method = "attachments"
+            if read_attachments is not True:
+                read_val = read_attachments
 
         res = _get_envelope(instance, args)
         if read_method:  # ex: `--subject` displays subject
-            print(getattr(res, read_method)())
+            ret = getattr(res, read_method)(read_val)
+            if isinstance(ret, list):  # if we get a list (ex: of attachments), print one by one to new lines
+                [print(x) for x in ret]
+            elif isinstance(ret, (Attachment, bytes)):  # print raw bytes
+                sys.stdout.buffer.write(ret.data)
+            else:
+                print(ret)
         elif not any([read_method, args["sign"], args["encrypt"], args["send"]]):
             # if there is anything to do, pretend the input parameters are a bone of a message
             print(str(res))

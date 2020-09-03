@@ -13,13 +13,14 @@ logger = logging.getLogger(__name__)
 
 
 class Address:
-    def __init__(self, real_name, address):
-        self.real_name = real_name
-        self.address = address
+
+    def __init__(self, name, address):
+        self.name: str = name
+        self.address: str = address
 
     def __str__(self):
-        if self.real_name:
-            return f"{self.real_name} <{self.address}>"
+        if self.name:
+            return f"{self.name} <{self.address}>"
         return self.address
 
     def __eq__(self, other):
@@ -32,10 +33,8 @@ class Address:
     def __repr__(self):
         return self.__str__()
 
-    @staticmethod
-    def get(o: "Address", name=None, address=None) -> str:
-        # XX method is not used yet
-        if not o:
+    def get(self, name=None, address=None) -> str:
+        if not self:
             return ""
         if name is None and address is False:
             name = True
@@ -45,16 +44,16 @@ class Address:
             name = address = True
 
         if name and address:
-            return str(o)
+            return str(self)
         if name and not address:
-            s = o.real_name
+            s = self.name
             # 'John <person@example.com>' -> 'John'
             # 'person@example.com>' -> '' (address=False) or 'John' (name=True)
             if not s and address is not False:
-                return o.address
+                return self.address
             return s
         if not name and address:
-            return o.address
+            return self.address
         raise TypeError("Specify at least one of the `name` and `address` arguments.")
 
     @staticmethod
@@ -122,7 +121,7 @@ class Attachment:
         self.inline = inline
 
     def __repr__(self):
-        l = [self.get_sample(), self.mimetype, self.name]
+        l = [self.name, self.mimetype, self.get_sample()]
         if self.inline:
             l.append("inline=True")
         return f"Attachment({', '.join(l)})"

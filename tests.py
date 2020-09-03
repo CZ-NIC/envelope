@@ -642,7 +642,7 @@ Third
         self.assertRaises(ValueError, e1.copy().message("Test", alternative="html").preview)
 
 
-class TestFrom(TestAbstract):
+class TestRecipients(TestAbstract):
     def test_from(self):
         id1 = "identity-1@example.com"
         id2 = "identity-2@example.com"
@@ -664,6 +664,10 @@ class TestFrom(TestAbstract):
                          .sender(id2)
                          .from_(id1),
                          (f"From: {id1}", f"Sender: {id2}"))
+
+    # def test_addresses(self):
+    # when it will be clear whether to return Address object or
+    # See .to() where name and address parameters are experimentally implemented.
 
 
 class TestSubject(TestAbstract):
@@ -793,8 +797,8 @@ class TestBash(TestAbstract):
 
     def test_attachment(self):
         preview_text = f"Attachment generic.txt (text/plain): Small sample text at..."
-        self.assertIn(preview_text, self.bash("--attachment", self.text_attachment, "--preview"))
-        o = self.bash("--attachment", self.text_attachment, "--send", "0")
+        self.assertIn(preview_text, self.bash("--attach", self.text_attachment, "--preview"))
+        o = self.bash("--attach", self.text_attachment, "--send", "0")
         self.assertNotIn(preview_text, o)
         self.assertIn('Content-Disposition: attachment; filename="generic.txt"', o)
 
@@ -972,16 +976,39 @@ class TestLoad(TestBash, TestSmime):
 
     def test_signed_gpg(self):
         # XX we might test signature verification
-        e = Envelope.load(path="tests/eml/test_signed_gpg.eml", key=self.key_cert_together)
+        e = Envelope.load(path="tests/eml/test_signed_gpg.eml")
         self.assertEqual("dumb message", e.message())
 
     def test_encrypted_gpg(self):
-        e = Envelope.load(path="tests/eml/test_encrypted_gpg.eml", key=self.key_cert_together)
+        e = Envelope.load(path="tests/eml/test_encrypted_gpg.eml")
         self.assertEqual("dumb encrypted message", e.message())
 
     def test_encrypted_signed_gpg(self):
-        e = Envelope.load(path="tests/eml/test_encrypted_signed_gpg.eml", key=self.key_cert_together)
+        e = Envelope.load(path="tests/eml/test_encrypted_signed_gpg.eml")
         self.assertEqual("dumb encrypted and signed message", e.message())
+
+    def test_encrypted_gpg_subject(self):
+        body = "just a body text"
+        subject = "This is an encrypted subject"
+        encrypted_eml = (Envelope(body)
+                         .gpg("tests/gpg_ring/")
+                         .to("envelope-example-identity-2@example.com")
+                         .from_("envelope-example-identity@example.com")
+                         .subject(subject)
+                         .encryption()
+                         # .attach(path=self.text_attachment)
+                         # .attach(self.image_file, inline=True)
+                         .as_message().as_string()
+                         )
+
+        # subject has been encrypted
+        self.assertIn("Subject: Encrypted message", encrypted_eml)
+        self.assertNotIn(subject, encrypted_eml)
+
+        # subject has been decrypted
+        e = Envelope.load(encrypted_eml)
+        self.assertEqual(body, e.message())
+        self.assertEqual(subject, e.subject())
 
 
 class TestTransfer(TestBash):

@@ -16,6 +16,16 @@ Envelope("my message")
     .send()
 ```
 
+```python3
+# Inline image
+Envelope("My inline image: <img src='cid:image.jpg' />")    
+    .attach(path="image.jpg", inline=True)
+
+# Load a message and read its attachments 
+Envelope.load(path="message.eml").attachments()
+# in bash: envelope --load message.eml --attachments
+```
+
 - [Installation](#installation)
   * [Bash completion](#bash-completion)
 - [Usage](#usage)
@@ -336,7 +346,7 @@ If the GPG encryption fails, it tries to determine which recipient misses the ke
         Envelope(...).smtp(smtp).send()
     ```
   * **attachments**
-    * **--attachment**: Path to the attachment, followed by optional file name to be used and/or mime type. This parameter may be used multiple times.
+    * **--attach**: Path to the attachment, followed by optional file name to be used and/or mime type. This parameter may be used multiple times.
     ```bash
     envelope --attachment "/tmp/file.txt" "displayed-name.txt" "text/plain" --attachment "/tmp/another-file.txt"
     ```
@@ -425,9 +435,11 @@ Envelope().auto_submitted.no()  # mark message as human produced
 ### Supportive
   * **.recipients()**: Return set of all recipients – `To`, `Cc`, `Bcc`
     * **.recipients(clear=True)**: All `To`, `Cc` and `Bcc` recipients are removed and the `Envelope` object is returned.
-  * **.attachments(name=None, inline=None)**: Access the list attachments.
-    * **name** (str): Set the name of the only desired attachment to be returned.
-    * **inline** (bool): Filter inline/enclosed attachments only.            
+  * **attachments**: Access the list attachments.
+      * **--attachments [NAME]** Get the list of attachments or a contents of the one specified by `NAME`
+      * **.attachments(name=None, inline=None)**
+        * **name** (str): Set the name of the only desired attachment to be returned.
+        * **inline** (bool): Filter inline/enclosed attachments only.            
   * **.copy()**: Return deep copy of the instance to be used independently. 
   ```python3    
     factory = Envelope().cc("original@example.com").copy

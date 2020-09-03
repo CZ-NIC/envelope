@@ -1,7 +1,9 @@
 # CHANGELOG
 
 ## 1.3 (unreleased)
-- CHANGED: `.attach(filename=)` renamed to `.attach(name=)`
+- CHANGED:
+    * `.attach(filename=)` renamed to `.attach(name=)`
+    * `--attachment` renamed to `--attach`
 - `.as_message` -> Message
 - e-mail validation
 - proper e-mail addresses handling: they can be in a string delimited by comma (or semicolon)
@@ -10,7 +12,7 @@
 - fix attainable contents fetching
 - embedding inline images 
 - loading parses attachments and decrypts
-- `.attachments` -> list of the attachments
+- `.attachments`, `--attachments [NAME]` -> read the list of the attachments
 
 ## 1.2 (2020-06-18)
 - fix: smtplib.SMTP_SSL handshake operation timed out caught

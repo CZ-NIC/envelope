@@ -207,12 +207,8 @@ class Envelope:
 
         o = message_from_bytes(assure_fetched(message, bytes))
         e = Envelope()
-        for k, val in o.items():
-            if k in ("Content-Type", "Content-Transfer-Encoding"):
-                continue
-            e.header(k, " ".join(x.strip() for x in val.splitlines()))
         try:
-            return Parser(e, key=key, cert=cert, gnupg_home=e._get_gnupg_home()).parse(o)
+            return Parser(e, key=key, cert=cert, gnupg_home=e._get_gnupg_home()).parse(o, add_headers=True)
         except ValueError as e:
             logger.warning(f"Message might not have been loaded correctly. {e}")
 
@@ -391,29 +387,34 @@ class Envelope:
     def _parse_addresses(registry, email_or_list):
         registry += (a for a in Address.parse(email_or_list) if a not in registry)
 
-    def to(self, email_or_list=None, name=None, address=None) -> Union["Envelope", List[str]]:
+    def to(self, email_or_list=None, name=None, address=None) -> Union["Envelope", List[str], List[Address]]:
         """ Multiple addresses may be given in a string, delimited by comma (or semicolon).
          (The same is valid for `to`, `cc`, `bcc` and `reply-to`.)
 
             e = (Envelope()
                 .to("person1@example.com")
                 .to("person1@example.com, John <person2@example.com>")
-                .to(["person3@example.com"])
-                .to())  # ["person1@example.com", "John <person2@example.com>", "person3@example.com"]
+                .to(["person3@example.com"]))
 
-            XXX `name` and `address` are undocumented and untested features yet. How would they work?
-            XX what should be the value if no real_name given? Address or ""? Or should this be specifiable?
-                Or should we return Address object directly?
+            e.to()  # ["person1@example.com", "John <person2@example.com>", "person3@example.com"] (Address objects)
             e.to(address=False)  # ["", "John", ""]
             e.to(name=True)  # ["person1@example.com", "John", "person3@example.com"] # returns address if no name given
             e.to(address=True)  # ["person1@example.com", "person2@example.com", "person3@example.com"]  # address only
+
+            XXX `name` and `address` are undocumented and untested features yet. How would they work?
+                Should we put these parameters to the other .cc, .bcc functions, or should we return Address objects directly?
+                return: Envelope if `email_or_list` set or List[Address] if neither `address` nor `name` set or List[str].
+                Address objects are equal if their e-mail address are equal.
+                But that way, we have to manual convert to str while joining ",".join(map(str, self.to())).
+                What is the default user use case?
+                -> I suppose WE RETURN OBJECTS.
+
             :param email_or_list: str|List[str] Set e-mail address/es. If None, we are reading.
             :param address: bool Include e-mail addresses in the reading result.
             :param name: bool Include e-mail names in the reading result.
-
         """
         if email_or_list is None:
-            return [Address.get(x, name, address) for x in self._to]
+            return [x.get(name, address) for x in self._to]
         self._parse_addresses(self._to, email_or_list)
         return self
 
@@ -1489,7 +1490,14 @@ class Parser:
         self.cert = cert
         self.gnupg_home = gnupg_home
 
-    def parse(self, o: Message):
+    def parse(self, o: Message, add_headers=False):
+        if add_headers:
+            for k, val in o.items():
+                # We skip "Content-Type" and "Content-Transfer-Encoding" because we decode text payload before importing.
+                # We skip MIME-Version because it may be another one in a encrypted sub-message we take the headers from too.
+                if k in ("Content-Type", "Content-Transfer-Encoding", "MIME-Version"):
+                    continue
+                self.e.header(k, " ".join(x.strip() for x in val.splitlines()))
         maintype, subtype = o.get_content_type().split("/")
         if o.is_multipart():
             payload: List[Message] = o.get_payload()
@@ -1516,7 +1524,7 @@ class Parser:
                     if p.get_content_type() == o.get_param("protocol"):  # ex: application/pgp-encrypted
                         continue
                     elif p.get_content_type() == "application/octet-stream":
-                        self.parse(message_from_string(self.gpg_decrypt(p.get_payload(decode=True))))
+                        self.parse(message_from_string(self.gpg_decrypt(p.get_payload(decode=True))), add_headers=True)
                     else:
                         raise ValueError(f"Cannot decrypt.")
             else:
@@ -1527,7 +1535,7 @@ class Parser:
             else:
                 raise ValueError(f"Unknown subtype: {subtype}")
         elif maintype == "application" and subtype == "x-pkcs7-mime":  # decrypting S/MIME
-            self.parse(message_from_bytes(self.smime_decrypt(o.as_bytes())))
+            self.parse(message_from_bytes(self.smime_decrypt(o.as_bytes())), add_headers=True)
         else:
             raise ValueError(f"Unknown maintype: {maintype}")
         return self.e
