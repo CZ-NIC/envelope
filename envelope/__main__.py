@@ -80,8 +80,9 @@ def main():
     group_send.add_argument('--bcc', help="E-mail or list", nargs="+", metavar="E-MAIL")
     group_send.add_argument('--reply-to', help="Header that states e-mail to be replied to. The field is not encrypted.",
                             metavar="E-MAIL")
-    group_send.add_argument('-f', '--from', help="Alias of --sender", metavar="E-MAIL")
-    group_send.add_argument('--sender', help="E-mail – needed to choose our key if encrypting", metavar="E-MAIL")
+    group_send.add_argument('-f', '--from', help="E-mail – needed to choose our key if encrypting", metavar="E-MAIL")
+    group_send.add_argument('--sender', help="Alias for --from if not set."
+                                             " Otherwise appends the \"Sender\" header.", metavar="E-MAIL")
     group_send.add_argument('--no-sender', action="store_true",
                             help="We explicitly say we do not want to decipher later if encrypting.")
     group_send.add_argument('-a', '--attach',
@@ -89,7 +90,6 @@ def main():
                                  " This parameter may be used multiple times.",
                             nargs="+", action="append")
                             # XX True for inline
-                            # XXX rename to --attach
     group_send.add_argument('--header',
                             help="Any e-mail header in the form `name value`. Flag may be used multiple times.",
                             nargs=2, action="append", metavar=("NAME", "VALUE"))
@@ -109,7 +109,8 @@ def main():
     group_supp.add_argument('--load', help="Path to the file to build an Envelope object from.", metavar="FILE")
     group_supp.add_argument('--attachments', help="Read the attachment", metavar="NAME",
                             nargs="?", dest="read_attachments", action=BlankTrue)
-    # XXXgroup_supp.add_argument('--attachments-inline', help="Path to the file to build an Envelope object from.", metavar="FILE")
+    # XXgroup_supp.add_argument('--attachments-inline', help="Read inline only attachments.", metavar="NAME")
+    # XXgroup_supp.add_argument('--attachments-enclosed', help="Read only enclosed (not inline) attachments.", metavar="NAME")
     group_supp.add_argument('-q', '--quiet', help="Quiet output", action="store_true")
 
     args = vars(parser.parse_args())
@@ -200,7 +201,7 @@ def main():
     del args["header"]
 
     if args["from"]:
-        args["sender"] = args["from"]
+        args["from_"] = args["from"]
     del args["from"]
 
     check = args.pop("check")

@@ -79,7 +79,7 @@ class TestAbstract(unittest.TestCase):
 
     cmd = "python3", "-m", "envelope"
 
-    def bash(self, *cmd, file:Path=None, piped=None, envelope=True, env=None, debug=False, decode=True):
+    def bash(self, *cmd, file: Path = None, piped=None, envelope=True, env=None, debug=False, decode=True):
         """
 
         :param cmd: Any number of commands.
@@ -669,9 +669,40 @@ class TestRecipients(TestAbstract):
                          .from_(id1),
                          (f"From: {id1}", f"Sender: {id2}"))
 
-    # def test_addresses(self):
-    # when it will be clear whether to return Address object or
-    # See .to() where name and address parameters are experimentally implemented.
+    def test_addresses(self):
+        e = Envelope.load(path=self.eml)
+        self.assertEqual(1, len(e.to()))
+        contact = e.to()[0]
+        self.assertEqual("Person <person@example.com>", contact)
+        self.assertEqual("person@example.com", contact)
+        self.assertEqual("person@example.com", contact.address)
+        self.assertEqual("Person", contact.name)
+
+    def test_removing_contact(self):
+        contact = "Person2 <person2@example.com>"
+
+        def e():
+            return Envelope.load(path=self.eml).cc(contact)
+
+        # Original contact should be removed
+        self.assertFalse(e().to(False).to())
+        self.assertFalse(e().to("").to())
+        self.assertFalse(e().to([False]).to())
+        self.assertFalse(e().to([""]).to())
+
+        # Contact should be inserted
+        self.assertEqual(contact, e().to(["", contact]).to()[0])
+        self.assertEqual(contact, e().to([contact, False]).to()[0])
+        self.assertEqual(1, len(e().to([contact, False]).to()))
+
+        # Cc should stay intact
+        self.assertEqual([contact], e().to("").cc())
+
+        # Works from bash too
+        header_row = f"To: Person <person@example.com>"
+        self.assertIn(header_row, self.bash(file=self.eml))
+        self.assertNotIn(header_row, self.bash("--to", "", file=self.eml))
+        self.assertNotIn(f"To: {contact}", self.bash("--to", "", "contact", file=self.eml))
 
 
 class TestSubject(TestAbstract):
@@ -831,7 +862,7 @@ class TestAttachment(TestAbstract):
                               "Subject: Inline image message",
                               'Content-Type: text/html; charset="utf-8"')
         img_msg = "Content-Disposition: inline", "R0lGODlhAwADAKEDAAIJAvz9/v///wAAACH+EUNyZWF0ZWQgd2l0aCBHSU1QACwAAAAAAwADAAAC"
-        image_gif = "Hi <img src='cid:image.gif'/>", "Content-Type: image/gif", "Content-ID: image.gif", *img_msg
+        image_gif = "Hi <img src='cid:image.gif'/>", "Content-Type: image/gif", "Content-ID: <image.gif>", *img_msg
         multiple_alternatives = ('Content-Type: text/plain; charset="utf-8"',
                                  "Plain alternative",
                                  "Content-Type: multipart/related;",
@@ -868,7 +899,7 @@ class TestAttachment(TestAbstract):
                          (*single_alternative,
                           "Hi <img src='cid:custom-name.jpg'/>",
                           "Content-Type: image/gif",
-                          "Content-ID: custom-name.jpg",
+                          "Content-ID: <custom-name.jpg>",
                           *img_msg))
 
         # Getting a name from the file name when contents is given
@@ -879,7 +910,7 @@ class TestAttachment(TestAbstract):
                          (*single_alternative,
                           "Hi <img src='cid:filename.gif'/>",
                           "Content-Type: image/gif",
-                          "Content-ID: filename.gif",
+                          "Content-ID: <filename.gif>",
                           *img_msg))
 
         # Getting a name from the file name when contents is given
@@ -891,7 +922,7 @@ class TestAttachment(TestAbstract):
                          (*single_alternative,
                           "Hi <img src='cid:custom-name.jpg'/>",
                           "Content-Type: image/gif",
-                          "Content-ID: custom-name.jpg",
+                          "Content-ID: <custom-name.jpg>",
                           *img_msg))
 
 

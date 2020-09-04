@@ -245,7 +245,7 @@ If the GPG encryption fails, it tries to determine which recipient misses the ke
       ```bash
       envelope --to first@example.com second@example.com --message "hello" 
       ```  
-    * **.to(email_or_list)**: If None, current list is returned.
+    * **.to(email_or_list)**: If None, current list is returned. If False or "", current list is cleared. 
     ```python3
         Envelope()
             .to("person1@example.com")
@@ -300,7 +300,7 @@ If the GPG encryption fails, it tries to determine which recipient misses the ke
     * **Envelope(subject=)**
   * **cc**: E-mail or their list. Multiple addresses may be given in a string, delimited by comma (or semicolon). (The same is valid for `to`, `cc`, `bcc` and `reply-to`.)
     * **--cc**
-    * **.cc(email_or_list)**: If None, current list returned.
+    * **.cc(email_or_list)**: If None, current list returned. If False or "", current list is cleared.
         ```python3
         Envelope()
             .cc("person1@example.com")
@@ -311,11 +311,11 @@ If the GPG encryption fails, it tries to determine which recipient misses the ke
     * **Envelope(cc=)**
   * **bcc**: E-mail or their list
     * **--bcc**
-    * **.bcc(email_or_list)**: If None, current list returned.
+    * **.bcc(email_or_list)**: If None, current list returned. If False or "", current list is cleared.
     * **Envelope(bcc=)**
   * **reply-to**: E-mail to be replied to or their list. The field is not encrypted.
     * **--reply-to**
-    * **.reply_to(email_or_list)**: If None, current list returned.
+    * **.reply_to(email_or_list)**: If None, current list returned. If False or "", current list is cleared.
     * **Envelope(reply_to=)**
   * **date**:
     * **.date(date)** `str|False` Specify Date header (otherwise Date is added automatically). If False, the Date header will not be added automatically.
@@ -433,6 +433,42 @@ Envelope().auto_submitted()  # mark message as automatic
 Envelope().auto_submitted.no()  # mark message as human produced
 ```    
 ### Supportive
+  * **e-mail addresses** Any address encountered is internally converted to an `Address` object. You can safely access the `self.name` property to access the real name and `self.address` to access the e-mail address.
+  
+    ```python3
+    a = Address("John <person@example.com>")
+    a.name == "John", a.address == "person@example.com"    
+    ```
+    
+    Since the `Address` is a subclass of `str`, you can safely join such objects.
+    
+    ```python3    
+    ", ".join([a, a]) # "John <person@example.com>, "John <person@example.com>"
+    a + " hello"  #  "John <person@example.com> hello"
+    ```
+    
+    Address objects are equal if their e-mail address are equal. (Their real names might differ.)
+    Address object is equal to a string if the string contains its e-mail address or the whole representation.
+    
+    ```python3
+    "person@example.com" == Address("John <person@example.com>") == "John <person@example.com>"  # True
+    ```
+  
+    Concerning `to`, `cc`, `bcc` and `reply-to`, multiple addresses may always be given in a string, delimited by comma (or semicolon). The `.get(address:bool, name:bool)` method may be called on an `Address` object to filter the desired information. 
+    ```python3
+    e = (Envelope()
+        .to("person1@example.com")
+        .to("person1@example.com, John <person2@example.com>")
+        .to(["person3@example.com"]))
+
+    [str(x) for x in e.to()]                # ["person1@example.com", "John <person2@example.com>", "person3@example.com"]
+    [x.get(address=False) for x in e.to()]  # ["", "John", ""]
+    [x.get(name=True) for x in e.to()]      # ["person1@example.com", "John", "person3@example.com"]
+                                            # return an address if no name given
+    [x.get(address=True) for x in e.to()]   # ["person1@example.com", "person2@example.com", "person3@example.com"]
+                                            # addresses only
+    ```
+  
   * **.recipients()**: Return set of all recipients – `To`, `Cc`, `Bcc`
     * **.recipients(clear=True)**: All `To`, `Cc` and `Bcc` recipients are removed and the `Envelope` object is returned.
   * **attachments**: Access the list attachments.

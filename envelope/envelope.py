@@ -330,9 +330,6 @@ class Envelope:
         # if a parameter is not set, use class defaults, else init with parameter
         self._populate(locals())
 
-        if sign or encrypt or send is not None:
-            self._start(send=send)
-
     @staticmethod
     def _get_private_var(k):
         """ Gets internal specific interface var name from its method name. """
@@ -342,7 +339,7 @@ class Envelope:
 
     def _populate(self, params):
         for k, v in params.items():
-            if k in ["self", "send"]:
+            if k in ["self", "send"]:  # send must be the last
                 continue
             elif k == "smime":  # smime uses _gpg, not _smime because it needs no parameter
                 if v is True:
@@ -377,6 +374,8 @@ class Envelope:
                 getattr(self, k)(v)  # ex: self.message(message)
 
         self._prepare_from()
+        if params.get("sign") or params.get("encrypt") or params.get("send") is not None:
+            self._start(send=params.get("send"))
         return self
 
     def copy(self):
@@ -385,54 +384,40 @@ class Envelope:
 
     @staticmethod
     def _parse_addresses(registry, email_or_list):
-        registry += (a for a in Address.parse(email_or_list) if a not in registry)
+        addresses = assure_list(email_or_list)
+        if any(not x for x in addresses):
+            registry.clear()
+        addresses = [x for x in addresses if x]  # filter out possible "" or False
+        if addresses:
+            registry += (a for a in Address.parse(addresses) if a not in registry)
 
-    def to(self, email_or_list=None, name=None, address=None) -> Union["Envelope", List[str], List[Address]]:
+    def to(self, email_or_list=None) -> Union["Envelope", List[Address]]:
         """ Multiple addresses may be given in a string, delimited by comma (or semicolon).
          (The same is valid for `to`, `cc`, `bcc` and `reply-to`.)
 
-            e = (Envelope()
-                .to("person1@example.com")
-                .to("person1@example.com, John <person2@example.com>")
-                .to(["person3@example.com"]))
-
-            e.to()  # ["person1@example.com", "John <person2@example.com>", "person3@example.com"] (Address objects)
-            e.to(address=False)  # ["", "John", ""]
-            e.to(name=True)  # ["person1@example.com", "John", "person3@example.com"] # returns address if no name given
-            e.to(address=True)  # ["person1@example.com", "person2@example.com", "person3@example.com"]  # address only
-
-            XXX `name` and `address` are undocumented and untested features yet. How would they work?
-                Should we put these parameters to the other .cc, .bcc functions, or should we return Address objects directly?
-                return: Envelope if `email_or_list` set or List[Address] if neither `address` nor `name` set or List[str].
-                Address objects are equal if their e-mail address are equal.
-                But that way, we have to manual convert to str while joining ",".join(map(str, self.to())).
-                What is the default user use case?
-                -> I suppose WE RETURN OBJECTS.
-
             :param email_or_list: str|List[str] Set e-mail address/es. If None, we are reading.
-            :param address: bool Include e-mail addresses in the reading result.
-            :param name: bool Include e-mail names in the reading result.
+            return: Envelope if `email_or_list` set or List[Address]
         """
         if email_or_list is None:
-            return [x.get(name, address) for x in self._to]
+            return self._to
         self._parse_addresses(self._to, email_or_list)
         return self
 
-    def cc(self, email_or_list=None) -> Union["Envelope", List[str]]:
+    def cc(self, email_or_list=None) -> Union["Envelope", List[Address]]:
         if email_or_list is None:
-            return [str(x) for x in self._cc]
+            return self._cc
         self._parse_addresses(self._cc, email_or_list)
         return self
 
-    def bcc(self, email_or_list=None) -> Union["Envelope", List[str]]:
+    def bcc(self, email_or_list=None) -> Union["Envelope", List[Address]]:
         if email_or_list is None:
-            return [str(x) for x in self._bcc]
+            return self._bcc
         self._parse_addresses(self._bcc, email_or_list)
         return self
 
-    def reply_to(self, email_or_list=None) -> Union["Envelope", List[str]]:
+    def reply_to(self, email_or_list=None) -> Union["Envelope", List[Address]]:
         if email_or_list is None:
-            return [str(x) for x in self._reply_to]
+            return self._reply_to
         self._parse_addresses(self._reply_to, email_or_list)
         return self
 
@@ -532,17 +517,17 @@ class Envelope:
             self.header("Date", date)
         return self
 
-    def sender(self, email=None) -> Union["Envelope", str]:
+    def sender(self, email=None) -> Union["Envelope", Address]:
         """  Alias for "from" if not set. Otherwise appends header "Sender". If None, current `Sender` returned. """
         if email is None:
-            return str(self.__sender or "")
+            return self.__sender
         self._sender = Address.parse(email, single=True, allow_false=True)
         self._prepare_from()
         return self
 
-    def from_(self, email=None) -> Union["Envelope", str]:
+    def from_(self, email=None) -> Union["Envelope", Address]:
         if email is None:
-            return str(self.__from or "")
+            return self.__from
         self._from = Address.parse(email, single=True, allow_false=True)
         self._prepare_from()
         return self
@@ -1335,7 +1320,7 @@ class Envelope:
             o.make_related()
             [o.add_related(a.data,
                            **dict(zip(("maintype", "subtype"), a.mimetype.split("/"))),
-                           cid=a.name) for a in self._attachments if a.inline]
+                           cid=f"<{a.name}>") for a in self._attachments if a.inline]
 
         if self._attach_key:
             # send your public key as an attachment (so that it can be imported before it propagates on the server)
@@ -1378,7 +1363,7 @@ class Envelope:
                 email["Subject"] = self._subject
         return email
 
-    def recipients(self, *, clear=False) -> Set[str]:
+    def recipients(self, *, clear=False) -> Set[Address]:
         """ Return set of all recipients – To, Cc, Bcc
             :param: clear If true, all To, Cc and Bcc recipients are removed and the object is returned.
 
@@ -1393,7 +1378,7 @@ class Envelope:
             self._cc.clear()
             self._bcc.clear()
             return self
-        return {str(x) for x in set(self._to + self._cc + self._bcc)}
+        return {x for x in set(self._to + self._cc + self._bcc)}
 
     def attachments(self, name=None, inline=None) -> Union[Attachment, List[Attachment]]:
         """ Access the attachments.

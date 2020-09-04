@@ -4,14 +4,16 @@
 - CHANGED:
     * `.attach(filename=)` renamed to `.attach(name=)`
     * `--attachment` renamed to `--attach`
+    *  `.to()`, `.cc()`, `.bcc()`, `.from_()`, `.sender()`, `.reply_to()`, `.recipients()` now return an `Address` object(s), not `str`
 - `.as_message` -> Message
 - e-mail validation
 - proper e-mail addresses handling: they can be in a string delimited by comma (or semicolon)
 - text alternatives
 - fix encoded headers
 - fix attainable contents fetching
-- embedding inline images 
+- embedding inline images
 - loading parses attachments and decrypts
+- contacts might be cleared (ex: to clear `To` header intuitively type `.to(False)`)
 - `.attachments`, `--attachments [NAME]` -> read the list of the attachments
 
 ## 1.2 (2020-06-18)
