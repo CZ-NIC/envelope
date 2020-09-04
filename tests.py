@@ -79,7 +79,7 @@ class TestAbstract(unittest.TestCase):
 
     cmd = "python3", "-m", "envelope"
 
-    def bash(self, *cmd, file=None, piped=None, envelope=True, env=None, debug=False):
+    def bash(self, *cmd, file:Path=None, piped=None, envelope=True, env=None, debug=False, decode=True):
         """
 
         :param cmd: Any number of commands.
@@ -108,7 +108,11 @@ class TestAbstract(unittest.TestCase):
             env = {**environ.copy(), **env}
 
         p = Popen(cmd, stdout=PIPE, stdin=PIPE, stderr=STDOUT, env=env)
-        return p.communicate(input=file.read_bytes() if file else piped.encode("utf-8"))[0].decode().rstrip()
+        r = p.communicate(input=file.read_bytes() if file else piped.encode("utf-8"))[0]
+        if decode:
+            return r.decode().rstrip()
+        else:
+            return r
 
 
 class TestEnvelope(TestAbstract):
@@ -891,7 +895,7 @@ class TestAttachment(TestAbstract):
                           *img_msg))
 
 
-class TestLoad(TestBash, TestSmime):
+class TestLoad(TestBash):
     inline_image = "tests/eml/inline_image.eml"
 
     def test_load(self):
@@ -933,8 +937,18 @@ class TestLoad(TestBash, TestSmime):
         self.assertEqual("Hi <img src='cid:image.gif'/>", e.message())
         self.assertEqual("Inline image message", e.subject())
         self.assertEqual("Plain alternative", e.message(alternative=PLAIN))
+        self.assertEqual(self.image_file.read_bytes(), bytes(e.attachments()[0]))
 
-        self.assertEqual(self.image_file.read_bytes(), e.attachments()[0].data)
+    def test_accessing_attachments(self):
+        # correctly preview the attachments
+        self.assertEqual("image.gif (image/gif): <img src='cid:True'/>", self.bash("--attachments", file=Path(self.inline_image)))
+
+        # correctly access the attachment, the bytes kept intact
+        self.assertEqual(self.image_file.read_bytes(),
+                         self.bash("--attachments", "image.gif", file=Path(self.inline_image), decode=False))
+
+
+class TestDecrypt(TestSmime):
 
     def test_smime_decrypt(self):
         e = Envelope.load(path="tests/eml/smime_encrypt.eml", key=self.smime_key, cert=self.smime_cert)

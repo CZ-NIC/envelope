@@ -126,6 +126,12 @@ class Attachment:
             l.append("inline=True")
         return f"Attachment({', '.join(l)})"
 
+    def __str__(self):
+        return str(self.data)
+
+    def __bytes__(self):
+        return bytes(self.data)
+
     def get_sample(self):
         if self.data is None:
             raise ValueError(f"Empty attachment {self.name}")
@@ -133,6 +139,12 @@ class Attachment:
         if len(sample) > 24:
             sample = sample[:20].strip() + "..."
         return sample
+
+    def preview(self):
+        if self.inline:
+            return f"{self.name} ({self.mimetype}): <img src='cid:{self.inline}'/>"
+        else:
+            return f"{self.name} ({self.mimetype}): {self.get_sample()}"
 
 
 class AutoSubmittedHeader:

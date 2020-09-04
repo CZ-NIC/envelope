@@ -440,6 +440,8 @@ Envelope().auto_submitted.no()  # mark message as human produced
       * **.attachments(name=None, inline=None)**
         * **name** (str): Set the name of the only desired attachment to be returned.
         * **inline** (bool): Filter inline/enclosed attachments only.            
+        * *Attachment* object has the attributes *.name* file name, *.mimetype*, *.data* raw data
+            * if casted to *str*/*bytes*, its raw *.data* are returned
   * **.copy()**: Return deep copy of the instance to be used independently. 
   ```python3    
     factory = Envelope().cc("original@example.com").copy

@@ -138,9 +138,9 @@ class Envelope:
         result = []
         for a in self._attachments:  # include attachments info as they are removed with the payload later
             if a.inline:
-                s = f"Inline attachment {a.name} ({a.mimetype}): <img src='cid:{a.inline}'/>"
+                s = f"Inline attachment {a.preview()}"
             else:
-                s = f"Attachment {a.name} ({a.mimetype}): {a.get_sample()}"
+                s = f"Attachment {a.preview()}"
             result.append(s)
 
         if self._bcc:  # as bcc is not included as an e-mail header, we explicitly states it here

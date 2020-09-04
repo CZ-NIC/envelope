@@ -240,7 +240,7 @@ def main():
         if read_method:  # ex: `--subject` displays subject
             ret = getattr(res, read_method)(read_val)
             if isinstance(ret, list):  # if we get a list (ex: of attachments), print one by one to new lines
-                [print(x) for x in ret]
+                [print(x.preview()) if isinstance(x, Attachment) else print(x) for x in ret]
             elif isinstance(ret, (Attachment, bytes)):  # print raw bytes
                 sys.stdout.buffer.write(ret.data)
             else:
