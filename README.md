@@ -241,9 +241,12 @@ If the GPG encryption fails, it tries to determine which recipient misses the ke
     ```
     * **Envelope(encrypt=)**: Any attainable contents
   * **to**: E-mail or list. When encrypting, we use keys of these identities. Multiple addresses may be given in a string, delimited by comma (or semicolon). (The same is valid for `to`, `cc`, `bcc` and `reply-to`.)
-    * **--to**: One or more e-mail addresses.
+    * **--to**: One or more e-mail addresses. Empty to read.
       ```bash
-      envelope --to first@example.com second@example.com --message "hello" 
+      $ envelope --to first@example.com second@example.com --message "hello" 
+      $ envelope --to
+      first@example.com
+      second@example.com
       ```  
     * **.to(email_or_list)**: If None, current list is returned. If False or "", current list is cleared. 
     ```python3
@@ -255,7 +258,7 @@ If the GPG encryption fails, it tries to determine which recipient misses the ke
         ```
     * **Envelope(to=)**: E-mail or their list.
   * **from**: E-mail – needed to choose our key if encrypting.    
-    * **--from** E-mail
+    * **--from** E-mail. Empty to read value.
     * **--sender** Alias for *--from* if not set. Otherwise appends header "Sender".
     * **--no-sender** Declare we want to encrypt and never decrypt back.
     * **.from_(email)**: E-mail or False. If None, current `From` returned.
@@ -299,7 +302,7 @@ If the GPG encryption fails, it tries to determine which recipient misses the ke
     * **.subject(text)**: If None, current subject returned.
     * **Envelope(subject=)**
   * **cc**: E-mail or their list. Multiple addresses may be given in a string, delimited by comma (or semicolon). (The same is valid for `to`, `cc`, `bcc` and `reply-to`.)
-    * **--cc**
+    * **--cc**: One or more e-mail addresses. Empty to read.
     * **.cc(email_or_list)**: If None, current list returned. If False or "", current list is cleared.
         ```python3
         Envelope()
@@ -310,11 +313,11 @@ If the GPG encryption fails, it tries to determine which recipient misses the ke
         ```
     * **Envelope(cc=)**
   * **bcc**: E-mail or their list
-    * **--bcc**
+    * **--bcc**: One or more e-mail addresses. Empty to read.
     * **.bcc(email_or_list)**: If None, current list returned. If False or "", current list is cleared.
     * **Envelope(bcc=)**
   * **reply-to**: E-mail to be replied to or their list. The field is not encrypted.
-    * **--reply-to**
+    * **--reply-to**: E-mail address or empty to read value.
     * **.reply_to(email_or_list)**: If None, current list returned. If False or "", current list is cleared.
     * **Envelope(reply_to=)**
   * **date**:

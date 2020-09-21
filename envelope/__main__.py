@@ -44,7 +44,8 @@ def main():
 
     group_ciph = parser.add_argument_group("Ciphering")
     group_ciph.add_argument('--gpg', help='Home path to GNUPG rings else default ~/.gnupg is used.'
-                                          'Leave blank for prefer GPG over S/MIME.', nargs="?", action=BlankTrue, metavar="PATH")
+                                          'Leave blank for prefer GPG over S/MIME.', nargs="?", action=BlankTrue,
+                            metavar="PATH")
     group_ciph.add_argument('--smime', action="store_true", help='Leave blank for prefer S/MIME over GPG.')
     group_ciph.add_argument('--sign', help='R|Sign the message.'
                                            '\n * "auto" for turning on signing if there is a key matching to the "from" header'
@@ -54,7 +55,8 @@ def main():
     group_ciph.add_argument('--cert', help='S/MIME: Certificate contents if not included in the key.',
                             action=BlankTrue, metavar="CONTENTS")
     group_ciph.add_argument('--passphrase', help='If signing key needs passphrase.')
-    group_ciph.add_argument('--sign-path', help='Filename with the sender\'s private key. (Alternative to `sign` parameter.)',
+    group_ciph.add_argument('--sign-path',
+                            help='Filename with the sender\'s private key. (Alternative to `sign` parameter.)',
                             metavar="KEY-PATH")
     group_ciph.add_argument('--cert-path', help='S/MIME: Filename with the sender\'s S/MIME private cert'
                                                 ' if cert not included in the key. (Alternative to `cert` parameter.)',
@@ -71,16 +73,20 @@ def main():
     group_ciph.add_argument('--encrypt-path', help='Filename(s) with the recipient\'s public key.'
                                                    ' (Alternative to `encrypt` parameter.)',
                             nargs="*", metavar="PATH")
-    group_ciph.add_argument('--attach-key', help="Appending public key to the attachments when sending.", action="store_true")
+    group_ciph.add_argument('--attach-key', help="Appending public key to the attachments when sending.",
+                            action="store_true")
 
     group_send = parser.add_argument_group("Sending")
     group_send.add_argument('-s', '--subject', help="E-mail subject", nargs="?", action=BlankTrue)
-    group_send.add_argument('-t', '--to', help="E-mail – needed to choose their key if encrypting", nargs="+", metavar="E-MAIL")
-    group_send.add_argument('--cc', help="E-mail or list", nargs="+", metavar="E-MAIL")
-    group_send.add_argument('--bcc', help="E-mail or list", nargs="+", metavar="E-MAIL")
-    group_send.add_argument('--reply-to', help="Header that states e-mail to be replied to. The field is not encrypted.",
-                            metavar="E-MAIL")
-    group_send.add_argument('-f', '--from', help="E-mail – needed to choose our key if encrypting", metavar="E-MAIL")
+    group_send.add_argument('-t', '--to', help="E-mail – needed to choose their key if encrypting", metavar="E-MAIL",
+                            nargs="*", action=BlankTrue)
+    group_send.add_argument('--cc', help="E-mail or list", metavar="E-MAIL", nargs="*", action=BlankTrue)
+    group_send.add_argument('--bcc', help="E-mail or list", metavar="E-MAIL", nargs="*", action=BlankTrue)
+    group_send.add_argument('--reply-to',
+                            help="Header that states e-mail to be replied to. The field is not encrypted.",
+                            metavar="E-MAIL", nargs="?", action=BlankTrue)
+    group_send.add_argument('-f', '--from', help="E-mail – needed to choose our key if encrypting", metavar="E-MAIL",
+                            nargs="?", action=BlankTrue)
     group_send.add_argument('--sender', help="Alias for --from if not set."
                                              " Otherwise appends the \"Sender\" header.", metavar="E-MAIL")
     group_send.add_argument('--no-sender', action="store_true",
@@ -89,15 +95,16 @@ def main():
                             help="Path to the attachment, followed by an optional file name to be used and/or mimetype."
                                  " This parameter may be used multiple times.",
                             nargs="+", action="append")
-                            # XX True for inline
+    # XX True for inline
     group_send.add_argument('--header',
                             help="Any e-mail header in the form `name value`. Flag may be used multiple times.",
                             nargs=2, action="append", metavar=("NAME", "VALUE"))
     group_send.add_argument('--mime', help="Set contents mime subtype: 'html' (default) or 'plain' for plain text",
                             metavar="SUBTYPE")
-    group_send.add_argument('--smtp', help="SMTP server. List `host, [port, [username, password, [security]]]` or dict.\n"
-                                           "Ex: '--smtp {\"host\": \"localhost\", \"port\": 25}'."
-                                           " Security may be explicitly set to 'starttls', 'tls' or automatically determined by port.",
+    group_send.add_argument('--smtp',
+                            help="SMTP server. List `host, [port, [username, password, [security]]]` or dict.\n"
+                                 "Ex: '--smtp {\"host\": \"localhost\", \"port\": 25}'."
+                                 " Security may be explicitly set to 'starttls', 'tls' or automatically determined by port.",
                             nargs="*", action=BlankTrue, metavar=("HOST", "PORT"))
     group_send.add_argument('--send', help="Send e-mail. Blank to send now.", nargs="?", action=BlankTrue)
 
@@ -200,8 +207,7 @@ def main():
     args["headers"] = args["header"]
     del args["header"]
 
-    if args["from"]:
-        args["from_"] = args["from"]
+    args["from_"] = args["from"]
     del args["from"]
 
     check = args.pop("check")
@@ -226,12 +232,9 @@ def main():
         # XX allow any header to be displayed, ex: `--header Received` will display all Received headers
         read_method = None
         read_val = None
-        if args["subject"] is True:
-            read_method = "subject"
-            del args["subject"]
-        if args["message"] is True:
-            read_method = "message"
-            del args["message"]
+        for x in (x for x in ("subject", "message", "from_", "to", "cc", "bcc", "reply_to") if args[x] is True):
+            read_method = x
+            del args[x]
         if read_attachments:
             read_method = "attachments"
             if read_attachments is not True:

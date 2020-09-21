@@ -25,6 +25,7 @@ environ["GNUPGHOME"] = GNUPG_HOME
 
 class TestAbstract(unittest.TestCase):
     utf_header = Path("tests/eml/utf-header.eml")  # the file has encoded headers
+    charset = Path("tests/eml/charset.eml")  # the file has encoded headers
     quopri = Path("tests/eml/quopri.eml")  # the file has CRLF separators
     eml = Path("tests/eml/mail.eml")
     text_attachment = "tests/eml/generic.txt"
@@ -704,6 +705,16 @@ class TestRecipients(TestAbstract):
         self.assertNotIn(header_row, self.bash("--to", "", file=self.eml))
         self.assertNotIn(f"To: {contact}", self.bash("--to", "", "contact", file=self.eml))
 
+    def test_reading_contact(self):
+        self.assertIn("Person <person@example.com>", self.bash("--to"))
+        self.assertIn("Harry Potter Junior via online--hey-list-open <some-list-email-address@example.com>", self.bash("--from"))
+
+        # if multiple recipients encountered, each displayed on its own line
+        self.assertIn("Person <person1@example.com>\nPerson2 <person2@example.com>", self.bash("--to", file=self.charset))
+        self.assertIn("Person3 <person3@example.com>\nPerson4 <person4@example.com>", self.bash("--cc", file=self.charset))
+        self.assertIn("Person5 <person5@example.com>", self.bash("--bcc", file=self.charset))
+        self.assertIn("Person6 <person6@example.com>", self.bash("--reply-to", file=self.charset))
+
 
 class TestSubject(TestAbstract):
     def test_cache_recreation(self):
@@ -977,6 +988,9 @@ class TestLoad(TestBash):
         # correctly access the attachment, the bytes kept intact
         self.assertEqual(self.image_file.read_bytes(),
                          self.bash("--attachments", "image.gif", file=Path(self.inline_image), decode=False))
+
+    def test_another_charset(self):
+        self.assertEqual("Dobrý den", Envelope.load(self.charset).message())
 
 
 class TestDecrypt(TestSmime):

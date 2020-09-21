@@ -625,7 +625,7 @@ class Envelope:
         """
 
         # lowercase header to its method name
-        specific_interface = {"to": self.to, "cc": self.cc, "bcc": self.bcc, "reply_to": self.reply_to,
+        specific_interface = {"to": self.to, "cc": self.cc, "bcc": self.bcc, "reply-to": self.reply_to,
                               "from": self.from_, "sender": self.sender,
                               "subject": self.subject
                               }
@@ -1516,7 +1516,10 @@ class Parser:
                 raise ValueError(f"Subtype {subtype} not implemented")
         elif maintype == "text":
             if subtype in (HTML, PLAIN):
-                self.e.message(o.get_payload(decode=True).strip(), alternative=subtype)
+                t = o.get_payload(decode=True).strip()
+                if o.get_charsets() and o.get_charsets()[0]:
+                    t = t.decode(o.get_charsets()[0])
+                self.e.message(t, alternative=subtype)
             else:
                 raise ValueError(f"Unknown subtype: {subtype}")
         elif maintype == "application" and subtype == "x-pkcs7-mime":  # decrypting S/MIME
