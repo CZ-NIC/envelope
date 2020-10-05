@@ -10,7 +10,7 @@ import warnings
 from base64 import b64decode
 from configparser import ConfigParser
 from copy import copy, deepcopy
-from email import message_from_bytes, message_from_string
+from email import message_from_bytes, message_from_string, header
 from email.message import EmailMessage, Message
 from email.parser import BytesParser
 from email.policy import default as policy
@@ -146,18 +146,15 @@ class Envelope:
         if self._bcc:  # as bcc is not included as an e-mail header, we explicitly states it here
             result.append("Bcc: " + ", ".join(map(str, self._bcc)))
 
-        for i, r in enumerate(self._result):
+        for r in self._result:
             if isinstance(r, Message):  # smime library always produces a Message object, otherwise EmailMessage is got
                 if self._sign or self._encrypt:
                     result.append(("GPG" if self._gpg else "S/MIME") + ": " + ", ".join(
                         x for x in [bool(self._sign) and "signed", bool(self._encrypt) and "encrypted"] if x))
 
-                # remove body from the message because it may have become unreadable, we will be calling self.message() instead
-                # I cannot use r.set_payload(""), since it would change the headers like Content-Transfer-Encoding
-                for line in r.as_string().splitlines():
-                    result.append(line)
-                    if not line.strip():
-                        break
+                # append headers
+                [result.append(f"{key}: {val}") for key, val in r.items()]
+                result.append("")
             else:
                 result.append(r)
 
@@ -209,8 +206,8 @@ class Envelope:
         e = Envelope()
         try:
             return Parser(e, key=key, cert=cert, gnupg_home=e._get_gnupg_home()).parse(o, add_headers=True)
-        except ValueError as e:
-            logger.warning(f"Message might not have been loaded correctly. {e}")
+        except ValueError as err:
+            logger.warning(f"Message might not have been loaded correctly. {err}")
 
         # emergency body loading when parsing failed
         header_row = re.compile(r"([^\t:]+):(.*)")
@@ -1482,6 +1479,9 @@ class Parser:
                 # We skip MIME-Version because it may be another one in a encrypted sub-message we take the headers from too.
                 if k in ("Content-Type", "Content-Transfer-Encoding", "MIME-Version"):
                     continue
+                if isinstance(val, header.Header):
+                    # when diacritics appear in Subject, object is returned instead of a string
+                    val = val.encode()
                 self.e.header(k, " ".join(x.strip() for x in val.splitlines()))
         maintype, subtype = o.get_content_type().split("/")
         if o.is_multipart():

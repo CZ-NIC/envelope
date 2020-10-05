@@ -128,15 +128,17 @@ def main():
     # build instance
     # determine if we have to load the instance from a file or string
 
-    if args["load"]:
-        instance = Envelope.load(Path(args["load"]))
-    elif select.select([sys.stdin, ], [], [], 0.0)[0] \
-            or len(sys.argv) == 1 \
-            or args["subject"] is True or args["message"] is True:
-        # XXX check if using `select` to detect STDIN does not mess up Windows
-        instance = Envelope.load(sys.stdin.read())
-    else:
-        instance = None
+    instance = None
+    try:
+        if args["load"]:
+            instance = Envelope.load(Path(args["load"]))
+        elif len(sys.argv) == 1 \
+                or args["subject"] is True \
+                or args["message"] is True \
+                or select.select([sys.stdin, ], [], [], 0.0)[0]:
+            instance = Envelope.load(sys.stdin.read())
+    except select.error:  # XX check if using `select` to detect STDIN does not mess up Windows
+        pass
     del args["load"]
 
     # in command line, we may specify input message by path (in module we would rather call message=Path("path"))

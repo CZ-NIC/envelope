@@ -26,6 +26,7 @@ environ["GNUPGHOME"] = GNUPG_HOME
 class TestAbstract(unittest.TestCase):
     utf_header = Path("tests/eml/utf-header.eml")  # the file has encoded headers
     charset = Path("tests/eml/charset.eml")  # the file has encoded headers
+    internationalized = Path("tests/eml/internationalized.eml")
     quopri = Path("tests/eml/quopri.eml")  # the file has CRLF separators
     eml = Path("tests/eml/mail.eml")
     text_attachment = "tests/eml/generic.txt"
@@ -200,7 +201,7 @@ class TestEnvelope(TestAbstract):
     def test_preview(self):
         self.check_lines(Envelope(Path("tests/eml/generic.txt")).preview(),
                          ('Content-Type: text/plain; charset="utf-8"',
-                          "Subject:",
+                          "Subject: ",
                           "Small sample text attachment."))
 
 
@@ -992,6 +993,12 @@ class TestLoad(TestBash):
     def test_another_charset(self):
         self.assertEqual("Dobrý den", Envelope.load(self.charset).message())
 
+    def test_internationalized(self):
+        self.assertEqual("Žluťoučký kůň", Envelope.load(self.internationalized).subject())
+
+        # when using preview, we do not want to end up with "Subject: =?utf-8?b?xb1sdcWlb3XEjWvDvSBrxa/FiA==?="
+        # which could appear even when .subject() shows decoded version
+        self.assertIn("Subject: Žluťoučký kůň", Envelope.load(self.internationalized).preview().splitlines())
 
 class TestDecrypt(TestSmime):
 

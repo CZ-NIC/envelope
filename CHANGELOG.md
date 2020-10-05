@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## 1.3 (unreleased)
+## 1.3 (2020-10-05)
 - CHANGED:
     * `.attach(filename=)` renamed to `.attach(name=)`
     * `--attachment` renamed to `--attach`
@@ -15,6 +15,7 @@
 - loading parses attachments and decrypts
 - contacts might be cleared (ex: to clear `To` header intuitively type `.to(False)`)
 - `.attachments`, `--attachments [NAME]` -> read the list of the attachments
+- preview returns nicely formatted headers
 
 ## 1.2 (2020-06-18)
 - fix: smtplib.SMTP_SSL handshake operation timed out caught

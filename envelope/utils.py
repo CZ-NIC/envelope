@@ -174,7 +174,7 @@ class Attachment:
     def get_sample(self):
         if self.data is None:
             raise ValueError(f"Empty attachment {self.name}")
-        sample = self.data.decode("utf-8", "ignore").replace("\n", "")
+        sample = self.data.decode("utf-8", "ignore").replace("\n", " ").replace("\r", " ")
         if len(sample) > 24:
             sample = sample[:20].strip() + "..."
         return sample
