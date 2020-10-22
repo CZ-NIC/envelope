@@ -127,14 +127,16 @@ class TestEnvelope(TestAbstract):
 
     def test_1000_split(self):
         self.check_lines(Envelope().message("short text").subject("my subject").send(False),
-                         ('Content-Transfer-Encoding: 7bit',
+                         ('Content-Type: text/plain; charset="utf-8"',
+                          'Content-Transfer-Encoding: 7bit',
                           "Subject: my subject",
                           "short text"), 10)
 
         # this should be no more 7bit but base64 (or quoted-printable which is however not guaranteed)
         e = Envelope().message("Longer than thousand chars. " * 1000).subject("my subject").send(False)
         self.check_lines(e,
-                         ("Content-Transfer-Encoding: base64",
+                         ('Content-Type: text/plain; charset="utf-8"',
+                          "Content-Transfer-Encoding: base64",
                           "Subject: my subject",), 100,
                          not_in=('Content-Transfer-Encoding: 7bit',)
                          )
@@ -150,14 +152,19 @@ class TestEnvelope(TestAbstract):
         # 7bit both plain and html
         self.check_lines(e.send(False),
                          ("Subject: my subject",
+                          'Content-Type: text/plain; charset="utf-8"',
                           'Content-Transfer-Encoding: 7bit',
                           "short text",
+                          'Content-Type: text/html; charset="utf-8"',
+                          'Content-Transfer-Encoding: 7bit',
                           "<b>html</b>"), 10)
 
         # 7bit html, base64 plain
         self.check_lines(e.copy().message("Longer than thousand chars. " * 1000).send(False),
                          ("Subject: my subject",
+                          'Content-Type: text/plain; charset="utf-8"',
                           "Content-Transfer-Encoding: base64",
+                          'Content-Type: text/html; charset="utf-8"',
                           'Content-Transfer-Encoding: 7bit',
                           "<b>html</b>"
                           ), 100,
@@ -167,8 +174,10 @@ class TestEnvelope(TestAbstract):
         # 7bit plain, base64 html
         self.check_lines(e.copy().message("Longer than thousand chars. " * 1000, alternative="html").send(False),
                          ("Subject: my subject",
+                          'Content-Type: text/plain; charset="utf-8"',
                           'Content-Transfer-Encoding: 7bit',
                           'short text',
+                          'Content-Type: text/html; charset="utf-8"',
                           "Content-Transfer-Encoding: base64",
                           ), 100,
                          not_in="<b>html</b>"
@@ -178,7 +187,9 @@ class TestEnvelope(TestAbstract):
         self.check_lines(e.copy().message("Longer than thousand chars. " * 1000, alternative="html")
                          .message("Longer than thousand chars. " * 1000).send(False),
                          ("Subject: my subject",
+                          'Content-Type: text/plain; charset="utf-8"',
                           "Content-Transfer-Encoding: base64",
+                          'Content-Type: text/html; charset="utf-8"',
                           "Content-Transfer-Encoding: base64",
                           ), 100,
                          not_in=('Content-Transfer-Encoding: 7bit',

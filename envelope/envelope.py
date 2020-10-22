@@ -1280,6 +1280,7 @@ class Envelope:
                 # rather than plain text. Which could cause a transferring SMTP server to include line breaks and spaces
                 # that might break up DKIM.
                 msg_text.set_content(t.encode("utf-8"), maintype="text", subtype=mime)  # text as bytes
+                msg_text.set_param("charset", "utf-8", replace=True)
             else:
                 msg_text.set_content(t, subtype=mime)  # text as string
         else:
@@ -1298,7 +1299,13 @@ class Envelope:
                     # passing bytes to EmailMessage makes its ContentManager to transfer it via base64 or quoted-printable
                     # rather than plain text. Which could cause a transferring SMTP server to include line breaks and spaces
                     # that might break up DKIM.
-                    msg_text.add_alternative(html.encode("utf-8"), maintype="text", subtype='html')  # `html` as bytes
+                    
+                    # create an alternative message part and set utf-8 encoding explicitly
+                    alt_msg = EmailMessage()
+                    alt_msg.set_content(html.encode("utf-8"), maintype="text", subtype="html")  # `html` as bytes
+                    alt_msg.set_param("charset", "utf-8", replace=True)
+                    msg_text.make_alternative()
+                    msg_text.attach(alt_msg)
                 else:
                     msg_text.add_alternative(html, subtype='html')  # `html` as string
             except (ValueError, TypeError):
