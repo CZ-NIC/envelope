@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 1.3.1 (patch release)
+- fix charset for base64 encoded content 
+
 ## 1.3 (2020-10-05)
 - CHANGED:
     * `.attach(filename=)` renamed to `.attach(name=)`
