@@ -1,7 +1,8 @@
 # CHANGELOG
 
-## 1.3.1 (patch release)
-- fix charset for base64 encoded content 
+## 1.3.2 (patch release)
+- fix charset for base64 encoded content
+- fix the default encoding while casting an attachment to string 
 
 ## 1.3 (2020-10-05)
 - CHANGED:

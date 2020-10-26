@@ -629,11 +629,13 @@ Third
     def test_nl2br(self):
         nobr = "Second"
         br = "Second<br>"
-        self.check_lines(Envelope().message(self.html), nobr)  # there already is a <br> tag so nl2br "auto" should not convert it
+        self.check_lines(Envelope().message(self.html),
+                         nobr)  # there already is a <br> tag so nl2br "auto" should not convert it
         self.check_lines(Envelope().message(self.html).mime(nl2br=True), br)
 
         self.check_lines(Envelope().message(self.html_without_line_break), br)
-        self.check_lines(Envelope().message(self.html_without_line_break).mime("plain", True), nobr)  # nl2br disabled in "plain"
+        self.check_lines(Envelope().message(self.html_without_line_break).mime("plain", True),
+                         nobr)  # nl2br disabled in "plain"
         self.check_lines(Envelope().message(self.html_without_line_break).mime(nl2br=False), nobr)
 
     def test_alternative(self):
@@ -719,11 +721,14 @@ class TestRecipients(TestAbstract):
 
     def test_reading_contact(self):
         self.assertIn("Person <person@example.com>", self.bash("--to"))
-        self.assertIn("Harry Potter Junior via online--hey-list-open <some-list-email-address@example.com>", self.bash("--from"))
+        self.assertIn("Harry Potter Junior via online--hey-list-open <some-list-email-address@example.com>",
+                      self.bash("--from"))
 
         # if multiple recipients encountered, each displayed on its own line
-        self.assertIn("Person <person1@example.com>\nPerson2 <person2@example.com>", self.bash("--to", file=self.charset))
-        self.assertIn("Person3 <person3@example.com>\nPerson4 <person4@example.com>", self.bash("--cc", file=self.charset))
+        self.assertIn("Person <person1@example.com>\nPerson2 <person2@example.com>",
+                      self.bash("--to", file=self.charset))
+        self.assertIn("Person3 <person3@example.com>\nPerson4 <person4@example.com>",
+                      self.bash("--cc", file=self.charset))
         self.assertIn("Person5 <person5@example.com>", self.bash("--bcc", file=self.charset))
         self.assertIn("Person6 <person6@example.com>", self.bash("--reply-to", file=self.charset))
 
@@ -783,7 +788,8 @@ class TestHeaders(TestAbstract):
         self.assertIs(e.header("cc", replace=True), e)
         self.assertEqual(e.cc(), [])
         self.assertIs(e.header("cc", id3), e)
-        self.assertEqual(e.header("cc"), [id3])  # cc and bcc headers always return list as documented (which is maybe not ideal)
+        self.assertEqual(e.header("cc"),
+                         [id3])  # cc and bcc headers always return list as documented (which is maybe not ideal)
 
     def test_date(self):
         """ Automatic adding of the Date header can be disabled. """
@@ -829,7 +835,8 @@ class TestSupportive(TestAbstract):
         e2 = factory().to("independent-2@example.com").cc("additional@example.com")
 
         self.assertEqual(e1.recipients(), {'independent-1@example.com', 'original@example.com'})
-        self.assertEqual(e2.recipients(), {'independent-2@example.com', 'original@example.com', 'additional@example.com'})
+        self.assertEqual(e2.recipients(),
+                         {'independent-2@example.com', 'original@example.com', 'additional@example.com'})
 
     def test_message(self):
         e = Envelope("hello").as_message()
@@ -862,6 +869,21 @@ class TestBash(TestAbstract):
 
 
 class TestAttachment(TestAbstract):
+
+    def test_casting(self):
+        e = Envelope() \
+            .attach("hello", "text/plain") \
+            .attach(b"hello bytes")
+
+        # attachment data are fetched as bytes by default
+        self.assertEqual(b"hello", e.attachments()[0].data, bytes(e.attachments()[0]))
+
+        # attachment can be casted to string (default UTF-8 encoding)
+        self.assertEqual("hello", str(e.attachments()[0]))
+
+        # the same is valid if the input has already been in bytes
+        self.assertEqual(b"hello bytes", e.attachments()[1].data, bytes(e.attachments()[1]))
+        self.assertEqual("hello bytes", str(e.attachments()[1]))
 
     def test_different_order(self):
         e = Envelope() \
@@ -898,7 +920,8 @@ class TestAttachment(TestAbstract):
         self.check_lines(e2, compare_lines)
 
         # Two message alternatives, the plain is specified
-        e3 = e().message(f"Hi <img src='cid:{name}'/>").message("Plain alternative", alternative=PLAIN, boundary="bound") \
+        e3 = e().message(f"Hi <img src='cid:{name}'/>").message("Plain alternative", alternative=PLAIN,
+                                                                boundary="bound") \
             .attach(image, inline=True)
         self.check_lines(e3, (
             'Content-Type: multipart/alternative; boundary="bound"',
@@ -983,8 +1006,9 @@ class TestLoad(TestBash):
         self.assertEqual("Hello world subject", self.bash("--subject"))
 
     def test_multiline_folded_header(self):
-        self.assertEqual("Very long text Very long text Very long text Very long text Ver Very long text Very long text",
-                         self.bash("--subject", file=self.quopri))
+        self.assertEqual(
+            "Very long text Very long text Very long text Very long text Ver Very long text Very long text",
+            self.bash("--subject", file=self.quopri))
 
     def test_alternative_and_related(self):
         e = Envelope.load(path=self.inline_image)
@@ -995,7 +1019,8 @@ class TestLoad(TestBash):
 
     def test_accessing_attachments(self):
         # correctly preview the attachments
-        self.assertEqual("image.gif (image/gif): <img src='cid:True'/>", self.bash("--attachments", file=Path(self.inline_image)))
+        self.assertEqual("image.gif (image/gif): <img src='cid:True'/>",
+                         self.bash("--attachments", file=Path(self.inline_image)))
 
         # correctly access the attachment, the bytes kept intact
         self.assertEqual(self.image_file.read_bytes(),
@@ -1010,6 +1035,7 @@ class TestLoad(TestBash):
         # when using preview, we do not want to end up with "Subject: =?utf-8?b?xb1sdcWlb3XEjWvDvSBrxa/FiA==?="
         # which could appear even when .subject() shows decoded version
         self.assertIn("Subject: Žluťoučký kůň", Envelope.load(self.internationalized).preview().splitlines())
+
 
 class TestDecrypt(TestSmime):
 

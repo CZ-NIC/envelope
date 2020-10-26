@@ -154,7 +154,7 @@ class Attachment:
             m = magic.Magic(mime=True)
             mimetype = m.from_file(str(contents)) if isinstance(contents, Path) else m.from_buffer(contents)
 
-        self.data = data
+        self.data: bytes = data
         self.mimetype = mimetype
         self.name = name
         self.inline = inline
@@ -166,10 +166,10 @@ class Attachment:
         return f"Attachment({', '.join(l)})"
 
     def __str__(self):
-        return str(self.data)
+        return str(self.data, "utf-8")
 
     def __bytes__(self):
-        return bytes(self.data)
+        return self.data
 
     def get_sample(self):
         if self.data is None:
