@@ -989,15 +989,25 @@ class TestLoad(TestBash):
     def test_encoded_headers(self):
         e = Envelope.load(path=str(self.utf_header))
         self.assertEqual(e.subject(), "Re: text")
-        self.assertEqual(e.from_(), "Jiří <jiri@example.com>")
+        self.assertEqual("Jiří <jiri@example.com>", e.from_())
 
         # Test header case-sensitive parsing in .header().
+        #
+        # (policy.header_store_parse is used no more but I leave the following comment since it is interesting)
         # We have to type the value to `str` due to this strange fact:
         # `key = "subject"; email["Subject"] = policy.header_store_parse(key, "hello")[1];`
         #   would force `str(email)` output 'subject: hello' (small 's'!)
         # Interestingly, setting `key = "anything else";` would output correct 'Subject: hello'
         # val = str(policy.header_store_parse(k, val)[1])
         self.assertIn("Subject: Re: text", str(e))
+
+        # when longer than certain number of characters, the method Parser.parse header.Header.encode()
+        # returned chunks that were problematic to parse with policy.header_store_parse
+        address = Envelope.load("To: Novák Honza Name longer than 75 chars <honza.novak@example.com>").to()[0]
+        self.assertEqual("honza.novak@example.com", address.address)
+        self.assertEqual("Novák Honza Name longer than 75 chars", address.name)
+
+
 
     def test_load_bash(self):
         self.assertIn("Hello world subject", self.bash())

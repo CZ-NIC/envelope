@@ -11,9 +11,9 @@ from base64 import b64decode
 from configparser import ConfigParser
 from copy import copy, deepcopy
 from email import message_from_bytes, message_from_string, header
+from email.header import decode_header
 from email.message import EmailMessage, Message
 from email.parser import BytesParser
-from email.policy import default as policy
 from email.utils import make_msgid, formatdate, getaddresses
 from getpass import getpass
 from itertools import chain
@@ -21,7 +21,8 @@ from pathlib import Path
 from quopri import decodestring
 from typing import Union, List, Set, Any
 
-from .utils import Address, Attachment, AutoSubmittedHeader, SMTP, _Message, is_gpg_fingerprint, assure_list, assure_fetched
+from .utils import Address, Attachment, AutoSubmittedHeader, SMTP, _Message, is_gpg_fingerprint, assure_list, \
+    assure_fetched
 
 smime_import_error = "Cannot import M2Crypto. Run: `sudo apt install swig && pip3 install M2Crypto`"
 
@@ -636,12 +637,20 @@ class Envelope:
                 if k in ("sender", "from"):
                     self._prepare_from()
                 return self
-            if type(val) is str:  # None has to stay None
-                # We have to type the value to `str` due to this strange fact:
-                # `key = "subject"; email["Subject"] = policy.header_store_parse(key, "hello")[1];`
-                #   would force `str(email)` output 'subject: hello' (small 's'!)
-                # Interestingly, setting `key = "anything else";` would output correct 'Subject: hello'
-                val = str(policy.header_store_parse(k, val)[1])  # Subject '=?UTF-8?Q?Re=3a_text?=' -> 'Re: text'
+            # Xif type(val) is str:  # None has to stay None
+            # We have to type the value to `str` due to this strange fact:
+            # `key = "subject"; email["Subject"] = policy.header_store_parse(key, "hello")[1];`
+            #   would force `str(email)` output 'subject: hello' (small 's'!)
+            # Interestingly, setting `key = "anything else";` would output correct 'Subject: hello'
+            # val = str(policy.header_store_parse(k, val)[1])  # Subject '=?UTF-8?Q?Re=3a_text?=' -> 'Re: text'
+            if val is not None:  # None has to stay None to allow reading
+                # val might be str or header.Header (used when loading through message_from_bytes)
+                # decode_header might return multiple chunks
+                # ex: "To: Novák Honza Name longer than 75 chars <honza.novak@example.com>" -> single chunk
+                #   [(b'Nov\xc3\xa1k Honza Name longer than 75 chars <honza.novak@example.com>', 'unknown-8bit')]
+                # ex: "From: =?UTF-8?Q?Ji=c5=99=c3=ad?= <jiri@example.com>" -> multiple chunks
+                #   [(b'Ji\xc5\x99\xc3\xad', 'utf-8'), (b' <jiri@example.com>', None)]
+                val = "".join(assure_fetched(x[0], str) for x in decode_header(val))
             return specific_interface[k](val)
 
         if replace:
@@ -1029,7 +1038,7 @@ class Envelope:
         # insert arbitrary headers
         # XX do not we want to encrypt these headers with GPG/SMIME?
         for k, v in self._headers.items():
-            #XXX make e-mail headers case insensitive, add tests
+            # XXX check e-mail headers are really case insensitive when loading, add tests
             # if k in ["Content-Type", "Content-Transfer-Encoding", "MIME-Version"]:
             if k.lower() in ["content-type", "content-transfer-encoding", "mime-version"]:
                 # skip headers already inserted in _prepare_email
@@ -1301,7 +1310,7 @@ class Envelope:
                     # passing bytes to EmailMessage makes its ContentManager to transfer it via base64 or quoted-printable
                     # rather than plain text. Which could cause a transferring SMTP server to include line breaks and spaces
                     # that might break up DKIM.
-                    
+
                     # create an alternative message part and set utf-8 encoding explicitly
                     alt_msg = EmailMessage()
                     alt_msg.set_content(html.encode("utf-8"), maintype="text", subtype="html")  # `html` as bytes
@@ -1486,12 +1495,16 @@ class Parser:
             for k, val in o.items():
                 # We skip "Content-Type" and "Content-Transfer-Encoding" because we decode text payload before importing.
                 # We skip MIME-Version because it may be another one in a encrypted sub-message we take the headers from too.
-                if k in ("Content-Type", "Content-Transfer-Encoding", "MIME-Version"):
+                if k.lower() in ("content-type", "content-transfer-encoding", "mime-version"):
                     continue
                 if isinstance(val, header.Header):
                     # when diacritics appear in Subject, object is returned instead of a string
-                    val = val.encode()
-                self.e.header(k, " ".join(x.strip() for x in val.splitlines()))
+                    # when maxline is not set, it uses a default one (75 chars?) and gets encoded into multiple chunks
+                    # while policy.header_store_parse parses just the first
+                    # val = val.encode()
+                    self.e.header(k, val)
+                else:
+                    self.e.header(k, " ".join(x.strip() for x in val.splitlines()))
         maintype, subtype = o.get_content_type().split("/")
         if o.is_multipart():
             payload: List[Message] = o.get_payload()

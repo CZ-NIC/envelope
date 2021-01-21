@@ -2,6 +2,7 @@
 
 ## 1.3.3 (unreleased)
 - fix case-insensitive header loading
+- fix non-latin chars in header loading
 
 ## 1.3.2 (patch release)
 - fix charset for base64 encoded content
