@@ -8,6 +8,8 @@ from subprocess import PIPE, STDOUT, Popen
 from tempfile import TemporaryDirectory
 from typing import Tuple, Union
 
+from envelope.utils import Address
+
 from envelope import Envelope
 from envelope.envelope import HTML, PLAIN, Parser
 
@@ -688,10 +690,22 @@ class TestRecipients(TestAbstract):
         e = Envelope.load(path=self.eml)
         self.assertEqual(1, len(e.to()))
         contact = e.to()[0]
-        self.assertEqual("Person <person@example.com>", contact)
+        full = "Person <person@example.com>"
+        self.assertEqual(full, contact)
         self.assertEqual("person@example.com", contact)
         self.assertEqual("person@example.com", contact.address)
         self.assertEqual("Person", contact.name)
+        self.assertEqual("PERSON@examPLE.com", contact)
+        self.assertEqual(Address("another name <PERSON@examPLE.com>"), contact)
+        self.assertNotEqual("person2@example.com", contact)
+        self.assertNotEqual(Address("another name <person2@example.com>"), contact)
+
+        # host property
+        self.assertEqual("example.com", contact.host)
+        self.assertNotEqual("@example.com", contact.host)
+
+        # joining
+        self.assertEqual(f"{full}, {full}", ", ".join((contact, contact)))
 
     def test_removing_contact(self):
         contact = "Person2 <person2@example.com>"
@@ -1006,8 +1020,6 @@ class TestLoad(TestBash):
         address = Envelope.load("To: Novák Honza Name longer than 75 chars <honza.novak@example.com>").to()[0]
         self.assertEqual("honza.novak@example.com", address.address)
         self.assertEqual("Novák Honza Name longer than 75 chars", address.name)
-
-
 
     def test_load_bash(self):
         self.assertIn("Hello world subject", self.bash())

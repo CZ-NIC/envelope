@@ -39,12 +39,19 @@ class Address(str):
         """
         Address objects are equal if their e-mail address are equal. (Their real names might differ.)
         Address object is equal to a string if the string contains its e-mail address or the whole representation.
-        Example: "person@example.com" == Address("John <person@example.com>") == "John <person@example.com>"  # True
+        Example: "person@EXAMPLE.com" == Address("John <person@example.com>") == "John <person@example.com>"  # True
         """
-        return hash(self) == hash(other) or hash(str(self)) == hash(other)
+        s = hash(other.casefold())
+        return hash(self) == s or hash(str(self).casefold()) == s
+
+    def casefold(self) -> "Address":
+        """ When comparing Addresses, use casefolded version. Important for Address.__eq__
+         (if retyped to a string, we could not compare addresses via Address.__hash__)"""
+        return Address(str(self).casefold())
 
     def __hash__(self):
-        return hash(self.address)
+        """ E-mail addresses are case insensitive """
+        return hash(self.address.casefold())
 
     def __repr__(self):
         return self.__str__()
@@ -56,6 +63,15 @@ class Address(str):
     @property
     def address(self):
         return self._address
+
+    @property
+    def host(self):
+        """ XXX document and test. Should it be part of def.get?
+          XMaybe used by OTRS (NOT USED NOW) """
+        try:
+            return self._address.split("@")[1]
+        except IndexError:
+            return None
 
     def get(self, name: bool = None, address: bool = None) -> str:
         """ Return `name` and/or `address`.

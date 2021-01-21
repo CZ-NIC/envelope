@@ -436,11 +436,11 @@ Envelope().auto_submitted()  # mark message as automatic
 Envelope().auto_submitted.no()  # mark message as human produced
 ```    
 ### Supportive
-  * **e-mail addresses** Any address encountered is internally converted to an `Address` object. You can safely access the `self.name` property to access the real name and `self.address` to access the e-mail address.
+  * **e-mail addresses** Any address encountered is internally converted to an `Address` object. You can safely access the `self.name` property to access the real name, `self.address` to access the e-mail address or `self.host` to its domain.
   
     ```python3
     a = Address("John <person@example.com>")
-    a.name == "John", a.address == "person@example.com"    
+    a.name == "John", a.address == "person@example.com", a.host == "example.com"    
     ```
     
     Since the `Address` is a subclass of `str`, you can safely join such objects.
