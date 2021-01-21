@@ -98,7 +98,7 @@ def main():
     # XX True for inline
     group_send.add_argument('--header',
                             help="Any e-mail header in the form `name value`. Flag may be used multiple times.",
-                            nargs=2, action="append", metavar=("NAME", "VALUE"))
+                            nargs=2, action="append", metavar=("NAME", "VALUE"))  # XX allow reading
     group_send.add_argument('--mime', help="Set contents mime subtype: 'html' (default) or 'plain' for plain text",
                             metavar="SUBTYPE")
     group_send.add_argument('--smtp',
@@ -130,7 +130,7 @@ def main():
 
     instance = None
     try:
-        if args["load"]:
+        if args["load"]:  # XX possibility to add key and cert
             instance = Envelope.load(Path(args["load"]))
         elif len(sys.argv) == 1 \
                 or args["subject"] is True \

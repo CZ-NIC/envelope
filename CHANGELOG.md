@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 1.3.3 (unreleased)
+- fix case-insensitive header loading
+
 ## 1.3.2 (patch release)
 - fix charset for base64 encoded content
 - fix the default encoding while casting an attachment to string 

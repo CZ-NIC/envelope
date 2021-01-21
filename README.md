@@ -474,10 +474,10 @@ Envelope().auto_submitted.no()  # mark message as human produced
   
   * **.recipients()**: Return set of all recipients – `To`, `Cc`, `Bcc`
     * **.recipients(clear=True)**: All `To`, `Cc` and `Bcc` recipients are removed and the `Envelope` object is returned.
-  * **attachments**: Access the list attachments.
+  * **attachments**: Access the list of attachments.
       * **--attachments [NAME]** Get the list of attachments or a contents of the one specified by `NAME`
       * **.attachments(name=None, inline=None)**
-        * **name** (str): Set the name of the only desired attachment to be returned.
+        * **name** (str): The name of the only desired attachment to be returned.
         * **inline** (bool): Filter inline/enclosed attachments only.            
         * *Attachment* object has the attributes *.name* file name, *.mimetype*, *.data* raw data
             * if casted to *str*/*bytes*, its raw *.data* are returned
@@ -621,7 +621,7 @@ Envelope(message="Hello world", sign=True, passphrase="my-password")
 
 Sign a message without signing by default turned previously on and having a default keyring path. Every `Envelope` call will honour these defaults. 
 ```python3 
-Envelope.default.signature(True).gnupghome("/tmp/my-keyring")
+Envelope.default.signature(True).gpg("/tmp/my-keyring")
 Envelope(message="Hello world")
 ```
 

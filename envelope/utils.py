@@ -235,7 +235,7 @@ class _Message:
     def __str__(self):
         text, html = self.get()
         if text and html:
-            return " ".join("(text/plain)", text, "(text/html)", html)
+            return " ".join(("(text/plain)", text, "(text/html)", html))
         else:
             return text or html
 

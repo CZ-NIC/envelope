@@ -1029,7 +1029,9 @@ class Envelope:
         # insert arbitrary headers
         # XX do not we want to encrypt these headers with GPG/SMIME?
         for k, v in self._headers.items():
-            if k in ["Content-Type", "Content-Transfer-Encoding", "MIME-Version"]:
+            #XXX make e-mail headers case insensitive, add tests
+            # if k in ["Content-Type", "Content-Transfer-Encoding", "MIME-Version"]:
+            if k.lower() in ["content-type", "content-transfer-encoding", "mime-version"]:
                 # skip headers already inserted in _prepare_email
                 continue
             try:
