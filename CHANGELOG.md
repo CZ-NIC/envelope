@@ -1,10 +1,14 @@
 # CHANGELOG
 
-## 1.3.3 (unreleased)
+## 1.3.4 (unreleased)
+- exposed Address
+- Address casefold method and `user` and `host` properties
+
+## 1.3.3 (2020-01-21)
 - fix case-insensitive header loading
 - fix non-latin chars in header loading
 
-## 1.3.2 (patch release)
+## 1.3.2 (2020-10-26)
 - fix charset for base64 encoded content
 - fix the default encoding while casting an attachment to string 
 

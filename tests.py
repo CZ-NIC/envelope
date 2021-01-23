@@ -704,8 +704,19 @@ class TestRecipients(TestAbstract):
         self.assertEqual("example.com", contact.host)
         self.assertNotEqual("@example.com", contact.host)
 
+        # user property
+        self.assertEqual("person", contact.user)
+        self.assertNotEqual("PERSON", contact.user)
+
         # joining
         self.assertEqual(f"{full}, {full}", ", ".join((contact, contact)))
+
+        # casefold method
+        c = contact.casefold()
+        self.assertEqual(contact, c)
+        self.assertIsNot(contact, c)
+        self.assertEqual(c.name, "person")
+        self.assertNotEqual(c.name, contact.name)
 
     def test_removing_contact(self):
         contact = "Person2 <person2@example.com>"

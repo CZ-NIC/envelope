@@ -436,12 +436,24 @@ Envelope().auto_submitted()  # mark message as automatic
 Envelope().auto_submitted.no()  # mark message as human produced
 ```    
 ### Supportive
-  * **e-mail addresses** Any address encountered is internally converted to an `Address` object. You can safely access the `self.name` property to access the real name, `self.address` to access the e-mail address or `self.host` to its domain.
-  
+  * **e-mail addresses** Any address encountered is internally converted to an `Address` object that can be imported from the `envelope` package. You can safely access following properties:
+    * `.name` – the real name
+    * `.address` – the e-mail address
+    * `.host` – its domain
+    * `.user` – the user name part of the e-mail
+    ```python3
+    from envelope import Address
+    a = Address("John <person@example.com>")
+    a.name == "John", a.address == "person@example.com", a.host == "example.com", a.user == "person"    
+    ```
+    
+    Method `self.casefold()` returns casefolded `Address` object which is useful for comparing with strings whereas comparing with other `Address` object casefolds automatically
     ```python3
     a = Address("John <person@example.com>")
-    a.name == "John", a.address == "person@example.com", a.host == "example.com"    
+    c = a.casefold()
+    a is not c, a == c, a.name == "john", a.name != c.name
     ```
+  
     
     Since the `Address` is a subclass of `str`, you can safely join such objects.
     

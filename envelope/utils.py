@@ -66,10 +66,17 @@ class Address(str):
 
     @property
     def host(self):
-        """ XXX document and test. Should it be part of def.get?
-          XMaybe used by OTRS (NOT USED NOW) """
+        """ XX Should it be part of Address.get? """
         try:
             return self._address.split("@")[1]
+        except IndexError:
+            return None
+
+    @property
+    def user(self):
+        """ XX docuemnt Should it be part of Address.get? """
+        try:
+            return self._address.split("@")[0]
         except IndexError:
             return None
 
