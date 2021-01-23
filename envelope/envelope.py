@@ -209,6 +209,7 @@ class Envelope:
             return Parser(e, key=key, cert=cert, gnupg_home=e._get_gnupg_home()).parse(o, add_headers=True)
         except ValueError as err:
             logger.warning(f"Message might not have been loaded correctly. {err}")
+            import ipdb; ipdb.post_mortem()
 
         # emergency body loading when parsing failed
         header_row = re.compile(r"([^\t:]+):(.*)")
@@ -1493,18 +1494,25 @@ class Parser:
     def parse(self, o: Message, add_headers=False):
         if add_headers:
             for k, val in o.items():
+                # XXX
+                # print(k, val)
+                # import ipdb; ipdb.set_trace()
                 # We skip "Content-Type" and "Content-Transfer-Encoding" because we decode text payload before importing.
                 # We skip MIME-Version because it may be another one in a encrypted sub-message we take the headers from too.
                 if k.lower() in ("content-type", "content-transfer-encoding", "mime-version"):
                     continue
-                if isinstance(val, header.Header):
-                    # when diacritics appear in Subject, object is returned instead of a string
-                    # when maxline is not set, it uses a default one (75 chars?) and gets encoded into multiple chunks
-                    # while policy.header_store_parse parses just the first
-                    # val = val.encode()
-                    self.e.header(k, val)
-                else:
-                    self.e.header(k, " ".join(x.strip() for x in val.splitlines()))
+                try:
+                    if isinstance(val, header.Header):
+                        # when diacritics appear in Subject, object is returned instead of a string
+                        # when maxline is not set, it uses a default one (75 chars?) and gets encoded into multiple chunks
+                        # while policy.header_store_parse parses just the first
+                        # val = val.encode()
+                        self.e.header(k, val)
+                    else:
+                        self.e.header(k, " ".join(x.strip() for x in val.splitlines()))
+                except ValueError as e:
+                    logger.warning(f"{e} at header {k}")
+
         maintype, subtype = o.get_content_type().split("/")
         if o.is_multipart():
             payload: List[Message] = o.get_payload()

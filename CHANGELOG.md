@@ -1,10 +1,11 @@
 # CHANGELOG
 
-## 1.3.4 (unreleased)
+## 1.4 (2021-01-23)
 - exposed Address
 - Address casefold method and `user` and `host` properties
+- loading ignores invalid headers (and prints out a warning)
 
-## 1.3.3 (2020-01-21)
+## 1.3.3 (2021-01-21)
 - fix case-insensitive header loading
 - fix non-latin chars in header loading
 
