@@ -16,12 +16,24 @@ class Address(str):
     """
         You can safely access the `self.name` property to access the real name and `self.address` to access the e-mail address.
         Example: Address("John <person@example.com>") -> self.name = "John", self.address = "person@example.com"
+        
+        Similarly, there are `self.user` and `self.host` properties.
+        Example: -> self.user= "person", self.host = "example.com"
+
+        All properties are guaranteed to be strings.
+        Example: a = Address("") → a.name == "", bool(a) is False
 
         Address objects are equal if their e-mail address are equal. (Their real names might differ.)
         Address object is equal to a string if the string contains its e-mail address or the whole representation.
         Example: "person@example.com" == Address("John <person@example.com>") == "John <person@example.com>"  # True
+        
+        Method casefold returns casefolded object, useful for string comparing (whereas it is still equal to the original object).
+        Example Address("John <person@example.com>").casefold() -> self.name == "john"
 
     """
+
+    _name: str
+    _address: str
 
     def __new__(cls, displayed_email=None, name=None, address=None):
         if displayed_email:
@@ -31,8 +43,8 @@ class Address(str):
             displayed_email = f"{name} <{address}>"
         else:
             displayed_email = address
-        instance = super().__new__(cls, displayed_email)
-        instance._name, instance._address = name, address
+        instance = super().__new__(cls, displayed_email or "")
+        instance._name, instance._address = name or "", address or ""
         return instance
 
     def __eq__(self, other):
@@ -57,28 +69,28 @@ class Address(str):
         return self.__str__()
 
     @property
-    def name(self):
+    def name(self) -> str:
         return self._name
 
     @property
-    def address(self):
+    def address(self) -> str:
         return self._address
 
     @property
-    def host(self):
+    def host(self) -> str:
         """ XX Should it be part of Address.get? """
         try:
             return self._address.split("@")[1]
         except IndexError:
-            return None
+            return ""
 
     @property
-    def user(self):
-        """ XX docuemnt Should it be part of Address.get? """
+    def user(self) -> str:
+        """ XX document Should it be part of Address.get? """
         try:
             return self._address.split("@")[0]
         except IndexError:
-            return None
+            return ""
 
     def get(self, name: bool = None, address: bool = None) -> str:
         """ Return `name` and/or `address`.

@@ -709,6 +709,17 @@ class TestRecipients(TestAbstract):
         self.assertEqual("person", contact.user)
         self.assertNotEqual("PERSON", contact.user)
 
+        # Address is correctly typed, empty properties returns string
+        empty = Address()
+        self.assertEqual(Address(""), empty)
+        self.assertEqual("", str(empty.user))
+        self.assertEqual("", str(empty.host))
+        self.assertEqual(str, type(empty.address))
+        self.assertEqual(str, type(empty.name))
+        self.assertEqual(Address, type(empty))
+        self.assertFalse(bool(empty))
+        self.assertTrue(bool(contact))
+
         # joining
         self.assertEqual(f"{full}, {full}", ", ".join((contact, contact)))
 

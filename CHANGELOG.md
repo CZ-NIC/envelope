@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 1.4.1
+– Address properties are "" if empty (handy when comparing strings)
+
 ## 1.4 (2021-01-23)
 - exposed Address
 - Address casefold method and `user` and `host` properties

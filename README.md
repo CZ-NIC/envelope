@@ -436,7 +436,7 @@ Envelope().auto_submitted()  # mark message as automatic
 Envelope().auto_submitted.no()  # mark message as human produced
 ```    
 ### Supportive
-  * **e-mail addresses** Any address encountered is internally converted to an `Address` object that can be imported from the `envelope` package. You can safely access following properties:
+  * **e-mail addresses** Any address encountered is internally converted to an `Address` object that can be imported from the `envelope` package. You can safely access following `str` properties:
     * `.name` – the real name
     * `.address` – the e-mail address
     * `.host` – its domain
