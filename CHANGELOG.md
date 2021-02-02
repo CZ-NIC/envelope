@@ -1,7 +1,9 @@
 # CHANGELOG
 
-## 1.4.1
+## 1.4.2
 – Address properties are "" if empty (handy when comparing strings)
+- replace invalid characters when loading (the way the e-mail clients behave)
+- headers truly case-insensitive when loading
 
 ## 1.4 (2021-01-23)
 - exposed Address

@@ -2,7 +2,7 @@
 
 [![Build Status](https://travis-ci.org/CZ-NIC/envelope.svg?branch=master)](https://travis-ci.org/CZ-NIC/envelope)
 
-Quick layer over [python-gnupg](https://bitbucket.org/vinay.sajip/python-gnupg/src), [M2Crypto](https://m2crypto.readthedocs.io/), [smtplib](https://docs.python.org/3/library/smtplib.html), [magic](https://pypi.org/project/python-magic/) and [email](https://docs.python.org/3/library/email.html?highlight=email#module-email) handling packages. Their common usecases merged into a single function. Want to sign a text and tired of forgetting how to do it right? You do not need to know everything about GPG or S/MIME, you do not have to bother with importing keys. Do not hassle with reconnecting SMTP server. Do not study various headers meanings to let your users unsubscribe via a URL.  
+Quick layer over [python-gnupg](https://bitbucket.org/vinay.sajip/python-gnupg/src), [M2Crypto](https://m2crypto.readthedocs.io/), [smtplib](https://docs.python.org/3/library/smtplib.html), [magic](https://pypi.org/project/python-magic/) and [email](https://docs.python.org/3/library/email.html?highlight=email#module-email) handling packages. Their common usecases merged into a single function. Want to sign a text and tired of forgetting how to do it right? You do not need to know everything about GPG or S/MIME, you do not have to bother with importing keys. Do not hassle with reconnecting to an SMTP server. Do not study various headers meanings to let your users unsubscribe via a URL.  
 You insert a message, attachments and inline images and receive signed and/or encrypted output to the file or to your recipients' e-mail.  
 Just single line of code. With the great help of the examples below.  
 
@@ -74,7 +74,7 @@ pip3 install M2Crypto
     ```bash
     pip3 install git+https://github.com/CZ-NIC/envelope.git
     ```
-    * Or just download the project and launch `./envelope.py`
+    * Or just download the project and launch `python3 -m envelope`
 * If planning to send e-mails, prepare SMTP credentials or visit [Configure your SMTP](#configure-your-smtp) tutorial.
 * If your e-mails are to be received outside your local domain, visit [DMARC](#dmarc) section.
 * If planning to sign/encrypt with GPG, install the corresponding package and possibly see [Configure your GPG](#configure-your-gpg) tutorial.

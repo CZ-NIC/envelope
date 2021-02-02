@@ -209,7 +209,6 @@ class Envelope:
             return Parser(e, key=key, cert=cert, gnupg_home=e._get_gnupg_home()).parse(o, add_headers=True)
         except ValueError as err:
             logger.warning(f"Message might not have been loaded correctly. {err}")
-            import ipdb; ipdb.post_mortem()
 
         # emergency body loading when parsing failed
         header_row = re.compile(r"([^\t:]+):(.*)")
@@ -612,14 +611,14 @@ class Envelope:
 
     auto_submitted: AutoSubmittedHeader
 
-    def header(self, key, val=None, replace=False):
+    def header(self, key, val=None, replace=False) -> Union["Envelope", list, str, None]:
         """ Add a generic header.
         The header will not be encrypted with GPG nor S/MIME.
         :param key: str Header name
-        :param val: str Header value. If None, currently used value is returned.
+        :param val: str Header value. If None, currently used value is returned as string, or their list, or None.
         :param replace: bool If True, any header of the `key` name are removed first and if `val` is None, the header is deleted.
                         Otherwise another header of the same name is appended.
-        :return: Envelope|str|list Returned self if `val` is not None or replace=True, else returns value of the header
+        :return: Envelope|str|list|None Returned self if `val` is not None or replace=True, else returns value of the header
                  or its list if the header was used multiple times. (Note that cc and bcc headers always return list.)
         """
 
@@ -1039,9 +1038,7 @@ class Envelope:
         # insert arbitrary headers
         # XX do not we want to encrypt these headers with GPG/SMIME?
         for k, v in self._headers.items():
-            # XXX check e-mail headers are really case insensitive when loading, add tests
-            # if k in ["Content-Type", "Content-Transfer-Encoding", "MIME-Version"]:
-            if k.lower() in ["content-type", "content-transfer-encoding", "mime-version"]:
+            if k.lower() in ("content-type", "content-transfer-encoding", "mime-version"):
                 # skip headers already inserted in _prepare_email
                 continue
             try:
@@ -1494,11 +1491,8 @@ class Parser:
     def parse(self, o: Message, add_headers=False):
         if add_headers:
             for k, val in o.items():
-                # XXX
-                # print(k, val)
-                # import ipdb; ipdb.set_trace()
                 # We skip "Content-Type" and "Content-Transfer-Encoding" because we decode text payload before importing.
-                # We skip MIME-Version because it may be another one in a encrypted sub-message we take the headers from too.
+                # We skip MIME-Version because it may be another one in an encrypted sub-message we take the headers from too.
                 if k.lower() in ("content-type", "content-transfer-encoding", "mime-version"):
                     continue
                 try:
@@ -1548,7 +1542,11 @@ class Parser:
             if subtype in (HTML, PLAIN):
                 t = o.get_payload(decode=True).strip()
                 if o.get_charsets() and o.get_charsets()[0]:
-                    t = t.decode(o.get_charsets()[0])
+                    try:
+                        t = t.decode(o.get_charsets()[0])
+                    except ValueError as e:
+                        t = t.decode(o.get_charsets()[0], errors="replace")
+                        logger.warning(f"Replacing some invalid characters in {maintype}/{subtype}: {e}")
                 self.e.message(t, alternative=subtype)
             else:
                 raise ValueError(f"Unknown subtype: {subtype}")

@@ -34,6 +34,7 @@ class TestAbstract(unittest.TestCase):
     text_attachment = "tests/eml/generic.txt"
     image_file = Path("tests/eml/image.gif")
     invalid_recipient = Path("tests/eml/invalid-recipient.eml")
+    invalid_characters = Path("tests/eml/invalid-characters.eml")
 
     def check_lines(self, o, lines: Union[str, Tuple[str, ...]] = (), longer: Union[int, Tuple[int, int]] = None,
                     debug=False, not_in: Union[str, Tuple[str, ...]] = (), raises=(), result=None):
@@ -1089,6 +1090,28 @@ class TestLoad(TestBash):
 
         self.assertEqual([], e.to())
         self.assertEqual("From Alice Smith", e.subject())
+
+    def test_invalid_characters(self):
+        msg = "WARNING:envelope.envelope:Replacing some invalid characters in text/plain:" \
+              " 'utf-8' codec can't decode byte 0xe1 in position 1: invalid continuation byte"
+        with self.assertLogs('envelope', level='WARNING') as cm:
+            e = Envelope.load(self.invalid_characters)
+        self.assertEqual(cm.output, [msg])
+
+        text = 'V�\x17Een� z�kazn�ku!\n Va\x161e z�silka bude'
+        self.assertEqual(text, e.message(alternative="plain")[:len(text)])
+        html = '<HTML><head><meta http-equiv="Content-Type" content="text/html; charset=utf-8"/></head><BODY><P>Vážený'
+        self.assertEqual(html, e.message()[:len(html)])
+
+        # test subject decoded from base64
+        subject = "Vaše zásilka ceká na dorucení"
+        self.assertEqual(subject, e.subject())
+
+        # test header internationalized
+        self.assertEqual(subject, e.header("Subject"))
+        self.assertEqual(subject, e.header("subJEct"))
+        self.assertEqual("Thu", e.header("dATe")[:3])
+
 
 
 class TestDecrypt(TestSmime):

@@ -1,0 +1,111 @@
+Return-Path: <tracking1102111@example.com>
+Received: from mail.csirt.cz (mail.csirt.cz [217.31.204.67])
+	by otrs.csirt.cz (Postfix) with ESMTPS id 8D9A72A0015
+	for <abuse@csirt.cz>; Thu, 28 Jan 2021 11:41:28 +0100 (CET)
+Received-SPF: Pass (mailfrom) identity=mailfrom; client-ip=194.31.191.46; helo=mail.example.com; envelope-from=tracking1102111@example.com; receiver=<UNKNOWN> 
+Authentication-Results: mail.csirt.cz;
+	dkim=pass (1024-bit key; unprotected) header.d=example.com header.i=@example.com header.b="bwbr5C0l";
+	dkim-atps=neutral
+Received: from mail.example.com (mail.example.com [194.31.191.46])
+	by mail.csirt.cz (Postfix) with ESMTPS id 2197A14214F
+	for <abuse@csirt.cz>; Thu, 28 Jan 2021 11:41:26 +0100 (CET)
+Received: from localhost (localhost [127.0.0.1])
+	by mail.example.com (Postfix) with ESMTP id A6F4423C58C4;
+	Thu, 28 Jan 2021 11:41:25 +0100 (CET)
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/simple; d=example.com; h=
+	date:date:from:from:subject:subject:mime-version:content-type
+	:content-type; s=default; t=1611830481; x=1613644882; bh=s1knJzL
+	xnxCFo40ai4oVTeEwVNf6T3ZN52CC1cVU4Kk=; b=bwbr5C0lhkuqRrfP/jKH5Vi
+	+A37faPRKcN7MaWTgPYrRq+4T8ty3MaJZlhC7Ygi+gV1NRJT8NBcpbGeJnNwVILP
+	5aojkUMSkN/+8rnlOsflqTEL9YcBBKj8bbjRRol5An5xoX3/A/+2UtWOhonmsWEh
+	bdH6JI2I+D18Sy7ifBjo=
+X-Virus-Scanned: Debian amavisd-new at mail.example.com
+Received: from mail.example.com ([127.0.0.1])
+	by localhost (mail.example.com [127.0.0.1]) (amavisd-new, port 10026)
+	with ESMTP id KyB4IVNiyFFP; Thu, 28 Jan 2021 11:41:21 +0100 (CET)
+Received: from [172.16.182.51] (unknown [10.39.0.8])
+	by mail.example.com (Postfix) with ESMTP id C9A8D23C58C2;
+	Thu, 28 Jan 2021 11:41:17 +0100 (CET)
+Content-Type: multipart/alternative; boundary="===============1427656600=="
+MIME-Version: 1.0
+Subject: =?utf-8?b?VmHFoWUgesOhc2lsa2EgY2Vrw6EgbmEgZG9ydWNlbsOt?=
+To: D H L Dodavka <tracking1102111@example.com>
+From: "D H L Dodavka" <tracking1102111@example.com>
+Date: Thu, 28 Jan 2021 18:41:14 +0800
+Message-Id: <20210128104125.A6F4423C58C4@mail.example.com>
+
+You will not see this in a MIME-aware mail reader.
+--===============1427656600==
+Content-Type: text/plain; charset="utf-8"
+MIME-Version: 1.0
+Content-Transfer-Encoding: quoted-printable
+Content-Description: Mail message body
+
+V=E1=17Een=FD z=E1kazn=EDku!
+ Va=161e z=E1silka bude odesl=E1na a=17E po zaplacen=ED n=E1klad=16F na dop=
+ravu ve v=FD=161i 5,26 EUR.
+ Odkaz na online platbu zaji=161=165uje va=161i bezpe=10Dnost:
+ =
+
+Zapla=165te poplatky hned
+ =
+
+pozdravy
+  =
+
+ DHL International GmbH
+  =
+
+  =
+
+   =
+
+  =
+
+  =
+
+ Dear Customer!
+ Your package will only be sent after payment of the shipping costs of $ 5.=
+26.
+ The online payment link ensures your security:
+ =
+
+Pay the fees now
+ =
+
+Regards
+ DHL International GmbH
+  =
+
+  =
+
+  =
+
+  =
+
+  =
+
+  =
+
+  =
+
+ Amtsgericht Bad Hersfeld HRA 863 Pers=F6nlich haftende Gesellschafter: - G=
+LS Beteiligungs GmbH, Sitz: Neuenstein, Registergericht: Amtsgericht Bad He=
+rsfeld HRB 787, Gesch=E4ftsf=FChrer: Saadi Al-Soudani, Eberhard Fritze, Rie=
+tkerk.
+   =20
+--===============1427656600==
+Content-Type: text/html; charset="utf-8"
+MIME-Version: 1.0
+Content-Transfer-Encoding: quoted-printable
+Content-Description: Mail message body
+
+<HTML><head><meta http-equiv=3D"Content-Type" content=3D"text/html; charset=
+=3Dutf-8"/></head><BODY><P>V=C3=A1=C5=BEen=C3=BD z=C3=A1kazn=C3=ADku!</P>
+<P>Va=C5=A1e z=C3=A1silka bude odesl=C3=A1na a=C5=BE po zaplacen=C3=AD n=C3=
+=A1klad=C5=AF na dopravu ve v=C3=BD=C5=A1i 5,26 EUR.</P>
+<P>Odkaz na online platbu zaji=C5=A1=C5=A5uje va=C5=A1i bezpe=C4=8Dnost:</P>
+<P><BR><A href=3D"https://dhl.cz:0@zensorium.com//assets/font/d/index.php">=
+Zapla=C5=A5te poplatky hned</A></P></BODY></HTML>
+--===============1427656600==--
+
