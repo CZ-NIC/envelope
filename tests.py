@@ -1,6 +1,7 @@
 import logging
 import sys
 import unittest
+from base64 import b64encode
 from email.message import EmailMessage
 from os import environ
 from pathlib import Path
@@ -9,7 +10,7 @@ from tempfile import TemporaryDirectory
 from typing import Tuple, Union
 
 from envelope import Envelope
-from envelope.envelope import HTML, PLAIN, Parser
+from envelope.envelope import HTML, PLAIN, Parser, AUTO
 from envelope.utils import Address
 
 logging.basicConfig(stream=sys.stderr, level=logging.WARNING)
@@ -241,7 +242,7 @@ class TestEnvelope(TestAbstract):
         self.check_lines(e, ('Cc: person-cc@example.com',), not_in=('Bcc: person-bcc@example.com',))
 
     def test_internal_cache(self):
-        e = Envelope("message")
+        e = Envelope("message").date(False)  # Date might interfere with the Envelope objects equality
         e.header("header1", "1")
 
         # create cache under the hood
@@ -251,10 +252,24 @@ class TestEnvelope(TestAbstract):
 
         # as soon as object changed, cache regenerated
         e.header("header2", "1")
-        e2 = Envelope("message").header("header1", "1").header("header2", "1")
+        e2 = Envelope("message").header("header1", "1").header("header2", "1").date(False)
         self.assertEqual("1", e.as_message()["header2"])
         self.assertEqual(e2, e)
         self.check_lines(e, "header2: 1")
+
+    def test_wrong_charset_message(self):
+        msg= "WARNING:envelope.utils:Cannot decode the message correctly, plain alternative bytes are not in Unicode."
+        b = "ř".encode("cp1250")
+        e = Envelope(b)
+        self.check_lines(e, raises=ValueError)
+        with self.assertLogs('envelope', level='WARNING') as cm:
+            repr(e)
+        self.assertEqual(cm.output, [msg])
+
+        e.header("Content-Type", "text/plain; charset=cp1250")
+        e.header("Content-Transfer-Encoding", "base64")
+        e.message(b64encode(b), alternative=AUTO)
+        self.assertEqual("ř", e.message())
 
 
 class TestSmime(TestAbstract):
@@ -683,8 +698,8 @@ Third
         boundary = "=====envelope-test===="
 
         # alternative="auto" can become both "html" and "plain"
-        e1 = Envelope().message("He<b>llo</b>").message("Hello", alternative="plain", boundary=boundary)
-        e2 = Envelope().message("He<b>llo</b>", alternative="html").message("Hello", boundary=boundary)
+        e1 = Envelope().message("He<b>llo</b>").message("Hello", alternative="plain", boundary=boundary).date(False)
+        e2 = Envelope().message("He<b>llo</b>", alternative="html").message("Hello", boundary=boundary).date(False)
         self.assertEqual(e1, e2)
 
         # HTML variant is always the last even if defined before plain variant
@@ -1294,6 +1309,20 @@ class TestTransfer(TestBash):
         hello = "aGVsbG8gd29ybGQ="
         self.assertEqual(Envelope.load(f"\n{hello}").message(), hello)
         self.assertEqual(Envelope.load(f"Content-Transfer-Encoding: base64\n\n{hello}").message(), "hello world")
+
+    def test_implanted_transfer(self):
+        e = (Envelope().header("Content-Transfer-Encoding", "quoted-printable").message(self.quoted))
+        self.assertEqual(self.long_text, e.message())
+
+        # we replace Content-Transfer-Encoding and change the message
+        original = "hello world"
+        hello = "aGVsbG8gd29ybGQ="
+        e = (Envelope().header("Content-Transfer-Encoding", "base64").message(hello))
+        self.assertEqual(original, e.message())
+
+        # the user specified Content-Transfer-Encoding but left the message unencoded
+        e2 = (Envelope().header("Content-Transfer-Encoding", "base64").message(original))
+        self.assertEqual(original, e2.message())
 
 
 if __name__ == '__main__':

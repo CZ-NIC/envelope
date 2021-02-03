@@ -5,6 +5,7 @@ from collections import defaultdict
 from email.utils import getaddresses, parseaddr
 from pathlib import Path
 from socket import gaierror, timeout
+from typing import Union
 
 import magic
 from validate_email import validate_email  # package py3-validate-email
@@ -86,7 +87,7 @@ class Address(str):
 
     @property
     def user(self) -> str:
-        """ XX document Should it be part of Address.get? """
+        """ XX Should it be part of Address.get? """
         try:
             return self._address.split("@")[0]
         except IndexError:
@@ -134,7 +135,8 @@ class Address(str):
     def parse(email_or_list, single=False, allow_false=False):
         if allow_false and email_or_list is False:  # .from_(False), .sender(False)
             return False
-        addresses = [Address(name=real_name, address=address) for real_name, address in getaddresses(assure_list(email_or_list))
+        addresses = [Address(name=real_name, address=address) for real_name, address in
+                     getaddresses(assure_list(email_or_list))
                      if not (real_name == address == "")]
         if single:
             if len(addresses) != 1:
@@ -253,22 +255,39 @@ class _Message:
     html: bytes = None
     boundary: str = None  # you may specify e-mail boundary used when multiple alternatives present
 
-    def get(self) -> (str, str):
+    def _decode(self, val, mime_alternative):
+        try:
+            val = val.decode()
+        except UnicodeDecodeError as e:
+            logger.warning(f"Cannot decode the message correctly,"
+                           f" {mime_alternative} alternative bytes are not in Unicode.")
+            val = str(val)
+        return val
+
+    def get(self, type_: Union[bytes, str] = bytes) -> (Union[bytes, str, None], Union[bytes, str, None]):
         """
-            :return text, html generator they are assured to be fetched. Raises is there is anything left in `auto`.
+        :param type_: Set to str if we should return str instead of bytes.
+         Note it raises a warning if bytes were not in Unicode.
+        :return (plain, html) tuple Data assured to be fetched. Raises if there is anything left in `auto`.
         """
         i = iter((self.auto,))
-        ret = self.plain or next(i, None), self.html or next(i, None)
+        plain, html = self.plain or next(i, None), self.html or next(i, None)
         if next(i, False):
             raise ValueError("Specified all of message alternative=plain, alternative=html and alternative=auto,"
                              " choose only two.")
-        return ret
+
+        if type_ is str:
+            if plain:
+                plain = self._decode(plain, "plain")
+            if html:
+                html = self._decode(html, "html")
+        return plain, html
 
     def is_empty(self):
         return tuple(self.get()) == (None, None)
 
     def __str__(self):
-        text, html = self.get()
+        text, html = self.get(str)
         if text and html:
             return " ".join(("(text/plain)", text, "(text/html)", html))
         else:

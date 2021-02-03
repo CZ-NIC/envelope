@@ -1,11 +1,12 @@
 # CHANGELOG
 
-## 1.4.2
+## 1.5 (2021-02-09)
 – Address properties are "" if empty (handy when comparing strings)
 - replace invalid characters when loading (the way the e-mail clients behave)
 - headers truly case-insensitive when loading
 - `.from_()` and `.sender()` truly return an `Address` even if not set (and then the Address is empty)
 - fix: the internal cache correctly regenerated
+- message is internally held in bytes -> helpful error message when charset fails 
 
 ## 1.4 (2021-01-23)
 - exposed Address

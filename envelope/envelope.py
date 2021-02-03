@@ -18,7 +18,7 @@ from email.utils import make_msgid, formatdate, getaddresses
 from getpass import getpass
 from itertools import chain
 from pathlib import Path
-from quopri import decodestring
+from quopri import decodestring, decode as quopri_decode
 from typing import Union, List, Set, Any
 
 from .utils import Address, Attachment, AutoSubmittedHeader, SMTP, _Message, is_gpg_fingerprint, assure_list, \
@@ -93,7 +93,7 @@ class Envelope:
         l = []
         quote = lambda x: '"' + x.replace('"', r'\"') + '"' if type(x) is str else x
 
-        text, html = self._message.get()
+        text, html = self._message.get(str)
         message = {}
         if text and html:
             message = {"message(html)": html,
@@ -154,7 +154,7 @@ class Envelope:
             else:
                 result.append(r)
 
-        text, html = self._message.get()
+        text, html = self._message.get(str)
         if text and html:
             result.extend(["* MESSAGE VARIANT text/plain:", text, "",
                            "* MESSAGE VARIANT text/html:", html])
@@ -433,7 +433,7 @@ class Envelope:
         """ An alias of .message """
         return self.message(text=text, path=path)
 
-    def message(self, text=None, *, path=None, alternative=AUTO, boundary=None) -> Union["Envelope", Any]:
+    def message(self, text=None, *, path=None, alternative=AUTO, boundary=None) -> Union["Envelope", str]:
         """
         Message to be ciphered / e-mail body text.
         :param text: Any attainable contents.
@@ -458,8 +458,8 @@ class Envelope:
             # Content-Type: text/html; charset="utf-8"
             # He<b>llo</b>
 
-        :return: Envelope if text or path is set
-            else return anything that has been inserted to the .message() before (probably str, bytes)
+        :return: Envelope if `text` or `path` is set
+            otherwise return anything that has been inserted to the .message() before as `str`
         """
         # XX make preview default over send(0) when no action is given?
         if boundary is not None:
@@ -468,30 +468,41 @@ class Envelope:
             raise ValueError(f"Invalid alternative {alternative} for message, choose one of the: {AUTO}, {PLAIN}, {HTML}")
         if text is path is None:
             # reading value
-            s = getattr(self._message, alternative)
-            if not s and alternative == AUTO:  # prefer reading HTML over plain text if alternative set
-                s = self._message.html or self._message.plain
+            b = getattr(self._message, alternative)
+            if not b and alternative == AUTO:  # prefer reading HTML over plain text if alternative set
+                b = self._message.html or self._message.plain
 
+            # When loading an EML, Content-Type and Content-Transfer-Encoding get wiped off and the message is decoded.
+            # However, the user can define the headers explicitly.
+            # In that case we expect the message is already inserted encoded. (However, if it not, we do our best.)
+
+            # The user can define the Content-Type
+            content_type = self._headers.get("Content-Type")
+            m = re.search("charset=(.*)", content_type, re.IGNORECASE) if content_type else None
+            charset = m[1] if m else "utf-8"
+
+            # Content-Transfer-Encoding might be active
             transfer = self._headers.get("Content-Transfer-Encoding")
-            # Useful for reading loaded EML that might have been encoded.
-            # When loading an EML, everything was loaded into `self._message.auto`.
-            # XX When loading an EML, everything is under .auto so that quering alternative="html"|"plain" would return None here!
             if transfer == "base64":
                 try:
-                    return b64decode(s).decode("utf-8")
+                    return b64decode(b).decode(charset)
                 except binascii.Error:
-                    pass
+                    pass  # the user specified Content-Transfer-Encoding but left the message unencoded
                 except UnicodeDecodeError:
-                    raise TypeError(f"Cannot base64-decode the message: {s}")
+                    raise TypeError(f"Cannot base64-decode the message: {b}")
             elif transfer == "quoted-printable":
                 try:
-                    return decodestring(s).decode("utf-8")
+                    return decodestring(b).decode(charset)
                 except ValueError:
-                    pass
+                    pass  # the user specified Content-Transfer-Encoding but left the message unencoded
 
-            # XX this should return str or bytes
-            # We prefer string. But we want to keep it as encoding agnostic as possible so bytes might be better.
-            return s or ""  # `s` might be None
+            if b is None:
+                return ""
+            try:
+                return b.decode(charset)
+            except UnicodeError:
+                raise ValueError(f"Cannot decode the message correctly, it is not in Unicode. {b}")
+
 
         # write value
         if type(text) is _Message:  # constructor internally adopts default's self.default._message
@@ -501,11 +512,8 @@ class Envelope:
         if path:
             text = Path(path)
 
-        setattr(self._message, alternative, assure_fetched(text, str))
+        setattr(self._message, alternative, assure_fetched(text, bytes))
         return self
-
-        # self._message = text
-        # return self
 
     def date(self, date):
         """
@@ -884,8 +892,8 @@ class Envelope:
         """ Start processing. Either sign, encrypt or send the message and possibly set bool status of the object to True.
         * send == SIMULATION is the same as send == False but the message "have not been sent" will not be produced
         """
-        text: str
-        html: str
+        plain: bytes
+        html: bytes
         data: bytes
 
         self._status = False
@@ -907,10 +915,10 @@ class Envelope:
             return
 
         # assure streams are fetched and files are read from their paths
-        text, html = self._message.get()
+        plain, html = self._message.get()
 
         # we need a message
-        if not any((text, html)):
+        if not any((plain, html)):
             logger.error("Missing message")
             return
 
@@ -920,12 +928,12 @@ class Envelope:
         # if we plan to send later, convert text message to the email message object
         email = None
         if send is not None or html:  # `html` means the user wants a 'multipart/alternative' e-mail message
-            email = self._prepare_email(text, html, encrypt and gpg_on, sign and gpg_on, sign)
+            email = self._prepare_email(plain, html, encrypt and gpg_on, sign and gpg_on, sign)
             if not email:
                 return
             data = email.as_bytes()
         else:
-            data = text.encode("utf-8")
+            data = plain
 
         # with GPG, encrypt or sign either text message or email message object
         micalg = None
@@ -1256,7 +1264,7 @@ class Envelope:
         email.attach(msg_text)
         return email
 
-    def _prepare_email(self, text: str, html: str, encrypt_gpg, sign_gpg, sign):
+    def _prepare_email(self, plain: bytes, html: bytes, encrypt_gpg, sign_gpg, sign):
         """
         :type sign: If GPG, this should be the key fingerprint.
         """
@@ -1270,11 +1278,16 @@ class Envelope:
             # determine mime subtype and maybe do nl2br
             mime, nl2br = self._mime, self._nl2br
 
-            if text is None:
-                text, html = html, None
+            if plain is None:
+                plain, html = html, None
                 mime = HTML
 
-            t: str = text
+            try:
+                t: str = plain.decode()
+            except UnicodeError:
+                raise ValueError("Cannot decode the message correctly, it is not in Unicode."
+                                 " Either specify Content-Type and Content-Transfer-Encoding headers manually"
+                                 " or pass the message as str.")
             if mime == AUTO:
                 if html:
                     mime = PLAIN
@@ -1305,10 +1318,17 @@ class Envelope:
                 msg_text["Content-Transfer-Encoding"] = self._headers["Content-Transfer-Encoding"]
             # When the user sets Content-Type as multipart, they signalize they want to create sub-message themselves,
             # if they do not do that, the message looks badly. Ex: the text should contain boundaries and sub-messages.
-            msg_text.set_payload(text, "utf-8")
-            # msg_text.add_alternative(text, "utf-8")
+            msg_text.set_payload(plain)
 
         if html:
+            # prefer transferring the HTML alternative as a string,
+            # so the source code of the EML is more readable (no Content-Transfer-Encoding is used)
+            try:
+                # make sure `html` is in Unicode
+                html_s = html.decode()
+            except UnicodeError:
+                raise ValueError("Cannot decode the text/html alternative bytes correctly, it is not in Unicode."
+                                 " Pass it as str instead.")
             try:
                 # if a line is longer than 1000 characters, force EmailMessage to encode whole message
                 if any(line for line in html.splitlines() if len(line) >= 1000):
@@ -1318,12 +1338,12 @@ class Envelope:
 
                     # create an alternative message part and set utf-8 encoding explicitly
                     alt_msg = EmailMessage()
-                    alt_msg.set_content(html.encode("utf-8"), maintype="text", subtype="html")  # `html` as bytes
+                    alt_msg.set_content(html_s.encode("utf-8"), maintype="text", subtype="html")  # pass `html` as bytes
                     alt_msg.set_param("charset", "utf-8", replace=True)
                     msg_text.make_alternative()
                     msg_text.attach(alt_msg)
                 else:
-                    msg_text.add_alternative(html, subtype='html')  # `html` as string
+                    msg_text.add_alternative(html_s, subtype='html')  # `html` as string
             except (ValueError, TypeError):
                 # Content-Type: multipart/mixed -> ValueError: Cannot convert mixed to alternative
                 # Content-Type: multipart/alternative -> TypeError: Attach is not valid on a message with a non-multipart payload

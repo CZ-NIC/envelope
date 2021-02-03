@@ -34,6 +34,7 @@ Envelope.load(path="message.eml").attachments()
   * [Module: fluent interface](#module-fluent-interface)
 - [Documentation](#documentation)
   * [Command list](#command-list)
+      - [Any attainable contents](#any-attainable-contents)
     + [Input / Output](#input--output)
     + [Recipients](#recipients)
     + [Sending](#sending)
@@ -137,15 +138,17 @@ All parameters are optional.
 * **.param(value)** denotes a positional argument
 * **.param(value=)** denotes a keyword argument
 * **Envelope(param=)** is a one-liner argument
- 
-Any attainable contents means plain **text**, **bytes** or **stream** (ex: from open()). In *module interface*, you may use a **`Path`** object to the file. In *CLI interface*, additional flags are provided instead.         
+
+####  Any attainable contents
+Whenever any attainable contents is mentioned, we mean plain **text**, **bytes** or **stream** (ex: from `open()`). In *module interface*, you may use a **`Path`** object to the file. In *CLI interface*, additional flags are provided instead.         
 
 ### Input / Output
   * **message**: Message / body text.
     If no string is set, message gets read. Besides, when "Content-Transfer-Encoding" is set to "base64" or "quoted-printable", it gets decoded (useful when quickly reading an EML file content `cat file.eml | envelope --message`).
-    * **--message**: String
+    * **--message**: String. Empty to read.
     * **--input**: *(CLI only)* Path to the message file. (Alternative to `--message` parameter.)
-    * **.message(text)**: Any attainable contents.
+    * **.message()**: Read current message in `str`.
+    * **.message(text)**: Set the message to [any attainable contents](#any-attainable-contents).
     * **.message(path=None, alternative="auto", boundary=None)**
         * `path`: Path to the file.
         * `alternative`: "auto", "html", "plain" You may specify e-mail text alternative. Some e-mail readers prefer to display plain text version over HTML. By default, we try to determine content type automatically (see *mime*).
@@ -167,7 +170,7 @@ Any attainable contents means plain **text**, **bytes** or **stream** (ex: from 
         * *boundary*: When specifying alternative, you may set e-mail boundary if you do not wish a random one to be created.            
     * **.body(path=None)**: Alias of `.message` (without `alternative` and `boundary` parameter)
     * **.text(path=None)**: Alias of `.message` (without `alternative` and `boundary` parameter)
-    * **Envelope(message=)**: Any attainable contents
+    * **Envelope(message=)**: [Any attainable contents](#any-attainable-contents)
     
     Equivalents for setting a string (in *Python* and in *Bash*).
     ```python3
@@ -310,7 +313,7 @@ Any attainable contents means plain **text**, **bytes** or **stream** (ex: from 
     ```
     * **.attach(attachment=, mimetype=, name=, path=, inline=)**:
         * Three different usages when specifying contents:
-            * **.attach(attachment=, mimetype=, name=)**: You can put any attainable contents of a single attachment into *attachment* and optionally add mime type or displayed file name.
+            * **.attach(attachment=, mimetype=, name=)**: You can put [any attainable contents](#any-attainable-contents) of a single attachment into *attachment* and optionally add mime type or displayed file name.
             * **.attach(mimetype=, name=, path=)**: You can specify path and optionally mime type or displayed file name.
             * **.attach(attachment=)**: You can put a list of attachments. The list may contain tuples: `contents [,mime type] [,file name] [, True for inline]`.
         ```python3
@@ -327,7 +330,7 @@ Any attainable contents means plain **text**, **bytes** or **stream** (ex: from 
            # Reference it like: .message("Hey, this is an inline image: <img src='cid:foo' />")
           ```
     
-    * **Envelope(attachments=)**: Attachment or their list. Attachment is defined by any attainable contents, optionally in tuple with the file name to be used in the e-mail and/or mime type and/or True for being inline: `contents [,mime type] [,file name] [, True for inline]`
+    * **Envelope(attachments=)**: Attachment or their list. Attachment is defined by [any attainable contents](#any-attainable-contents), optionally in tuple with the file name to be used in the e-mail and/or mime type and/or True for being inline: `contents [,mime type] [,file name] [, True for inline]`
     ```python3
     Envelope(attachments=[(Path("/tmp/file.txt"), "displayed-name.txt", "text/plain"), Path("/tmp/another-file.txt"])
     ```    
@@ -407,9 +410,9 @@ Note that if neither *gpg* nor *smime* is specified, we try to determine the met
         * GPG: 
             * Blank (*CLI*) or True (*module*) for user default key
             * key ID/fingerprint
-            * Any attainable contents with the key to be signed with (will be imported into keyring)
+            * [Any attainable contents](#any-attainable-contents) with the key to be signed with (will be imported into keyring)
             * "auto" for turning on signing if there is a key matching to the "from" header
-        * S/MIME: Any attainable contents with key to be signed with. May contain signing certificate as well.            
+        * S/MIME: [Any attainable contents](#any-attainable-contents) with key to be signed with. May contain signing certificate as well.            
     * **--sign key**: (for `key` see above)
     * **--sign-path**: Filename with the sender\'s private key. (Alternative to `sign` parameter.)
     * **--passphrase**: Passphrase to the key if needed.
@@ -421,7 +424,7 @@ Note that if neither *gpg* nor *smime* is specified, we try to determine the met
     * **Envelope(sign=key)**: (for `key` see above)        
     * **Envelope(passphrase=)**: Passphrase to the key if needed.
     * **Envelope(attach_key=)**: GPG: Append public key to the attachments when sending.
-    * **Envelope(cert=)**: S/MIME: Any attainable contents.
+    * **Envelope(cert=)**: S/MIME: [Any attainable contents](#any-attainable-contents)
 ### Encrypting
 If the GPG encryption fails, it tries to determine which recipient misses the key.
 
@@ -430,15 +433,15 @@ If the GPG encryption fails, it tries to determine which recipient misses the ke
         * GPG:
             * Blank (*CLI*) or True (*module*) to force encrypt
             * key ID/fingerprint
-            * Any attainable contents with the key to be encrypted with (will be imported into keyring)
+            * [Any attainable contents](#any-attainable-contents) with the key to be encrypted with (will be imported into keyring)
             * "auto" for turning on encrypting if there is a matching key for every recipient
-        * S/MIME any attainable contents with certificate to be encrypted with or their list
+        * S/MIME [any attainable contents](#any-attainable-contents) with a certificate to be encrypted with or their list
     * **--encrypt [key]**: (for `key` see above) Put 0/false/no to disable `encrypt-path`.
     * **--encrypt-path** *(CLI only)*: Filename(s) with the recipient\'s public key. (Alternative to `encrypt` parameter.)
     * **.encrypt(key=True, sign=, key_path=)**:
-        * **`sign`** You may specify boolean or default signing key ID/fingerprint or "auto" for GPG or any attainable contents with S/MIME key + signing certificate.
+        * **`sign`** You may specify boolean or default signing key ID/fingerprint or "auto" for GPG or [any attainable contents](#any-attainable-contents) with a S/MIME key + signing certificate.
         * **`key_path`**: Key/certificate contents (alternative to `key` parameter)
-    * **.encryption(key=True, key_path=)**: Encrypt later (when launched with *.sign()*, *.encrypt()* or *.send()* functions. If needed, in the parameters specify Any attainable contents with GPG encryption key or S/MIME encryption certificate. 
+    * **.encryption(key=True, key_path=)**: Encrypt later (when launched with *.sign()*, *.encrypt()* or *.send()* functions. If needed, in the parameters specify [any attainable contents](#any-attainable-contents) with GPG encryption key or S/MIME encryption certificate. 
     ```bash
     # message gets encrypted for multiple S/MIME certificates
     envelope --smime --encrypt-path recipient1.pem recipient2.pem --message "Hello"
@@ -446,7 +449,7 @@ If the GPG encryption fails, it tries to determine which recipient misses the ke
     # message gets encrypted with the default GPG key
     envelope  --message "Encrypted GPG message!" --subject "Secret subject will not be shown" --encrypt --from person@example.com --to person@example.com
     ```
-    * **Envelope(encrypt=)**: Any attainable contents
+    * **Envelope(encrypt=)**: [Any attainable contents](#any-attainable-contents)
 
 ### Supportive
   * **.recipients()**: Return set of all recipients – `To`, `Cc`, `Bcc`
@@ -492,11 +495,11 @@ If the GPG encryption fails, it tries to determine which recipient misses the ke
     e = Envelope("hello").as_message()
     print(type(e), e.get_payload())  # <class 'email.message.EmailMessage'> hello\n 
     ```
- * **load**: Parse any attainable contents (including email.message.Message) like an EML file to build an Envelope object.
+ * **load**: Parse [any attainable contents](#any-attainable-contents) (including email.message.Message) like an EML file to build an Envelope object.
     * It can decrypt the message and parse its (inline or enclosed) attachments.
     * Note that if you will send this reconstructed message, you might not probably receive it due to the Message-ID duplication. Delete at least Message-ID header prior to re-sending. 
     * (*static*) **.load(message, \*, path=None, key=None, cert=None)**
-        * **message**: Any attainable contents.
+        * **message**: [Any attainable contents](#any-attainable-contents)
         * **path**: Path to the file, alternative to the `message`
         * **key**, **cert**: Specify when decrypting an S/MIME message (may be bundled together to the `key`)
         ```python3

@@ -36,7 +36,8 @@ def _get_envelope(instance: Envelope, args):
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=SmartFormatter)
     group_io = parser.add_argument_group("Input/Output")
-    group_io.add_argument('--message', help='Plain text message.', metavar="TEXT", nargs="?", action=BlankTrue)
+    group_io.add_argument('--message', help='Plain text message. Empty to read.',
+                          metavar="TEXT", nargs="?", action=BlankTrue)
     group_io.add_argument('--input', help='Path to message file. (Alternative to `message` parameter.)', metavar="FILE")
     group_io.add_argument('--output',
                           help='Path to file to be written to (else the contents is returned if ciphering or True if sending).',
@@ -76,21 +77,23 @@ def main():
     group_ciph.add_argument('--attach-key', help="Appending public key to the attachments when sending.",
                             action="store_true")
 
-    group_send = parser.add_argument_group("Sending")
-    group_send.add_argument('-s', '--subject', help="E-mail subject", nargs="?", action=BlankTrue)
-    group_send.add_argument('-t', '--to', help="E-mail – needed to choose their key if encrypting", metavar="E-MAIL",
+    group_recip = parser.add_argument_group("Recipients")
+    group_recip.add_argument('-t', '--to', help="E-mail – needed to choose their key if encrypting", metavar="E-MAIL",
                             nargs="*", action=BlankTrue)
-    group_send.add_argument('--cc', help="E-mail or list", metavar="E-MAIL", nargs="*", action=BlankTrue)
-    group_send.add_argument('--bcc', help="E-mail or list", metavar="E-MAIL", nargs="*", action=BlankTrue)
-    group_send.add_argument('--reply-to',
+    group_recip.add_argument('--cc', help="E-mail or list", metavar="E-MAIL", nargs="*", action=BlankTrue)
+    group_recip.add_argument('--bcc', help="E-mail or list", metavar="E-MAIL", nargs="*", action=BlankTrue)
+    group_recip.add_argument('--reply-to',
                             help="Header that states e-mail to be replied to. The field is not encrypted.",
                             metavar="E-MAIL", nargs="?", action=BlankTrue)
-    group_send.add_argument('-f', '--from', help="E-mail – needed to choose our key if encrypting", metavar="E-MAIL",
+    group_recip.add_argument('-f', '--from', help="E-mail – needed to choose our key if encrypting", metavar="E-MAIL",
                             nargs="?", action=BlankTrue)
-    group_send.add_argument('--sender', help="Alias for --from if not set."
+    group_recip.add_argument('--sender', help="Alias for --from if not set."
                                              " Otherwise appends the \"Sender\" header.", metavar="E-MAIL")
-    group_send.add_argument('--no-sender', action="store_true",
+    group_recip.add_argument('--no-sender', action="store_true",
                             help="We explicitly say we do not want to decipher later if encrypting.")
+
+    group_send = parser.add_argument_group("Sending")
+    group_send.add_argument('-s', '--subject', help="E-mail subject", nargs="?", action=BlankTrue)
     group_send.add_argument('-a', '--attach',
                             help="Path to the attachment, followed by an optional file name to be used and/or mimetype."
                                  " This parameter may be used multiple times.",
