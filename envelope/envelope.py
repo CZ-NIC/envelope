@@ -72,9 +72,7 @@ class Envelope:
         return self._status
 
     def __str__(self):
-        if self._result_cache_hash and self._result_cache_hash != self._param_hash():
-            # ex: if we change Subject, we have to regenerate self._result
-            self._result.clear()
+        self._result_fresh()
         if not self._result:
             if self._encrypt or self._sign:
                 # if subject is not set, we suppose this is just a data blob to be encrypted, no an e-mail message
@@ -116,13 +114,11 @@ class Envelope:
         return f"Envelope({', '.join(l)})"
 
     def __bytes__(self):
-        if not self._result:
-            str(self)
+        self._result_fresh(True)
         return assure_fetched(self._get_result_str(), bytes)
 
     def __eq__(self, other):
-        if not self._result:
-            str(self)
+        self._result_fresh(True)
         me = assure_fetched(self._get_result_str(), bytes)
         if type(other) in [str, bytes]:
             return me == assure_fetched(other, bytes)
@@ -134,8 +130,7 @@ class Envelope:
             Bcc and attachments are mentioned.
             Ex: whilst we have to use quoted-printable, here the output will be plain text.
         """
-        if not self._result:
-            str(self)
+        self._result_fresh(True)
         result = []
         for a in self._attachments:  # include attachments info as they are removed with the payload later
             if a.inline:
@@ -174,10 +169,18 @@ class Envelope:
             self._result_cache = s  # slightly quicker next time if ever containing a huge amount of lines
         return self._result_cache
 
+    def _result_fresh(self, recreate=False):
+        if self._result_cache_hash and self._result_cache_hash != self._param_hash():
+            # ex: if we change Subject, we have to regenerate self._result
+            self._result.clear()
+        if recreate and not self._result:
+            str(self)
+
     def as_message(self) -> Message:
         """
         :return: Message object is S/MIME is used, EmailMessage otherwise.
         """
+        self._result_fresh()
         for el in self._result:
             if isinstance(el, Message):
                 return el

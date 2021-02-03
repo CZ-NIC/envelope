@@ -240,6 +240,22 @@ class TestEnvelope(TestAbstract):
         self.assertIn("person-bcc@example.com", e.recipients())
         self.check_lines(e, ('Cc: person-cc@example.com',), not_in=('Bcc: person-bcc@example.com',))
 
+    def test_internal_cache(self):
+        e = Envelope("message")
+        e.header("header1", "1")
+
+        # create cache under the hood
+        self.assertFalse(e._result)
+        e.as_message()["header1"]
+        self.assertTrue(e._result)
+
+        # as soon as object changed, cache regenerated
+        e.header("header2", "1")
+        e2 = Envelope("message").header("header1", "1").header("header2", "1")
+        self.assertEqual("1", e.as_message()["header2"])
+        self.assertEqual(e2, e)
+        self.check_lines(e, "header2: 1")
+
 
 class TestSmime(TestAbstract):
     # create a key and its certificate valid for 100 years
