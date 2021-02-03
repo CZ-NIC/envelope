@@ -8,10 +8,9 @@ from subprocess import PIPE, STDOUT, Popen
 from tempfile import TemporaryDirectory
 from typing import Tuple, Union
 
-from envelope.utils import Address
-
 from envelope import Envelope
 from envelope.envelope import HTML, PLAIN, Parser
+from envelope.utils import Address
 
 logging.basicConfig(stream=sys.stderr, level=logging.WARNING)
 
@@ -218,6 +217,28 @@ class TestEnvelope(TestAbstract):
                          ('Content-Type: text/plain; charset="utf-8"',
                           "Subject: ",
                           "Small sample text attachment."))
+
+    def test_equality(self):
+        source = {"message": "message", "subject": "hello"}
+        e1 = Envelope(**source).date(False)
+        e2 = Envelope(**source).date(False)
+        self.assertEqual(e1, e2)
+        self.assertEqual(str(e1), e2)
+        self.assertEqual(bytes(e1), e2)
+
+        s = 'Content-Type: text/plain; charset="utf-8"\nContent-Transfer-Encoding: 7bit' \
+            '\nMIME-Version: 1.0\nSubject: hello\n\nmessage\n'
+        b = bytes(s, "utf-8")
+        self.assertEqual(s, e1)
+        self.assertEqual(s, str(e1))
+        self.assertEqual(b, e1)
+        self.assertEqual(b, bytes(e1))
+
+    def test_bcc_ignored(self):
+        e = Envelope(**{"message": "message", "subject": "hello", "cc": "person-cc@example.com",
+                        "bcc": "person-bcc@example.com"})
+        self.assertIn("person-bcc@example.com", e.recipients())
+        self.check_lines(e, ('Cc: person-cc@example.com',), not_in=('Bcc: person-bcc@example.com',))
 
 
 class TestSmime(TestAbstract):
@@ -770,6 +791,39 @@ class TestRecipients(TestAbstract):
         self.assertIn("Person5 <person5@example.com>", self.bash("--bcc", file=self.charset))
         self.assertIn("Person6 <person6@example.com>", self.bash("--reply-to", file=self.charset))
 
+    def test_empty_contact(self):
+        """ Be sure to receive an address even if the header misses. """
+        e1 = Envelope.load("Empty message")
+        self.assertTrue(isinstance(e1.from_(), Address))
+        self.assertTrue(isinstance(e1.sender(), Address))
+        self.assertTrue(isinstance(e1.to(), list))
+        self.assertTrue(isinstance(e1.cc(), list))
+        self.assertTrue(isinstance(e1.bcc(), list))
+        self.assertTrue(isinstance(e1.reply_to(), list))
+
+        self.assertFalse(e1.from_())
+        self.assertFalse(e1.sender())
+
+        self.assertEqual("", e1.from_().address)
+        self.assertEqual("", e1.sender().host)
+
+        e2 = Envelope.load("From: test@example.com\n\nEmpty message")
+        self.assertTrue(isinstance(e2.from_(), Address))
+        self.assertTrue(e2.from_())
+        self.assertFalse(e2.sender())
+        self.assertEqual("", e2.from_().name)
+
+        e3 = Envelope.load("From: Person <test@example.com>\n\nEmpty message")
+        self.assertTrue(e3.from_())
+        self.assertEqual("Person", e3.from_().name)
+        self.assertTrue(e3.from_().is_valid())
+
+        e4 = Envelope.load("From: Invalid\n\nEmpty message")
+        self.assertTrue(e4.from_())
+        self.assertEqual("Invalid", e4.from_().address)
+        self.assertEqual("", e4.from_().name)
+        self.assertFalse(e4.from_().is_valid())
+
 
 class TestSubject(TestAbstract):
     def test_cache_recreation(self):
@@ -1111,7 +1165,6 @@ class TestLoad(TestBash):
         self.assertEqual(subject, e.header("Subject"))
         self.assertEqual(subject, e.header("subJEct"))
         self.assertEqual("Thu", e.header("dATe")[:3])
-
 
 
 class TestDecrypt(TestSmime):

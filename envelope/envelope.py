@@ -300,6 +300,9 @@ class Envelope:
         #   GPG: (True, key contents, fingerprint, None)
         #   SMIME: certificate contents
         self._encrypt = None
+
+        # `_from` and `_sender` properties might be false because of `sender=False` attribute (or "--no-sender" flag)
+        # that explicitly states we have no sender
         self._from: Union[Address, False] = None
         self.__from: Union[Address, False] = None
         self._sender: Union[Address, False] = None
@@ -518,14 +521,15 @@ class Envelope:
     def sender(self, email=None) -> Union["Envelope", Address]:
         """  Alias for "from" if not set. Otherwise appends header "Sender". If None, current `Sender` returned. """
         if email is None:
-            return self.__sender
+            return self.__sender or Address()
         self._sender = Address.parse(email, single=True, allow_false=True)
         self._prepare_from()
         return self
 
     def from_(self, email=None) -> Union["Envelope", Address]:
+        """ Set the sender header. If None, current `From` returned. """
         if email is None:
-            return self.__from
+            return self.__from or Address()
         self._from = Address.parse(email, single=True, allow_false=True)
         self._prepare_from()
         return self
@@ -980,10 +984,10 @@ class Envelope:
                 if sign:
                     if sign in [True, AUTO]:  # try to determine sign based on the "From" header
                         fallback_sign = sign = None
-                        try:
-                            address_searched = self.__from.address
-                        except AttributeError:
-                            # there is no "From" header and no default key is given, pick the first secret as a default
+                        address_searched = self.__from.address if self.__from else False
+                        if not address_searched:
+                            # there is no "From" header (or the "From" header address is empty)
+                            # and no default key is given, pick the first secret as a default
                             for key in self._gnupg.list_keys(True):
                                 fallback_sign = key["keyid"]
                                 break

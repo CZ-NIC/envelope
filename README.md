@@ -35,14 +35,18 @@ Envelope.load(path="message.eml").attachments()
 - [Documentation](#documentation)
   * [Command list](#command-list)
     + [Input / Output](#input--output)
+    + [Recipients](#recipients)
+    + [Sending](#sending)
+      - [Specific headers](#specific-headers)
     + [Cipher standard method](#cipher-standard-method)
     + [Signing](#signing)
     + [Encrypting](#encrypting)
-    + [Sending](#sending)
-      - [Specific headers](#specific-headers)
     + [Supportive](#supportive)
+      - [Address](#address)
   * [Default values](#default-values)
-  * [Converting object to str or bool](#converting-object-to-str-or-bool)
+  * [Envelope object](#envelope-object)
+    + [Converting object to str or bool](#converting-object-to-str-or-bool)
+    + [Object equality](#object-equality)
 - [Examples](#examples)
   * [Signing and encrypting](#signing-and-encrypting)
   * [Sending](#sending-1)
@@ -184,63 +188,29 @@ Any attainable contents means plain **text**, **bytes** or **stream** (ex: from 
     * **--output**
     * **.output(output_file)**
     * **Envelope(output=)**
-### Cipher standard method
-Note that if neither *gpg* nor *smime* is specified, we try to determine the method automatically.
-  * **gpg**: True to prefer GPG over S/MIME or home path to GNUPG rings (otherwise default ~/.gnupg is used)
-    * **--gpg [path]**
-    * **.gpg(gnugp_home=True)**
-    * **Envelope(gpg=True)**
-  * **.smime**: Prefer S/MIME over GPG
-    * **--smime**
-    * **.smime()**
-    * **Envelope(smime=True)**
-### Signing
-  * **sign**: Sign the message.
-    * **`key`** parameter
-        * GPG: 
-            * Blank (*CLI*) or True (*module*) for user default key
-            * key ID/fingerprint
-            * Any attainable contents with the key to be signed with (will be imported into keyring)
-            * "auto" for turning on signing if there is a key matching to the "from" header
-        * S/MIME: Any attainable contents with key to be signed with. May contain signing certificate as well.            
-    * **--sign key**: (for `key` see above)
-    * **--sign-path**: Filename with the sender\'s private key. (Alternative to `sign` parameter.)
-    * **--passphrase**: Passphrase to the key if needed.
-    * **--attach-key**: GPG: Blank for appending public key to the attachments when sending.
-    * **--cert**: S/MIME: Certificate contents if not included in the key.
-    * **--cert-path**: S/MIME: Filename with the sender's private cert if cert not included in the key. (Alternative to `cert` parameter.)
-    * **.sign(key=True, passphrase=, attach_key=False, cert=None, key_path=None)**: Sign now (and you may specify the parameters). (For `key` see above.)
-    * **.signature(key=True, passphrase=, attach_key=False, cert=None, key_path=None)**: Sign later (when launched with *.sign()*, *.encrypt()* or *.send()* functions
-    * **Envelope(sign=key)**: (for `key` see above)        
-    * **Envelope(passphrase=)**: Passphrase to the key if needed.
-    * **Envelope(attach_key=)**: GPG: Append public key to the attachments when sending.
-    * **Envelope(cert=)**: S/MIME: Any attainable contents.
-### Encrypting
-If the GPG encryption fails, it tries to determine which recipient misses the key.
-
-  * **encrypt**:  Recipient GPG public key or S/MIME certificate to be encrypted with. 
-    * **`key`** parameter
-        * GPG:
-            * Blank (*CLI*) or True (*module*) to force encrypt
-            * key ID/fingerprint
-            * Any attainable contents with the key to be encrypted with (will be imported into keyring)
-            * "auto" for turning on encrypting if there is a matching key for every recipient
-        * S/MIME any attainable contents with certificate to be encrypted with or their list
-    * **--encrypt [key]**: (for `key` see above) Put 0/false/no to disable `encrypt-path`.
-    * **--encrypt-path** *(CLI only)*: Filename(s) with the recipient\'s public key. (Alternative to `encrypt` parameter.)
-    * **.encrypt(key=True, sign=, key_path=)**:
-        * **`sign`** You may specify boolean or default signing key ID/fingerprint or "auto" for GPG or any attainable contents with S/MIME key + signing certificate.
-        * **`key_path`**: Key/certificate contents (alternative to `key` parameter)
-    * **.encryption(key=True, key_path=)**: Encrypt later (when launched with *.sign()*, *.encrypt()* or *.send()* functions. If needed, in the parameters specify Any attainable contents with GPG encryption key or S/MIME encryption certificate. 
-    ```bash
-    # message gets encrypted for multiple S/MIME certificates
-    envelope --smime --encrypt-path recipient1.pem recipient2.pem --message "Hello"
     
-    # message gets encrypted with the default GPG key
-    envelope  --message "Encrypted GPG message!" --subject "Secret subject will not be shown" --encrypt --from person@example.com --to person@example.com
+### Recipients
+* **from**: E-mail – needed to choose our key if encrypting.
+    * **--from** E-mail. Empty to read value.
+    * **--sender** Alias for *--from* if not set. Otherwise appends header "Sender".
+    * **--no-sender** Declare we want to encrypt and never decrypt back.
+    * **.from_(email)**: E-mail or False. If None, current `From` returned as an [Address](#address) object (even an empty one).
+    * **.sender(email)**: E-mail or False – an alias for *.from_*, will fill up `From` header. If `From` has already been set, this will fill `Sender` header. If None, current `Sender` returned as an [Address](#address) object (even an empty one).
+    * **Envelope(from_=)**: Sender e-mail or False to explicitly omit. When encrypting without sender, we do not use their key so that we will not be able to decipher again.       
+    * **Envelope(sender=)** *(see --sender)*
+    ```python3
+    # These statement are identical.
+    Envelope(from_="identity@example.com")    
+    Envelope(sender="identity@example.com")
+  
+    # This statement produces both From header and Sender header.
+    Envelope(from_="identity@example.com", sender="identity2@example.com")
+  
+    # reading an Address object
+    a = Envelope(from_="identity@example.com").from_()
+    a == "identity@example.com", a.host == "example.com"
     ```
-    * **Envelope(encrypt=)**: Any attainable contents
-  * **to**: E-mail or list. When encrypting, we use keys of these identities. Multiple addresses may be given in a string, delimited by comma (or semicolon). (The same is valid for `to`, `cc`, `bcc` and `reply-to`.)
+* **to**: E-mail or list. When encrypting, we use keys of these identities. Multiple addresses may be given in a string, delimited by a comma (or semicolon). (The same is valid for `to`, `cc`, `bcc` and `reply-to`.)
     * **--to**: One or more e-mail addresses. Empty to read.
       ```bash
       $ envelope --to first@example.com second@example.com --message "hello" 
@@ -248,7 +218,7 @@ If the GPG encryption fails, it tries to determine which recipient misses the ke
       first@example.com
       second@example.com
       ```  
-    * **.to(email_or_list)**: If None, current list is returned. If False or "", current list is cleared. 
+    * **.to(email_or_list)**: If None, current list of [Addresses](#address) returned. If False or "", current list is cleared. 
     ```python3
         Envelope()
             .to("person1@example.com")
@@ -257,22 +227,26 @@ If the GPG encryption fails, it tries to determine which recipient misses the ke
             .to()  # ["person1@example.com", "John <person2@example.com>", "person3@example.com"] 
         ```
     * **Envelope(to=)**: E-mail or their list.
-  * **from**: E-mail – needed to choose our key if encrypting.    
-    * **--from** E-mail. Empty to read value.
-    * **--sender** Alias for *--from* if not set. Otherwise appends header "Sender".
-    * **--no-sender** Declare we want to encrypt and never decrypt back.
-    * **.from_(email)**: E-mail or False. If None, current `From` returned.
-    * **.sender(email)**: E-mail or False – an alias for *.from_*, will fill up `From` header. If `From` has already been set, this will fill `Sender` header. If None, current `Sender` returned.
-    * **Envelope(from_=)**: Sender e-mail or False to explicitly omit. When encrypting without sender, we do not use their key so that we will not be able to decipher again.       
-    * **Envelope(sender=)** *(see --sender)*
-    ```python3
-    # These statement are identic.
-    Envelope(from_="identity@example.com")    
-    Envelope(sender="identity@example.com")
-  
-    # This statement produces both From header and Sender header.
-    Envelope(from_="identity@example.com", sender="identity2@example.com")        
-    ```
+* **cc**: E-mail or their list. Multiple addresses may be given in a string, delimited by a comma (or semicolon). (The same is valid for `to`, `cc`, `bcc` and `reply-to`.)
+    * **--cc**: One or more e-mail addresses. Empty to read.
+    * **.cc(email_or_list)**: If None, current list of [Addresses](#address) returned. If False or "", current list is cleared.
+        ```python3
+        Envelope()
+            .cc("person1@example.com")
+            .cc("person1@example.com, John <person2@example.com>")
+            .cc(["person3@example.com"])
+            .cc()  # ["person1@example.com", "John <person2@example.com>", "person3@example.com"] 
+        ```
+    * **Envelope(cc=)**
+* **bcc**: E-mail or their list. Multiple addresses may be given in a string, delimited by a comma (or semicolon). (The same is valid for `to`, `cc`, `bcc` and `reply-to`.) The header is not sent.
+    * **--bcc**: One or more e-mail addresses. Empty to read.
+    * **.bcc(email_or_list)**: If None, current list of [Addresses](#address) returned. If False or "", current list is cleared.
+    * **Envelope(bcc=)**
+* **reply-to**: E-mail or their list. Multiple addresses may be given in a string, delimited by a comma (or semicolon). (The same is valid for `to`, `cc`, `bcc` and `reply-to`.) The field is not encrypted.
+    * **--reply-to**: E-mail address or empty to read value.
+    * **.reply_to(email_or_list)**: If None, current list of [Addresses](#address) returned. If False or "", current list is cleared.
+    * **Envelope(reply_to=)**
+    
 ### Sending
   * **send**: Send the message to the recipients by e-mail. True (blank in *CLI*) to send now or False to print out debug information.
     * **--send**
@@ -301,25 +275,6 @@ If the GPG encryption fails, it tries to determine which recipient misses the ke
     * **--subject**
     * **.subject(text)**: If None, current subject returned.
     * **Envelope(subject=)**
-  * **cc**: E-mail or their list. Multiple addresses may be given in a string, delimited by comma (or semicolon). (The same is valid for `to`, `cc`, `bcc` and `reply-to`.)
-    * **--cc**: One or more e-mail addresses. Empty to read.
-    * **.cc(email_or_list)**: If None, current list returned. If False or "", current list is cleared.
-        ```python3
-        Envelope()
-            .cc("person1@example.com")
-            .cc("person1@example.com, John <person2@example.com>")
-            .cc(["person3@example.com"])
-            .cc()  # ["person1@example.com", "John <person2@example.com>", "person3@example.com"] 
-        ```
-    * **Envelope(cc=)**
-  * **bcc**: E-mail or their list
-    * **--bcc**: One or more e-mail addresses. Empty to read.
-    * **.bcc(email_or_list)**: If None, current list returned. If False or "", current list is cleared.
-    * **Envelope(bcc=)**
-  * **reply-to**: E-mail to be replied to or their list. The field is not encrypted.
-    * **--reply-to**: E-mail address or empty to read value.
-    * **.reply_to(email_or_list)**: If None, current list returned. If False or "", current list is cleared.
-    * **Envelope(reply_to=)**
   * **date**:
     * **.date(date)** `str|False` Specify Date header (otherwise Date is added automatically). If False, the Date header will not be added automatically.
   * **smtp**: SMTP server
@@ -435,55 +390,65 @@ These helpers are available via fluent interface.
 Envelope().auto_submitted()  # mark message as automatic        
 Envelope().auto_submitted.no()  # mark message as human produced
 ```    
-### Supportive
-  * **e-mail addresses** Any address encountered is internally converted to an `Address` object that can be imported from the `envelope` package. You can safely access following `str` properties:
-    * `.name` – the real name
-    * `.address` – the e-mail address
-    * `.host` – its domain
-    * `.user` – the user name part of the e-mail
-    ```python3
-    from envelope import Address
-    a = Address("John <person@example.com>")
-    a.name == "John", a.address == "person@example.com", a.host == "example.com", a.user == "person"    
-    ```
-    
-    Method `self.casefold()` returns casefolded `Address` object which is useful for comparing with strings whereas comparing with other `Address` object casefolds automatically
-    ```python3
-    a = Address("John <person@example.com>")
-    c = a.casefold()
-    a is not c, a == c, a.name == "john", a.name != c.name
-    ```
-  
-    
-    Since the `Address` is a subclass of `str`, you can safely join such objects.
-    
-    ```python3    
-    ", ".join([a, a]) # "John <person@example.com>, "John <person@example.com>"
-    a + " hello"  #  "John <person@example.com> hello"
-    ```
-    
-    Address objects are equal if their e-mail address are equal. (Their real names might differ.)
-    Address object is equal to a string if the string contains its e-mail address or the whole representation.
-    
-    ```python3
-    "person@example.com" == Address("John <person@example.com>") == "John <person@example.com>"  # True
-    ```
-  
-    Concerning `to`, `cc`, `bcc` and `reply-to`, multiple addresses may always be given in a string, delimited by comma (or semicolon). The `.get(address:bool, name:bool)` method may be called on an `Address` object to filter the desired information. 
-    ```python3
-    e = (Envelope()
-        .to("person1@example.com")
-        .to("person1@example.com, John <person2@example.com>")
-        .to(["person3@example.com"]))
 
-    [str(x) for x in e.to()]                # ["person1@example.com", "John <person2@example.com>", "person3@example.com"]
-    [x.get(address=False) for x in e.to()]  # ["", "John", ""]
-    [x.get(name=True) for x in e.to()]      # ["person1@example.com", "John", "person3@example.com"]
-                                            # return an address if no name given
-    [x.get(address=True) for x in e.to()]   # ["person1@example.com", "person2@example.com", "person3@example.com"]
-                                            # addresses only
+### Cipher standard method
+Note that if neither *gpg* nor *smime* is specified, we try to determine the method automatically.
+  * **gpg**: True to prefer GPG over S/MIME or home path to GNUPG rings (otherwise default ~/.gnupg is used)
+    * **--gpg [path]**
+    * **.gpg(gnugp_home=True)**
+    * **Envelope(gpg=True)**
+  * **.smime**: Prefer S/MIME over GPG
+    * **--smime**
+    * **.smime()**
+    * **Envelope(smime=True)**
+### Signing
+  * **sign**: Sign the message.
+    * **`key`** parameter
+        * GPG: 
+            * Blank (*CLI*) or True (*module*) for user default key
+            * key ID/fingerprint
+            * Any attainable contents with the key to be signed with (will be imported into keyring)
+            * "auto" for turning on signing if there is a key matching to the "from" header
+        * S/MIME: Any attainable contents with key to be signed with. May contain signing certificate as well.            
+    * **--sign key**: (for `key` see above)
+    * **--sign-path**: Filename with the sender\'s private key. (Alternative to `sign` parameter.)
+    * **--passphrase**: Passphrase to the key if needed.
+    * **--attach-key**: GPG: Blank for appending public key to the attachments when sending.
+    * **--cert**: S/MIME: Certificate contents if not included in the key.
+    * **--cert-path**: S/MIME: Filename with the sender's private cert if cert not included in the key. (Alternative to `cert` parameter.)
+    * **.sign(key=True, passphrase=, attach_key=False, cert=None, key_path=None)**: Sign now (and you may specify the parameters). (For `key` see above.)
+    * **.signature(key=True, passphrase=, attach_key=False, cert=None, key_path=None)**: Sign later (when launched with *.sign()*, *.encrypt()* or *.send()* functions
+    * **Envelope(sign=key)**: (for `key` see above)        
+    * **Envelope(passphrase=)**: Passphrase to the key if needed.
+    * **Envelope(attach_key=)**: GPG: Append public key to the attachments when sending.
+    * **Envelope(cert=)**: S/MIME: Any attainable contents.
+### Encrypting
+If the GPG encryption fails, it tries to determine which recipient misses the key.
+
+  * **encrypt**:  Recipient GPG public key or S/MIME certificate to be encrypted with. 
+    * **`key`** parameter
+        * GPG:
+            * Blank (*CLI*) or True (*module*) to force encrypt
+            * key ID/fingerprint
+            * Any attainable contents with the key to be encrypted with (will be imported into keyring)
+            * "auto" for turning on encrypting if there is a matching key for every recipient
+        * S/MIME any attainable contents with certificate to be encrypted with or their list
+    * **--encrypt [key]**: (for `key` see above) Put 0/false/no to disable `encrypt-path`.
+    * **--encrypt-path** *(CLI only)*: Filename(s) with the recipient\'s public key. (Alternative to `encrypt` parameter.)
+    * **.encrypt(key=True, sign=, key_path=)**:
+        * **`sign`** You may specify boolean or default signing key ID/fingerprint or "auto" for GPG or any attainable contents with S/MIME key + signing certificate.
+        * **`key_path`**: Key/certificate contents (alternative to `key` parameter)
+    * **.encryption(key=True, key_path=)**: Encrypt later (when launched with *.sign()*, *.encrypt()* or *.send()* functions. If needed, in the parameters specify Any attainable contents with GPG encryption key or S/MIME encryption certificate. 
+    ```bash
+    # message gets encrypted for multiple S/MIME certificates
+    envelope --smime --encrypt-path recipient1.pem recipient2.pem --message "Hello"
+    
+    # message gets encrypted with the default GPG key
+    envelope  --message "Encrypted GPG message!" --subject "Secret subject will not be shown" --encrypt --from person@example.com --to person@example.com
     ```
-  
+    * **Envelope(encrypt=)**: Any attainable contents
+
+### Supportive
   * **.recipients()**: Return set of all recipients – `To`, `Cc`, `Bcc`
     * **.recipients(clear=True)**: All `To`, `Cc` and `Bcc` recipients are removed and the `Envelope` object is returned.
   * **attachments**: Access the list of attachments.
@@ -564,7 +529,65 @@ Envelope().auto_submitted.no()  # mark message as human produced
           
            $ envelope < email.eml
            ```
-   
+
+#### Address
+
+Any e-mail address encountered is internally converted to an `Address(str)` object that can be imported from the `envelope` package. You can safely access following `str` properties:
+* `.name` – the real name
+* `.address` – the e-mail address
+* `.host` – its domain
+* `.user` – the user name part of the e-mail
+```python3
+from envelope import Address
+a = Address("John <person@example.com>")
+a.name == "John", a.address == "person@example.com", a.host == "example.com", a.user == "person"
+```
+
+Empty object works too. For example, if the `From` header is not set, we get an empty Address object. Still it is safe to access its properties.
+```python3
+a = Envelope.load("Empty message").from_()
+bool(a) is False, a.host == ""
+Address() == Address("") == "", Address().address == ""
+``` 
+
+Method `.casefold()` returns casefolded `Address` object which is useful for comparing with strings whereas comparing with other `Address` object casefolds automatically
+```python3
+a = Address("John <person@example.com>")
+c = a.casefold()
+a is not c, a == c, a.name == "john", a.name != c.name
+```
+
+Method `.is_valid(check_mx=False)` returns boolean if the format is valid. When `check_mx` set to `True`, MX server is inquired too.
+
+Since the `Address` is a subclass of `str`, you can safely join such objects.
+
+```python3    
+", ".join([a, a]) # "John <person@example.com>, "John <person@example.com>"
+a + " hello"  #  "John <person@example.com> hello"
+```
+
+Address objects are equal if their e-mail address are equal. (Their real names might differ.)
+Address object is equal to a string if the string contains its e-mail address or the whole representation.
+
+```python3
+"person@example.com" == Address("John <person@example.com>") == "John <person@example.com>"  # True
+```
+
+Concerning `to`, `cc`, `bcc` and `reply-to`, multiple addresses may always be given in a string, delimited by comma (or semicolon). The `.get(address:bool, name:bool)` method may be called on an `Address` object to filter the desired information. 
+```python3
+e = (Envelope()
+    .to("person1@example.com")
+    .to("person1@example.com, John <person2@example.com>")
+    .to(["person3@example.com"]))
+
+[str(x) for x in e.to()]                # ["person1@example.com", "John <person2@example.com>", "person3@example.com"]
+[x.get(address=False) for x in e.to()]  # ["", "John", ""]
+[x.get(name=True) for x in e.to()]      # ["person1@example.com", "John", "person3@example.com"]
+                                        # return an address if no name given
+[x.get(address=True) for x in e.to()]   # ["person1@example.com", "person2@example.com", "person3@example.com"]
+                                        # addresses only
+```
+
 ## Default values
 
 In *module* interface, you may set the defaults when accessing `Envelope.default` instance. 
@@ -574,7 +597,9 @@ Envelope.default.subject("Test subject").signature()
 Envelope("Hello")  # this message has a default subject and is signed by default when sent
 ```
 
-## Converting object to str or bool
+## Envelope object
+
+### Converting object to str or bool
 
 When successfully signing, encrypting or sending, object is resolvable to True and signed text / produced e-mail could be obtained via str().
 
@@ -582,6 +607,20 @@ When successfully signing, encrypting or sending, object is resolvable to True a
 o = Envelope("message", sign=True)
 str(o)  # signed text
 bool(o)  # True
+```
+
+### Object equality
+Envelope object is equal to a `str`, `bytes` or another `Envelope` if their `bytes` are the same.
+```python3
+# Envelope objects are equal
+sign = {"message": "message", "sign": True}
+Envelope(**sign) == Envelope(**sign)  # True
+bytes(Envelope(**sign))  # because their bytes are the same
+# b'-----BEGIN PGP SIGNED MESSAGE-----\nHash: SHA512\n\nmessage\n-----BEGIN PGP SIGNATURE-----\n\niQEzBAEBCgAdFiE...\n-----END PGP SIGNATURE-----\n'
+
+# however, result of a PGP encrypting produces always a different output
+encrypt = {"message": "message", "encrypt": True, "from_": False, "to": "person@example.com"}
+Envelope(**encrypt) != Envelope(**encrypt)  # Envelope objects are not equal
 ```
 
 # Examples
