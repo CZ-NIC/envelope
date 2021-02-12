@@ -187,6 +187,24 @@ Whenever any attainable contents is mentioned, we mean plain **text**, **bytes**
     ```bash
     envelope --input file.txt
     ```
+
+    Envelope is sometimes able to handle wrong encoding or tries to print out a meaningful warning.
+    ```python3
+    # Issue a warning when trying to represent a mal-encoded message.
+    b ="€".encode("cp1250")  # converted to bytes b'\x80'
+    e = Envelope(b)
+    repr(e)
+    # WARNING: Cannot decode the message correctly, plain alternative bytes are not in Unicode.
+    # Envelope(message="b'\x80'")
+    
+    # When trying to output a mal-encoded message, we end up with a ValueError exception.
+    e.message()
+    # ValueError: Cannot decode the message correctly, it is not in Unicode. b'\x80'
+    
+    # Setting up an encoding (even ex-post) solves the issue.
+    e.header("Content-Type", "text/plain;charset=cp1250")
+    e.message()  # '€'
+    ```
   * **output**: Path to file to be written to (else the contents is returned).
     * **--output**
     * **.output(output_file)**

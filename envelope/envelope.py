@@ -88,7 +88,7 @@ class Envelope:
     def __repr__(self):
         """
         :return: Prints out basic representation.
-            However this is not serialization, you cannot reconstruct any complicated objects having attachments or custom headers.
+            However this is not a serialization: you cannot reconstruct any complicated objects having attachments or custom headers.
         """
         l = []
         quote = lambda x: '"' + x.replace('"', r'\"') + '"' if type(x) is str else x

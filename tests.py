@@ -258,7 +258,7 @@ class TestEnvelope(TestAbstract):
         self.check_lines(e, "header2: 1")
 
     def test_wrong_charset_message(self):
-        msg= "WARNING:envelope.utils:Cannot decode the message correctly, plain alternative bytes are not in Unicode."
+        msg = "WARNING:envelope.utils:Cannot decode the message correctly, plain alternative bytes are not in Unicode."
         b = "ř".encode("cp1250")
         e = Envelope(b)
         self.check_lines(e, raises=ValueError)
@@ -270,6 +270,10 @@ class TestEnvelope(TestAbstract):
         e.header("Content-Transfer-Encoding", "base64")
         e.message(b64encode(b), alternative=AUTO)
         self.assertEqual("ř", e.message())
+
+        # Strangely, putting apostrophes around the charset would not work
+        # e.header("Content-Type", "text/plain;charset='cp1250'")
+        # e._header["Content-Type"] == "text/plain;")
 
 
 class TestSmime(TestAbstract):
