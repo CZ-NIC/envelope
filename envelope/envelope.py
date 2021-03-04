@@ -1044,7 +1044,8 @@ class Envelope:
 
     def _send_now(self, email, encrypt, encrypted_subject, send):
         try:
-            if not self.__from and send is True:
+            if not self.__from and self.__from is not False and send is True:
+                # allow ignore sender when deliberately set to False
                 logger.error("You have to specify sender e-mail.")
                 return False
             if self.__from:

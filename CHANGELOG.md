@@ -1,7 +1,8 @@
 # CHANGELOG
 
-## 1.5.1
+## 1.5.1 (2021-03-04)
 - choose subject text placeholder while PGP encrypting
+- fix sending e-mail without From if deliberately set to False (regression)
 
 ## 1.5 (2021-02-09)
 – Address properties are "" if empty (handy when comparing strings)

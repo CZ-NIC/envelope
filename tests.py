@@ -1236,7 +1236,7 @@ class TestLoad(TestBash):
         self.assertEqual("Thu", e.header("dATe")[:3])
 
 
-class TestDecrypt(TestSmime):
+class TestDecrypt(TestSmime, TestGPG):
 
     def test_smime_decrypt(self):
         e = Envelope.load(path="tests/eml/smime_encrypt.eml", key=self.smime_key, cert=self.smime_cert)
