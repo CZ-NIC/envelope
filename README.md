@@ -294,8 +294,12 @@ Whenever any attainable contents is mentioned, we mean plain **text**, **bytes**
     ```
   * **subject**: Mail subject. Gets encrypted with GPG, stays visible with S/MIME.
     * **--subject**
-    * **.subject(text)**: If None, current subject returned.
+    * **.subject(text=None, encrypt=None)**:
+        * `text` Subject text.
+        * `encrypt` Text used instead of the real protected subject while PGP encrypting. False to not encrypt.   
+        * If neither parameter specified, current subject returned.
     * **Envelope(subject=)**
+    * **Envelope(subject_encrypted=)**
   * **date**:
     * **.date(date)** `str|False` Specify Date header (otherwise Date is added automatically). If False, the Date header will not be added automatically.
   * **smtp**: SMTP server

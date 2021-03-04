@@ -247,7 +247,7 @@ class Envelope:
 
     def __init__(self, message=None, from_=None, to=None, subject=None, headers=None,
                  gpg=None, smime=None,
-                 encrypt=None, sign=None, passphrase=None, attach_key=None, cert=None,
+                 encrypt=None, sign=None, passphrase=None, attach_key=None, cert=None, subject_encrypted=None,
                  sender=None, cc=None, bcc=None, reply_to=None, mime=None, attachments=None,
                  smtp=None, output=None, send=None):
         """
@@ -271,6 +271,7 @@ class Envelope:
 
         Encrypting
         :param encrypt: Recipients public key string or Path or stream (ex: from open()).
+        :param subject_encrypted: Text used instead of the real protected subject while PGP encrypting. False to not encrypt.
         :param to: E-mail or list. If encrypting used so that we choose the key they will be able to decipher with.
         :param from_: E-mail of the sender. If encrypting used so that we choose our key to be still able
                         to decipher the message later with.
@@ -315,6 +316,7 @@ class Envelope:
         self._bcc: List[Address] = []
         self._reply_to: List[Address] = []
         self._subject: str = None
+        self._subject_encrypted: Union[str, False] = True
         self._smtp = None
         self._attachments: List[Attachment] = []
         self._mime = AUTO
@@ -372,6 +374,8 @@ class Envelope:
                 self.signature(v)
             elif k == "encrypt":
                 self.encryption(v)
+            elif k == "subject_encrypted":
+                self.subject(encrypted=v)
             elif k == "_Message":  # internal stuff
                 continue
             elif v is not None and v != []:  # "to" will receive [] by default
@@ -560,10 +564,18 @@ class Envelope:
         self._gpg = False
         return self
 
-    def subject(self, subject=None) -> Union["Envelope", str]:
-        if subject is None:
+    def subject(self, subject=None, encrypted: Union[str, bool] = None) -> Union["Envelope", str]:
+        """ Get or set the message subject
+        :param subject: Subject text.
+        :param encrypted: Text used instead of the real protected subject while PGP encrypting. False to not encrypt.
+        :return If neither parameter specified, current subject returned, otherwise return self.
+        """
+        if subject is None and encrypted is None:
             return str(self._subject or "")
-        self._subject: str = subject
+        if subject is not None:
+            self._subject: str = subject
+        if encrypted is not None:
+            self._subject_encrypted = encrypted
         return self
 
     def mime(self, subtype=AUTO, nl2br=AUTO):
@@ -1089,7 +1101,8 @@ class Envelope:
 
     def _param_hash(self):
         """ Check if headers changed from last _start call."""
-        return hash(frozenset(self._headers.items())) + hash("".join(self.recipients())) + hash(self._subject) + hash(self.__from)
+        return (hash(frozenset(self._headers.items())) + hash("".join(self.recipients()))
+                + hash(self._subject) + hash(self._subject_encrypted) + hash(self.__from))
 
     def _sign_gpg_now(self, message, sign, send):
         status = self._gnupg.sign(
@@ -1245,11 +1258,12 @@ class Envelope:
         email.attach(msg_signature)
         return email
 
-    @staticmethod
-    def _compose_gpg_encrypted(text):
+    def _compose_gpg_encrypted(self, text):
         # encrypted message structure according to RFC3156
         email = EmailMessage()
-        email["Subject"] = "Encrypted message"  # real subject should be revealed when decrypted
+        # real subject might be hidden until decrypted
+        email["Subject"] = ("Encrypted message" if self._subject_encrypted is True else self._subject_encrypted)\
+            if self._subject_encrypted else self._subject
         email.set_type("multipart/encrypted")
         email.set_param("protocol", "application/pgp-encrypted")
         msg_version = EmailMessage()

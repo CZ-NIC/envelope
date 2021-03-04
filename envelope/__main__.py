@@ -19,11 +19,33 @@ class SmartFormatter(argparse.HelpFormatter):
 
 
 class BlankTrue(argparse.Action):
-    """ When left blank, this flag produces True. (Normal behaviour is to produce None which I use for not being set."""
+    """ When left blank, this flag produces True. Normal behaviour is to produce None which I use for not being set."""
 
     def __call__(self, _, namespace, values, option_string=None):
         if values in [None, []]:  # blank argument with nargs="?" produces None, with ="*" produces []
             values = True
+        setattr(namespace, self.dest, values)
+
+
+class BlankTrueFalseStr(argparse.Action):
+    """ When left blank, this flag produces True. Normal behaviour is to produce None which I use for not being set.
+    When 0/false/off 1/true/on used, bool is produced, else str is taken.
+    """
+
+    def __call__(self, _, namespace, values, option_string=None):
+        allow_string = True
+        if values in [None, []]:  # blank argument with nargs="?" produces None, with ="*" produces []
+            values = True
+        elif values.lower() in ["0", "false", "off"]:
+            values = False
+        elif values.lower() in ["1", "true", "on"]:
+            values = True
+        elif not allow_string \
+                and (type(self.metavar) is not list or values.lower() not in self.metavar) \
+                and (len(self.metavar.split("/")) < 2 or values.lower() not in self.metavar.split("/")):
+            print(f"Unrecognised value '{values}' of '{self.dest}'. Allowed values are 0/1/BLANK."
+                  f" Should the value be considered a positional parameter, move '{self.dest}' behind.")
+            exit()
         setattr(namespace, self.dest, values)
 
 
@@ -88,12 +110,15 @@ def main():
     group_recip.add_argument('-f', '--from', help="E-mail – needed to choose our key if encrypting", metavar="E-MAIL",
                             nargs="?", action=BlankTrue)
     group_recip.add_argument('--sender', help="Alias for --from if not set."
-                                             " Otherwise appends the \"Sender\" header.", metavar="E-MAIL")
+                                              " Otherwise appends the \"Sender\" header.", metavar="E-MAIL")
     group_recip.add_argument('--no-sender', action="store_true",
                             help="We explicitly say we do not want to decipher later if encrypting.")
 
     group_send = parser.add_argument_group("Sending")
     group_send.add_argument('-s', '--subject', help="E-mail subject", nargs="?", action=BlankTrue)
+    group_send.add_argument('--subject-encrypted', help="Text used instead of the real protected subject"
+                                                        " while PGP encrypting. Put 0/false/off to not encrypt.",
+                            action=BlankTrueFalseStr)
     group_send.add_argument('-a', '--attach',
                             help="Path to the attachment, followed by an optional file name to be used and/or mimetype."
                                  " This parameter may be used multiple times.",
@@ -237,6 +262,7 @@ def main():
         # XX allow any header to be displayed, ex: `--header Received` will display all Received headers
         read_method = None
         read_val = None
+        # if some of the following keys are true, we want to read that value instead of setting it
         for x in (x for x in ("subject", "message", "from_", "to", "cc", "bcc", "reply_to") if args[x] is True):
             read_method = x
             del args[x]

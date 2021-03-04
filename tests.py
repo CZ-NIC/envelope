@@ -94,6 +94,7 @@ class TestAbstract(unittest.TestCase):
         :param envelope: Prepend envelope module call before commands.
         :param env: dict Modify environment variables.
         :param debug: Print debug info.
+        :param decode: Decode the output by default.
         :return:
         """
         if envelope:
@@ -105,7 +106,7 @@ class TestAbstract(unittest.TestCase):
             print("Cmd:")
             r = [f"{' '.join(cmd)}"]
             if file:
-                r.append(" < {file}")
+                r.append(f" < {file}")
             elif piped:
                 r = [f'echo "{piped}" |'] + r
             print(" ".join(r))
@@ -994,6 +995,39 @@ class TestBash(TestAbstract):
         self.assertNotIn(preview_text, o)
         self.assertIn('Content-Disposition: attachment; filename="generic.txt"', o)
 
+    def test_subject(self):
+        subject1 = "Hello world"
+        subject2 = "Good bye sun"
+        default_placeholder = "Encrypted message"  # default text used by the library
+
+        def get_encrypted(subject, subject_encrypted):
+            ref = self.bash("--attach", self.text_attachment, "--send", "0",
+                            "--gpg", "tests/gpg_ring/",
+                            "--to", "envelope-example-identity-2@example.com",
+                            "--from", "envelope-example-identity@example.com",
+                            "--encrypt",
+                            "--subject", subject,
+                            "--subject-encrypted", subject_encrypted, piped="text")
+            # remove text "Have not been sent ... Encrypted subject: ..." prepended by ._send_now
+            ref = ref[ref.index("\n\n") + 2:]
+            return ref, Envelope.load(ref).as_message().as_string()
+
+        encrypted, decrypted = get_encrypted(subject1, subject2)
+        self.assertIn(f"Subject: {subject2}", encrypted)
+        self.assertNotIn(subject1, encrypted)
+        self.assertIn(f"Subject: {subject1}", decrypted)
+        self.assertNotIn(subject2, decrypted)
+
+        for x in ("False", "FALSE", "0", "oFF"):
+            encrypted, decrypted = get_encrypted(subject1, x)
+            self.assertIn(f"Subject: {subject1}", encrypted)
+            self.assertIn(f"Subject: {subject1}", decrypted)
+
+        for x in ("True", "TRUE", "1", "oN"):
+            encrypted, decrypted = get_encrypted(subject1, x)
+            self.assertIn(f"Subject: {default_placeholder}", encrypted)
+            self.assertIn(f"Subject: {subject1}", decrypted)
+
 
 class TestAttachment(TestAbstract):
 
@@ -1258,25 +1292,40 @@ class TestDecrypt(TestSmime):
     def test_encrypted_gpg_subject(self):
         body = "just a body text"
         subject = "This is an encrypted subject"
-        encrypted_eml = (Envelope(body)
-                         .gpg("tests/gpg_ring/")
-                         .to("envelope-example-identity-2@example.com")
-                         .from_("envelope-example-identity@example.com")
-                         .subject(subject)
-                         .encryption()
-                         # .attach(path=self.text_attachment)
-                         # .attach(self.image_file, inline=True)
-                         .as_message().as_string()
-                         )
+        encrypted_subject = "Encrypted message"
+        ref = (Envelope(body)
+               .gpg("tests/gpg_ring/")
+               .to("envelope-example-identity-2@example.com")
+               .from_("envelope-example-identity@example.com")
+               .encryption())
+        encrypted_eml = ref.subject(subject).as_message().as_string()
 
         # subject has been encrypted
-        self.assertIn("Subject: Encrypted message", encrypted_eml)
+        self.assertIn("Subject: " + encrypted_subject, encrypted_eml)
         self.assertNotIn(subject, encrypted_eml)
 
         # subject has been decrypted
         e = Envelope.load(encrypted_eml)
         self.assertEqual(body, e.message())
         self.assertEqual(subject, e.subject())
+
+        # further meddling with the encrypt parameter
+        def check_decryption(reference, other_subject=encrypted_subject):
+            encrypted = reference.as_message().as_string()
+            self.assertIn(other_subject, encrypted)
+            self.assertNotIn(subject, encrypted)
+
+            decrypted = Envelope.load(encrypted).as_message().as_string()
+            self.assertIn(subject, decrypted)
+            self.assertNotIn(other_subject, decrypted)
+
+        front_text = "Front text"
+        check_decryption(ref.subject(subject, encrypted=True))  # the default behaviour
+        check_decryption(ref.subject(subject, front_text), front_text)  # choose another placeholder text
+
+        always_visible = ref.subject(subject, encrypted=False).as_message().as_string()  # do not encrypt the subject
+        self.assertIn(subject, always_visible)
+        self.assertIn(subject, Envelope.load(always_visible).as_message().as_string())
 
 
 class TestTransfer(TestBash):

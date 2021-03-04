@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 1.5.1
+- choose subject text placeholder while PGP encrypting
+
 ## 1.5 (2021-02-09)
 – Address properties are "" if empty (handy when comparing strings)
 - replace invalid characters when loading (the way the e-mail clients behave)
