@@ -688,7 +688,11 @@ class Envelope:
                 return h[0]
             return h
         elif val:
-            self._headers[key] = val
+            try:
+                self._headers[key] = val
+            except TypeError as e:
+                logger.warning(f"Header {key} could not be successfully loaded with {val}: {e}")
+                self._headers[key] = str(val)
         return self
 
     def smtp(self, host="localhost", port=25, user=None, password=None, security=None):
@@ -1586,6 +1590,9 @@ class Parser:
                 if o.get_charsets() and o.get_charsets()[0]:
                     try:
                         t = t.decode(o.get_charsets()[0])
+                    except LookupError as e:
+                        t = t.decode(errors="replace")
+                        logger.warning(f"Replacing some invalid characters in {maintype}/{subtype}: {e}")
                     except ValueError as e:
                         t = t.decode(o.get_charsets()[0], errors="replace")
                         logger.warning(f"Replacing some invalid characters in {maintype}/{subtype}: {e}")

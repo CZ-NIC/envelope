@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 1.5.2
+- better invalid header loading (ex: invalid charset in the content type header)
+
 ## 1.5.1 (2021-03-04)
 - choose subject text placeholder while PGP encrypting
 - fix sending e-mail without From if deliberately set to False (regression)

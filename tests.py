@@ -35,6 +35,7 @@ class TestAbstract(unittest.TestCase):
     image_file = Path("tests/eml/image.gif")
     invalid_recipient = Path("tests/eml/invalid-recipient.eml")
     invalid_characters = Path("tests/eml/invalid-characters.eml")
+    invalid_headers = Path("tests/eml/invalid-headers.eml")
 
     def check_lines(self, o, lines: Union[str, Tuple[str, ...]] = (), longer: Union[int, Tuple[int, int]] = None,
                     debug=False, not_in: Union[str, Tuple[str, ...]] = (), raises=(), result=None):
@@ -1234,6 +1235,19 @@ class TestLoad(TestBash):
         self.assertEqual(subject, e.header("Subject"))
         self.assertEqual(subject, e.header("subJEct"))
         self.assertEqual("Thu", e.header("dATe")[:3])
+
+    def test_invalid_headers(self):
+        """ Following file has some invalid headers whose parsing would normally fail. """
+        msg = ['WARNING:envelope.envelope:Header List-Unsubscribe could not be successfully ' 
+               "loaded with <mailto:RB��R@innovabrokers.com.co>: 'Header' object is not subscriptable",
+               'WARNING:envelope.envelope:Replacing some invalid characters in text/html: '
+               'unknown encoding: "utf-8message-id: <123456@example.com>']
+        with self.assertLogs('envelope', level='WARNING') as cm:
+            e = Envelope.load(self.invalid_headers)
+        self.assertEqual(msg, cm.output)
+
+        self.assertEqual("An invalid header", e.message())
+        self.assertEqual("Support Team <no_reply-2345@example.com>", e.from_())
 
 
 class TestDecrypt(TestSmime, TestGPG):
