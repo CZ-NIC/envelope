@@ -1,6 +1,7 @@
 import io
 import logging
 import smtplib
+import ssl
 from collections import defaultdict
 from email.utils import getaddresses, parseaddr
 from pathlib import Path
@@ -320,12 +321,13 @@ class SMTP:
             if self.security is None:
                 self.security = defaultdict(lambda: False, {587: "starttls", 465: "tls"})[self.port]
 
+            context = ssl.create_default_context()
             if self.security == "tls":
-                smtp = smtplib.SMTP_SSL(self.host, self.port, timeout=1)
+                smtp = smtplib.SMTP_SSL(self.host, self.port, timeout=1, context=context)
             else:
                 smtp = smtplib.SMTP(self.host, self.port, timeout=1)
                 if self.security == "starttls":
-                    smtp.starttls()
+                    smtp.starttls(context=context)
             if self.user:
                 try:
                     smtp.login(self.user, self.password)

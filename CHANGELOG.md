@@ -1,7 +1,8 @@
 # CHANGELOG
 
-## 1.5.2
+## 1.5.2 (2021-06-02)
 - better invalid header loading (ex: invalid charset in the content type header)
+- SMTP connection uses `ssl.create_default_context()` by default
 
 ## 1.5.1 (2021-03-04)
 - choose subject text placeholder while PGP encrypting
