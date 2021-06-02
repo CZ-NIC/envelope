@@ -1238,13 +1238,16 @@ class TestLoad(TestBash):
 
     def test_invalid_headers(self):
         """ Following file has some invalid headers whose parsing would normally fail. """
-        msg = ['WARNING:envelope.envelope:Header List-Unsubscribe could not be successfully ' 
+        msg = ['WARNING:envelope.envelope:Header List-Unsubscribe could not be successfully '
                "loaded with <mailto:RB��R@innovabrokers.com.co>: 'Header' object is not subscriptable",
                'WARNING:envelope.envelope:Replacing some invalid characters in text/html: '
                'unknown encoding: "utf-8message-id: <123456@example.com>']
         with self.assertLogs('envelope', level='WARNING') as cm:
             e = Envelope.load(self.invalid_headers)
-        self.assertEqual(msg, cm.output)
+        if (3, 6) == (sys.version_info.major, sys.version_info.minor):  # XX drop with Python3.6 support
+            self.assertIn("support indexing", cm.output[0])
+        else:
+            self.assertEqual(msg, cm.output)
 
         self.assertEqual("An invalid header", e.message())
         self.assertEqual("Support Team <no_reply-2345@example.com>", e.from_())

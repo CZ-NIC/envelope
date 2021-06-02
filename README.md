@@ -448,8 +448,6 @@ Note that if neither *gpg* nor *smime* is specified, we try to determine the met
     * **Envelope(attach_key=)**: GPG: Append public key to the attachments when sending.
     * **Envelope(cert=)**: S/MIME: [Any attainable contents](#any-attainable-contents)
 ### Encrypting
-If the GPG encryption fails, it tries to determine which recipient misses the key.
-
   * **encrypt**:  Recipient GPG public key or S/MIME certificate to be encrypted with. 
     * **`key`** parameter
         * GPG:
@@ -472,6 +470,11 @@ If the GPG encryption fails, it tries to determine which recipient misses the ke
     envelope  --message "Encrypted GPG message!" --subject "Secret subject will not be shown" --encrypt --from person@example.com --to person@example.com
     ```
     * **Envelope(encrypt=)**: [Any attainable contents](#any-attainable-contents)
+
+#### GPG notes
+* If the GPG encryption fails, it tries to determine which recipient misses the key.  
+* By default, GPG encrypts with the key of the **from** header recipient too.
+* Key ID/fingerprint is internally ignored right now, GPG decides itself which key is to be used.
 
 ### Supportive
   * **.recipients()**: Return set of all recipients – `To`, `Cc`, `Bcc`

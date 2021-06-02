@@ -148,10 +148,10 @@ class Address(str):
         return addresses
 
     def is_valid(self, check_mx=False):
-        if not validate_email(self.address, check_mx=False):
+        if not validate_email(self.address, check_dns=False, check_smtp=False, check_blacklist=False):
             logger.warning(f"Address format invalid: '{self}'")
             return False
-        elif check_mx and print(f"Verifying {self}...") and not validate_email(self.address, check_mx=True):
+        elif check_mx and print(f"Verifying {self}...") and not validate_email(self.address, check_dns=True):
             logger.warning(f"MX check failed for: '{self}'")
             return False
         return True

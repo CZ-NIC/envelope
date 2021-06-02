@@ -1,4 +1,4 @@
 jsonpickle
 python-magic
 python-gnupg
-py3-validate-email
+py3-validate-email>=1.0.0
