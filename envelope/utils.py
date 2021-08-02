@@ -143,8 +143,8 @@ class Address(str):
             if len(addresses) != 1:
                 raise ValueError(f"Single e-mail address expected: {email_or_list}")
             return addresses[0]
-        if len(addresses) == 0:
-            raise ValueError(f"E-mail address cannot be parsed: {email_or_list}")
+        # if len(addresses) == 0:
+        #     raise ValueError(f"E-mail address cannot be parsed: {email_or_list}")
         return addresses
 
     def is_valid(self, check_mx=False):

@@ -33,7 +33,7 @@ class TestAbstract(unittest.TestCase):
     eml = Path("tests/eml/mail.eml")
     text_attachment = "tests/eml/generic.txt"
     image_file = Path("tests/eml/image.gif")
-    invalid_recipient = Path("tests/eml/invalid-recipient.eml")
+    group_recipient = Path("tests/eml/group-recipient.eml")
     invalid_characters = Path("tests/eml/invalid-characters.eml")
     invalid_headers = Path("tests/eml/invalid-headers.eml")
 
@@ -1206,14 +1206,17 @@ class TestLoad(TestBash):
         # which could appear even when .subject() shows decoded version
         self.assertIn("Subject: Žluťoučký kůň", Envelope.load(self.internationalized).preview().splitlines())
 
-    def test_invalid_recipient(self):
-        msg = "WARNING:envelope.envelope:E-mail address cannot be parsed: ['undisclosed-recipients:;'] at header To"
-        with self.assertLogs('envelope', level='WARNING') as cm:
-            e = Envelope.load(self.invalid_recipient)
-        self.assertEqual(cm.output, [msg])
+    def test_group_recipient(self):
+        # msg = "WARNING:envelope.envelope:E-mail address cannot be parsed: ['undisclosed-recipients:;'] at header To"
+        # with self.assertLogs('envelope', level='WARNING') as cm:
+        #     e = Envelope.load(self.group_recipient)
+        # self.assertEqual(cm.output, [msg])
+        e = Envelope.load(self.group_recipient)
 
         self.assertEqual([], e.to())
         self.assertEqual("From Alice Smith", e.subject())
+
+        self.assertEqual({"hi", "hi2"}, Envelope.load("To: group: hi; group b: hi2;").recipients())
 
     def test_invalid_characters(self):
         msg = "WARNING:envelope.envelope:Replacing some invalid characters in text/plain:" \

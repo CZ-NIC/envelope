@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 1.5.3 (2021-08-02)
+- group syntax is no more reported as erroneous (ex: undisclosed-recipients:;)
+
 ## 1.5.2 (2021-06-02)
 - better invalid header loading (ex: invalid charset in the content type header)
 - SMTP connection uses `ssl.create_default_context()` by default
