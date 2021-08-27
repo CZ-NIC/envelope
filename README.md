@@ -674,7 +674,7 @@ with open("/tmp/message.txt") as f:
 
 Sign and encrypt the message so that's decryptable by keys for me@example.com and remote_person@example.com (that should already be loaded in the keyring).
 ```python3 
-Envelope(message="Hello world", sign=True
+Envelope(message="Hello world", sign=True,
         encrypt=True,
         sender="me@example.com",
         to="remote_person@example.com")
@@ -682,7 +682,7 @@ Envelope(message="Hello world", sign=True
 
 Sign and encrypt the message so that's decryptable by keys for me@example.com and remote_person@example.com (that get's imported to the keyring from the file).
 ```python3 
-Envelope(message="Hello world", sign=True
+Envelope(message="Hello world", sign=True,
         encrypt=Path("/tmp/remote_key.asc"),
         sender="me@example.com",
         to="remote_person@example.com")
