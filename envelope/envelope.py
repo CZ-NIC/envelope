@@ -886,8 +886,7 @@ class Envelope:
         if self._processed:
             raise RuntimeError("Cannot call .send() after .sign()/.encrypt()."
                                " You probably wanted to use .signature()/.encryption() instead.")
-        self._start(sign=sign, encrypt=encrypt, send=send)
-        return self
+        return self._start(sign=sign, encrypt=encrypt, send=send)
 
     def _prepare_from(self):
         """ Prepare private variables. Resolve "from" and "sender" headers.
