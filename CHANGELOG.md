@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 1.5.4
+- disable validate_email module blacklist updater #17
+
 ## 1.5.3 (2021-08-02)
 - group syntax is no more reported as erroneous (ex: undisclosed-recipients:;)
 

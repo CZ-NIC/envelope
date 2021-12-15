@@ -4,12 +4,15 @@ import smtplib
 import ssl
 from collections import defaultdict
 from email.utils import getaddresses, parseaddr
+from os import environ
 from pathlib import Path
 from socket import gaierror, timeout
 from typing import Union
 
 import magic
-from validate_email import validate_email  # package py3-validate-email
+
+environ['PY3VE_IGNORE_UPDATER'] = '1'
+from validate_email import validate_email  # noqa, #17 E402, the package name is py3-validate-email
 
 logger = logging.getLogger(__name__)
 
