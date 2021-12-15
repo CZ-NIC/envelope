@@ -267,6 +267,10 @@ Whenever any attainable contents is mentioned, we mean plain **text**, **bytes**
     * **--reply-to**: E-mail address or empty to read value.
     * **.reply_to(email_or_list)**: If None, current list of [Addresses](#address) returned. If False or "", current list is cleared.
     * **Envelope(reply_to=)**
+* **from_addr**: SMTP envelope MAIL FROM address.
+    * **--from-addr**: E-mail address or empty to read value.
+    * **.from_addr(email)**: E-mail or False. If None, current `SMTP envelope MAIL FROM` returned as an [Address](#address) object (even an empty one).
+    * **.Envelope(from_addr=)**
     
 ### Sending
   * **send**: Send the message to the recipients by e-mail. True (blank in *CLI*) to send now or False to print out debug information.

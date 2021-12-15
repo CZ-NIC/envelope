@@ -113,6 +113,8 @@ def main():
                                               " Otherwise appends the \"Sender\" header.", metavar="E-MAIL")
     group_recip.add_argument('--no-sender', action="store_true",
                             help="We explicitly say we do not want to decipher later if encrypting.")
+    group_recip.add_argument('--from-addr', help="SMTP envelope MAIL FROM address", metavar="E-MAIL",
+                             nargs="?", action=BlankTrue)
 
     group_send = parser.add_argument_group("Sending")
     group_send.add_argument('-s', '--subject', help="E-mail subject", nargs="?", action=BlankTrue)

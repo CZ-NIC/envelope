@@ -746,6 +746,19 @@ class TestRecipients(TestAbstract):
                          .from_(id1),
                          (f"From: {id1}", f"Sender: {id2}"))
 
+    def test_from_addr(self):
+        mail1 = "envelope-from@example.com"
+        mail2 = "header-from@example.com"
+        e = Envelope("dumb message").from_addr(mail1).from_(mail2)
+        self.assertEqual(mail1, e.from_addr())
+        self.assertEqual(mail2, e.from_())
+        self.assertIn("Have not been sent from " + mail1, str(e.send(False)))
+        e = Envelope("dumb message").from_(mail2)
+        self.assertIn("Have not been sent from " + mail2, str(e.send(False)))
+        e = Envelope("dumb message", from_addr=mail1).from_(mail2)
+        self.assertIn("Have not been sent from " + mail1, str(e.send(False)))
+        self.assertIn("Have not been sent from " + mail1, self.bash("--from-addr", mail1, "--send", "0", file=self.eml))
+
     def test_addresses(self):
         e = Envelope.load(path=self.eml)
         self.assertEqual(1, len(e.to()))

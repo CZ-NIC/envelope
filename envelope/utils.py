@@ -345,7 +345,7 @@ class SMTP:
             return False
         return smtp
 
-    def send_message(self, email, to_addrs):
+    def send_message(self, email, from_addr, to_addrs):
         for attempt in range(1, 3):  # an attempt to reconnect possible
             try:
                 if self.key not in self._instances:
@@ -355,7 +355,7 @@ class SMTP:
                     return False
 
                 # recipients cannot be taken from headers when encrypting, we have to re-list them again
-                return smtp.send_message(email, to_addrs=to_addrs)
+                return smtp.send_message(email, from_addr=from_addr, to_addrs=to_addrs)
 
             except (timeout, smtplib.SMTPSenderRefused) as e:  # timeouts
                 if attempt == 2:

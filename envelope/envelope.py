@@ -18,8 +18,8 @@ from email.utils import make_msgid, formatdate, getaddresses
 from getpass import getpass
 from itertools import chain
 from pathlib import Path
-from quopri import decodestring, decode as quopri_decode
-from typing import Union, List, Set, Any
+from quopri import decodestring
+from typing import Union, List, Set, Optional
 
 from .utils import Address, Attachment, AutoSubmittedHeader, SMTP, _Message, is_gpg_fingerprint, assure_list, \
     assure_fetched
@@ -106,6 +106,7 @@ class Envelope:
                                                 "cc": self._cc,
                                                 "bcc": self._bcc,
                                                 "reply_to": self._reply_to,
+                                                "from_addr": self._from_addr,
                                                 **message
                                                 }.items() if v)
 
@@ -245,7 +246,7 @@ class Envelope:
         #     e.header(key, val)
         return e
 
-    def __init__(self, message=None, from_=None, to=None, subject=None, headers=None,
+    def __init__(self, message=None, from_=None, to=None, subject=None, headers=None, from_addr=None,
                  gpg=None, smime=None,
                  encrypt=None, sign=None, passphrase=None, attach_key=None, cert=None, subject_encrypted=None,
                  sender=None, cc=None, bcc=None, reply_to=None, mime=None, attachments=None,
@@ -290,6 +291,7 @@ class Envelope:
             optionally in tuple with the file name in the e-mail and/or mimetype.
         :param headers: List of headers which are tuples of name, value. Ex: [("X-Mailer", "my-cool-application"), ...]
         :param sender: Alias for "from" if not set. Otherwise appends header "Sender".
+        :param from_addr: Envelope MAIL FROM address for SMTP.
         """
         # user defined variables
         self._message = _Message()
@@ -311,6 +313,7 @@ class Envelope:
         self.__from: Union[Address, False] = None
         self._sender: Union[Address, False] = None
         self.__sender: Union[Address, False] = None
+        self._from_addr: Optional[Address] = None
         self._to: List[Address] = []
         self._cc: List[Address] = []
         self._bcc: List[Address] = []
@@ -547,6 +550,12 @@ class Envelope:
             return self.__from or Address()
         self._from = Address.parse(email, single=True, allow_false=True)
         self._prepare_from()
+        return self
+
+    def from_addr(self, email=None) -> Union["Envelope", Address]:
+        if email is None:
+            return self._from_addr or Address()
+        self._from_addr = Address.parse(email, single=True)
         return self
 
     def output(self, output_file):
@@ -1086,14 +1095,16 @@ class Envelope:
             email["Message-ID"] = make_msgid()
 
         if send and send != SIMULATION:
-            failures = self._smtp.send_message(email, to_addrs=list(map(str, set(self._to + self._cc + self._bcc))))
+            failures = self._smtp.send_message(email,
+                                               from_addr=self._from_addr,
+                                               to_addrs=list(map(str, set(self._to + self._cc + self._bcc))))
             if failures:
                 logger.warning(f"Unable to send to all recipients: {repr(failures)}.")
             elif failures is False:
                 return False
         else:
             if send != SIMULATION:
-                self._result.append(f"{'*' * 100}\nHave not been sent from {(self.__from or '-')}"
+                self._result.append(f"{'*' * 100}\nHave not been sent from {(self._from_addr or self.__from or '-')}"
                                     f" to {', '.join(self.recipients()) or '-'}")
             if encrypt:
                 if encrypted_subject:
