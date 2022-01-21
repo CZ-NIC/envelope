@@ -658,8 +658,6 @@ class TestGPG(TestAbstract):
                          .signature(passphrase=GPG_PASSPHRASE),
                          result=True)
 
-        temp.cleanup()
-
 
 class TestMime(TestAbstract):
     plain = """First
