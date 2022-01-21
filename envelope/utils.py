@@ -6,7 +6,8 @@ from collections import defaultdict
 from email.utils import getaddresses, parseaddr
 from os import environ
 from pathlib import Path
-from socket import gaierror, timeout
+from socket import gaierror, timeout as timeout_exc
+from time import sleep
 from typing import Union
 
 import magic
@@ -303,7 +304,11 @@ class SMTP:
     # Usecase: user passes smtp server info in dict in a loop but we do want it connects just once
     _instances = {}
 
-    def __init__(self, host="localhost", port=25, user=None, password=None, security=None):
+    def __init__(self, host="localhost", port=25, user=None, password=None, security=None, timeout=1, attempts=3,
+                 delay=0):
+        self.attempts = attempts
+        self.delay = delay  # If sending timeouts, delay N seconds before another attempt.
+
         if isinstance(host, smtplib.SMTP):
             self.instance = host
         else:
@@ -313,6 +318,7 @@ class SMTP:
             self.user = user
             self.password = password
             self.security = security
+            self.timeout = timeout
         d = locals()
         del d["self"]
         self.key = repr(d)
@@ -326,9 +332,9 @@ class SMTP:
 
             context = ssl.create_default_context()
             if self.security == "tls":
-                smtp = smtplib.SMTP_SSL(self.host, self.port, timeout=1, context=context)
+                smtp = smtplib.SMTP_SSL(self.host, self.port, timeout=self.timeout, context=context)
             else:
-                smtp = smtplib.SMTP(self.host, self.port, timeout=1)
+                smtp = smtplib.SMTP(self.host, self.port, timeout=self.timeout)
                 if self.security == "starttls":
                     smtp.starttls(context=context)
             if self.user:
@@ -346,7 +352,7 @@ class SMTP:
         return smtp
 
     def send_message(self, email, from_addr, to_addrs):
-        for attempt in range(1, 3):  # an attempt to reconnect possible
+        for attempt in range(self.attempts):  # an attempt to reconnect possible
             try:
                 if self.key not in self._instances:
                     self._instances[self.key] = self.connect()
@@ -356,16 +362,18 @@ class SMTP:
 
                 # recipients cannot be taken from headers when encrypting, we have to re-list them again
                 return smtp.send_message(email, from_addr=from_addr, to_addrs=to_addrs)
-
-            except (timeout, smtplib.SMTPSenderRefused) as e:  # timeouts
-                if attempt == 2:
+            except (timeout_exc, smtplib.SMTPException) as e:
+                del self._instances[self.key]  # this connection is gone, reconnect next time
+                if isinstance(e, timeout_exc):
+                    if self.delay:
+                        sleep(self.delay)
+                    continue
+                elif isinstance(e, smtplib.SMTPSenderRefused):
                     logger.warning(f"SMTP sender refused, unable to reconnect.\n{e}")
                     return False
-                del self._instances[self.key]  # this connection is gone possibly due to a timeout, reconnect
-                continue
-            except smtplib.SMTPException as e:
-                logger.error(f"SMTP sending failed.\n{e}")
-                return False
+                elif isinstance(e, smtplib.SMTPException):
+                    logger.error(f"SMTP sending failed.\n{e}")
+                    return False
 
 
 def is_gpg_fingerprint(key):

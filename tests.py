@@ -122,6 +122,10 @@ class TestAbstract(unittest.TestCase):
         else:
             return r
 
+    def assertSubset(self, dict_, subset):
+        """ assertDictContainsSubset alternative """
+        self.assertEqual(dict_, {**dict_, **subset})  # XX make (dict_, dict_ | subset) as of Python3.9
+
 
 class TestEnvelope(TestAbstract):
     def test_message_generating(self):
@@ -1409,6 +1413,15 @@ class TestTransfer(TestBash):
         # the user specified Content-Transfer-Encoding but left the message unencoded
         e2 = (Envelope().header("Content-Transfer-Encoding", "base64").message(original))
         self.assertEqual(original, e2.message())
+
+
+class TestSMTP(TestAbstract):
+    def test_smtp_parameters(self):
+        self.assertSubset(Envelope().smtp()._smtp.__dict__,
+                          {"host": "localhost", "port": 25, "timeout": 1, "attempts": 3, "delay": 0})
+        self.assertSubset(Envelope().smtp(port=32)._smtp.__dict__,
+                          {"host": "localhost", "port": 32})
+        self.assertSubset(Envelope().smtp(timeout=5)._smtp.__dict__, {"timeout": 5})
 
 
 if __name__ == '__main__':

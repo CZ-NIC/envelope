@@ -3,6 +3,8 @@
 ## 1.5.4
 - disable validate_email module blacklist updater #17
 - SMTP envelope MAIL FROM address #16
+- SMTP exposes timeout #20 , attempts, delay
+- SMTP re-connect on every error #21
 
 ## 1.5.3 (2021-08-02)
 - group syntax is no more reported as erroneous (ex: undisclosed-recipients:;)

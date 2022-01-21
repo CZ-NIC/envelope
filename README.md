@@ -308,15 +308,18 @@ Whenever any attainable contents is mentioned, we mean plain **text**, **bytes**
     * **.date(date)** `str|False` Specify Date header (otherwise Date is added automatically). If False, the Date header will not be added automatically.
   * **smtp**: SMTP server
     * **--smtp**
-    * **.smtp(host="localhost", port=25, user=, password=, security=)**
+    * **.smtp(host="localhost", port=25, user=, password=, security=, timeout=1, attempts=3, delay=0)**
     * **Envelope(smtp=)**
     * Parameters:
-        * `host` may include hostname or any of the following input formats (ex: path to an INI file or a `dict`)
-        * `security` if not set, automatically set to `starttls` for port *587* and to `tls` for port *465*
+        * `host` May include hostname or any of the following input formats (ex: path to an INI file or a `dict`)
+        * `security` If not set, automatically set to `starttls` for port *587* and to `tls` for port *465*
+        * `timeout` How many seconds should SMTP wait before timing out.
+        * `attempts` How many times we try to send the message to an SMTP server.
+        * `delay` How many seconds to sleep before re-trying a timed out connection.
     * Input format may be in the following form:
         * `None` default localhost server used
         * `smtplib.SMTP` object
-        * `list` or `tuple` having `host, [port, [username, password, [security]]]` parameters
+        * `list` or `tuple` having `host, [port, [username, password, [security, [timeout, [attempts, [delay]]]]]]` parameters
             * ex: `envelope --smtp localhost 125 me@example.com` will set up host, port and username parameters
         * `dict` specifying {"host": ..., "port": ...}
             * ex: `envelope --smtp '{"host": "localhost"}'` will set up host parameter

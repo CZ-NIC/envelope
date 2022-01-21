@@ -101,18 +101,18 @@ def main():
 
     group_recip = parser.add_argument_group("Recipients")
     group_recip.add_argument('-t', '--to', help="E-mail – needed to choose their key if encrypting", metavar="E-MAIL",
-                            nargs="*", action=BlankTrue)
+                             nargs="*", action=BlankTrue)
     group_recip.add_argument('--cc', help="E-mail or list", metavar="E-MAIL", nargs="*", action=BlankTrue)
     group_recip.add_argument('--bcc', help="E-mail or list", metavar="E-MAIL", nargs="*", action=BlankTrue)
     group_recip.add_argument('--reply-to',
-                            help="Header that states e-mail to be replied to. The field is not encrypted.",
-                            metavar="E-MAIL", nargs="?", action=BlankTrue)
+                             help="Header that states e-mail to be replied to. The field is not encrypted.",
+                             metavar="E-MAIL", nargs="?", action=BlankTrue)
     group_recip.add_argument('-f', '--from', help="E-mail – needed to choose our key if encrypting", metavar="E-MAIL",
-                            nargs="?", action=BlankTrue)
+                             nargs="?", action=BlankTrue)
     group_recip.add_argument('--sender', help="Alias for --from if not set."
                                               " Otherwise appends the \"Sender\" header.", metavar="E-MAIL")
     group_recip.add_argument('--no-sender', action="store_true",
-                            help="We explicitly say we do not want to decipher later if encrypting.")
+                             help="We explicitly say we do not want to decipher later if encrypting.")
     group_recip.add_argument('--from-addr', help="SMTP envelope MAIL FROM address", metavar="E-MAIL",
                              nargs="?", action=BlankTrue)
 
@@ -132,9 +132,11 @@ def main():
     group_send.add_argument('--mime', help="Set contents mime subtype: 'html' (default) or 'plain' for plain text",
                             metavar="SUBTYPE")
     group_send.add_argument('--smtp',
-                            help="SMTP server. List `host, [port, [username, password, [security]]]` or dict.\n"
+                            help="SMTP server. List `host, [port, [username, password,"
+                                 " [security, [timeout, [attempts, [delay]]]]]]` or dict.\n"
                                  "Ex: '--smtp {\"host\": \"localhost\", \"port\": 25}'."
-                                 " Security may be explicitly set to 'starttls', 'tls' or automatically determined by port.",
+                                 " Security may be explicitly set to 'starttls', 'tls'"
+                                 " or automatically determined by port.",
                             nargs="*", action=BlankTrue, metavar=("HOST", "PORT"))
     group_send.add_argument('--send', help="Send e-mail. Blank to send now.", nargs="?", action=BlankTrue)
 

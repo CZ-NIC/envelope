@@ -704,16 +704,19 @@ class Envelope:
                 self._headers[key] = str(val)
         return self
 
-    def smtp(self, host="localhost", port=25, user=None, password=None, security=None):
+    def smtp(self, host="localhost", port=25, user=None, password=None, security=None, timeout=1, attempts=3, delay=0):
         """
         Obtain SMTP server connection.
         Note that you may safely call this in a loop,
             envelope will remember the settings and connect only once (without reconnecting every iteration).
-        :param host: hostname, smtplib.SMTP or INI file path.
+        :param host: hostname, smtplib.SMTP or INI file path
         :param port:
         :param user:
         :param password:
-        :param security: Ex: tlsstart
+        :param security: If not set, automatically set to `starttls` for port *587* and to `tls` for port *465*
+        :param timeout: How many seconds should SMTP wait before timing out.
+        :param attempts: How many times we try to send the message to an SMTP server.
+        :param delay: How many seconds to sleep before re-trying a timed out connection.
         :return:
         """
         # CLI interface returns always a list or dict, ex: host=["localhost"] or host=["ini file"] or host={}
@@ -750,7 +753,7 @@ class Envelope:
         elif isinstance(host, smtplib.SMTP):
             self._smtp = SMTP(host)
         else:
-            self._smtp = SMTP(host, port, user, password, security)
+            self._smtp = SMTP(host, port, user, password, security, timeout=timeout, attempts=attempts, delay=delay)
         return self
 
     def attach(self, attachment=None, mimetype=None, name=None, inline=None, *, path=None):
