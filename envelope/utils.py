@@ -8,7 +8,7 @@ from os import environ
 from pathlib import Path
 from socket import gaierror, timeout as timeout_exc
 from time import sleep
-from typing import Union
+from typing import Union, Dict
 
 import magic
 
@@ -305,7 +305,7 @@ class SMTP:
     _instances = {}
 
     def __init__(self, host="localhost", port=25, user=None, password=None, security=None, timeout=1, attempts=3,
-                 delay=0):
+                 delay=1):
         self.attempts = attempts
         self.delay = delay  # If sending timeouts, delay N seconds before another attempt.
 
@@ -364,16 +364,22 @@ class SMTP:
                 return smtp.send_message(email, from_addr=from_addr, to_addrs=to_addrs)
             except (timeout_exc, smtplib.SMTPException) as e:
                 del self._instances[self.key]  # this connection is gone, reconnect next time
-                if isinstance(e, timeout_exc):
+                if isinstance(e, smtplib.SMTPSenderRefused):
+                    logger.warning(f"SMTP sender refused, unable to reconnect. {e}")
+                    return False
+                elif isinstance(e, timeout_exc):
                     if self.delay:
                         sleep(self.delay)
                     continue
-                elif isinstance(e, smtplib.SMTPSenderRefused):
-                    logger.warning(f"SMTP sender refused, unable to reconnect.\n{e}")
-                    return False
                 elif isinstance(e, smtplib.SMTPException):
-                    logger.error(f"SMTP sending failed.\n{e}")
-                    return False
+                    if attempt + 1 < self.attempts:
+                        logger.info(f"{type(e).__name__}, attempt {attempt + 1}. {e}")
+                        if self.delay:
+                            sleep(self.delay)
+                        continue
+                    else:
+                        logger.warning(f"{type(e).__name__}: sending failed. {e}")
+                        return False
 
 
 def is_gpg_fingerprint(key):

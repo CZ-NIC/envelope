@@ -308,7 +308,7 @@ Whenever any attainable contents is mentioned, we mean plain **text**, **bytes**
     * **.date(date)** `str|False` Specify Date header (otherwise Date is added automatically). If False, the Date header will not be added automatically.
   * **smtp**: SMTP server
     * **--smtp**
-    * **.smtp(host="localhost", port=25, user=, password=, security=, timeout=1, attempts=3, delay=0)**
+    * **.smtp(host="localhost", port=25, user=, password=, security=, timeout=1, attempts=3, delay=1)**
     * **Envelope(smtp=)**
     * Parameters:
         * `host` May include hostname or any of the following input formats (ex: path to an INI file or a `dict`)
