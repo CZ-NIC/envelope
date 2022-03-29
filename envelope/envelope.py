@@ -704,7 +704,7 @@ class Envelope:
                 self._headers[key] = str(val)
         return self
 
-    def smtp(self, host="localhost", port=25, user=None, password=None, security=None, timeout=1, attempts=3, delay=0):
+    def smtp(self, host="localhost", port=25, user=None, password=None, security=None, timeout=1, attempts=3, delay=1):
         """
         Obtain SMTP server connection.
         Note that you may safely call this in a loop,
@@ -1538,6 +1538,16 @@ class Envelope:
             print("Trying to connect to the SMTP...")
             passed *= bool(self._smtp.connect())  # check SMTP
         return passed
+
+    def smtp_quit(self=None):
+        """ Explicitly closes cached SMTP connections. Either class or instance can be called.
+        Envelope.smtp_quit() → closing all
+        Envelope().smtp_quit() → closing only those which match the SMTP server provided to the Envelope object
+        """
+        if self is None:
+            SMTP.quit_all()
+        else:
+            self._smtp.quit()
 
 
 class Parser:

@@ -1,6 +1,6 @@
 # Envelope
 
-[![Build Status](https://travis-ci.org/CZ-NIC/envelope.svg?branch=master)](https://travis-ci.org/CZ-NIC/envelope)
+[![Build Status](https://github.com/CZ-NIC/envelope/actions/workflows/run-unittest.yml/badge.svg)](https://github.com/CZ-NIC/envelope/actions) [![Downloads](https://pepy.tech/badge/envelope)](https://pepy.tech/project/envelope)
 
 Quick layer over [python-gnupg](https://bitbucket.org/vinay.sajip/python-gnupg/src), [M2Crypto](https://m2crypto.readthedocs.io/), [smtplib](https://docs.python.org/3/library/smtplib.html), [magic](https://pypi.org/project/python-magic/) and [email](https://docs.python.org/3/library/email.html?highlight=email#module-email) handling packages. Their common usecases merged into a single function. Want to sign a text and tired of forgetting how to do it right? You do not need to know everything about GPG or S/MIME, you do not have to bother with importing keys. Do not hassle with reconnecting to an SMTP server. Do not study various headers meanings to let your users unsubscribe via a URL.  
 You insert a message, attachments and inline images and receive signed and/or encrypted output to the file or to your recipients' e-mail.  
@@ -522,48 +522,54 @@ Note that if neither *gpg* nor *smime* is specified, we try to determine the met
     Trying to connect to the SMTP...
     Check succeeded.
     ```
- * **.as_message()**: Generates an email.message.Message object.
-    ```python3
-    e = Envelope("hello").as_message()
-    print(type(e), e.get_payload())  # <class 'email.message.EmailMessage'> hello\n 
-    ```
- * **load**: Parse [any attainable contents](#any-attainable-contents) (including email.message.Message) like an EML file to build an Envelope object.
-    * It can decrypt the message and parse its (inline or enclosed) attachments.
-    * Note that if you will send this reconstructed message, you might not probably receive it due to the Message-ID duplication. Delete at least Message-ID header prior to re-sending. 
-    * (*static*) **.load(message, \*, path=None, key=None, cert=None)**
-        * **message**: [Any attainable contents](#any-attainable-contents)
-        * **path**: Path to the file, alternative to the `message`
-        * **key**, **cert**: Specify when decrypting an S/MIME message (may be bundled together to the `key`)
-        ```python3
-        Envelope.load("Subject: testing message").subject()  # "testing message"
-        ```
-    * bash
-        * allows use blank `--subject` or `--message` flags to display the 
-        * **--load FILE**
-            ```bash
-            $ envelope --load email.eml
-            Content-Type: text/plain; charset="utf-8"
-            Content-Transfer-Encoding: 7bit
-            MIME-Version: 1.0
-            Subject: testing message
+  * **.as_message()**: Generates an email.message.Message object.
+     ```python3
+     e = Envelope("hello").as_message()
+     print(type(e), e.get_payload())  # <class 'email.message.EmailMessage'> hello\n 
+     ```
+  * **load**: Parse [any attainable contents](#any-attainable-contents) (including email.message.Message) like an EML file to build an Envelope object.
+     * It can decrypt the message and parse its (inline or enclosed) attachments.
+     * Note that if you will send this reconstructed message, you might not probably receive it due to the Message-ID duplication. Delete at least Message-ID header prior to re-sending. 
+     * (*static*) **.load(message, \*, path=None, key=None, cert=None)**
+         * **message**: [Any attainable contents](#any-attainable-contents)
+         * **path**: Path to the file, alternative to the `message`
+         * **key**, **cert**: Specify when decrypting an S/MIME message (may be bundled together to the `key`)
+         ```python3
+         Envelope.load("Subject: testing message").subject()  # "testing message"
+         ```
+     * bash
+         * allows use blank `--subject` or `--message` flags to display the 
+         * **--load FILE**
+             ```bash
+             $ envelope --load email.eml
+             Content-Type: text/plain; charset="utf-8"
+             Content-Transfer-Encoding: 7bit
+             MIME-Version: 1.0
+             Subject: testing message
             
-            Message body
+             Message body
           
-            $ envelope --load email.eml --subject
-            testing message          
-            ```
-        * (*bash*) piped in content, envelope executable used with no argument    
-            ```bash
-            $ echo "Subject: testing message" | envelope
-            Content-Type: text/plain; charset="utf-8"
-            Content-Transfer-Encoding: 7bit
-            MIME-Version: 1.0
-            Subject: testing message
+             $ envelope --load email.eml --subject
+             testing message          
+             ```
+         * (*bash*) piped in content, envelope executable used with no argument    
+             ```bash
+             $ echo "Subject: testing message" | envelope
+             Content-Type: text/plain; charset="utf-8"
+             Content-Transfer-Encoding: 7bit
+             MIME-Version: 1.0
+             Subject: testing message
            
-           $ cat email.eml | envelope
+            $ cat email.eml | envelope
           
-           $ envelope < email.eml
-           ```
+            $ envelope < email.eml
+            ```
+  * **smtp_quit()**: As Envelope tends to re-use all the SMTP instances, you may want to quit them explicitly. Either call this method to the Envelope class to close all the cached connections or to an Envelope object to close only the connection it currently uses.
+    ```python3
+    e = Envelope().smtp(server1).smtp(server2)
+    e.smtp_quit()  # called on an instance → closes connection to `server2` only
+    Envelope.smtp_quit()  # called on the class → closes both connections
+    ```
 
 #### Address
 
@@ -866,12 +872,14 @@ This is just a short explanation on these anti-spam mechanisms so that you can t
 Every time, the receiver should ask the sender's domain these questions over DNS.  
 
 ### SPF
-The receiver asks the sender's domain: Do you allow the senders IP/domain to send the e-mail on your behalf?
+The receiver asks the sender's domain: Do you allow the senders IP/domain to send the e-mail on your behalf? Is the IP/domain the mail originates from enlisted as valid in the DNS of the SMTP envelope MAIL FROM address domain? 
 
 Check your domain on SPF:
 ```bash
 dig -t TXT example.com
-``` 
+```
+
+SPF technology is tied to the SMTP envelope MAIL FROM address which is specified with the `.from_addr` method and then stored into the Return-Path header by the receiving server, and it has nothing in common with the headers like From `.from_`, Sender `.sender`, or Reply-To `.reply_to`. 
 
 ### DKIM
 The receiver asks the sender's domain: Give me the public key so that I may check the hash in the e-mail header that assert the message was composed by your private key. So that the e-mail comes trustworthy from you and nobody modified it on the way.

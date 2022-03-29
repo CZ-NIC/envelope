@@ -2,7 +2,9 @@ import logging
 import sys
 import unittest
 from base64 import b64encode
+from contextlib import redirect_stdout
 from email.message import EmailMessage
+from io import StringIO
 from os import environ
 from pathlib import Path
 from subprocess import PIPE, STDOUT, Popen
@@ -11,7 +13,7 @@ from typing import Tuple, Union
 
 from envelope import Envelope
 from envelope.envelope import HTML, PLAIN, Parser, AUTO
-from envelope.utils import Address
+from envelope.utils import Address, SMTP
 
 logging.basicConfig(stream=sys.stderr, level=logging.WARNING)
 
@@ -987,6 +989,38 @@ class TestSupportive(TestAbstract):
         self.assertEqual(type(e), EmailMessage)
         self.assertEqual(e.get_payload(), "hello\n")
 
+    def test_smtp_quit(self):
+        """ Calling .smtp_quit() object closes only its current SMTP connection, calling on closes closes them all."""
+        if (sys.version_info.major, sys.version_info.minor) < (3, 7):
+            # In Python3.6, sorting of dict seemed not to be stable for the case of SMTP.key.
+            # The frozen dict of SMTP.key had parameters sorted differently than here in key(name),
+            # hence the test failed. Since Python3.6 is after the end of life, I ignore.
+            return
+
+        class DummySMTPConnection:
+            def __init__(self, name):
+                self.name = name
+
+            def quit(self):
+                print(self.name)
+
+        def key(name):
+            return "{'host': '" + name + "', 'port': 25, 'user': None, 'password': None," \
+                                         " 'security': None, 'timeout': 1, 'attempts': 3, 'delay': 1}"
+
+        SMTP._instances = {key(name): DummySMTPConnection(name) for name in (f"dummy{i}" for i in range(4))}
+
+        e1 = Envelope().smtp("dummy1").smtp("dummy2")  # this object uses dummy2 only
+        e2 = Envelope().smtp("dummy3")  # this object uses dummy3
+
+        stdout = StringIO()
+        with redirect_stdout(stdout):
+            e2.smtp_quit()
+            Envelope.smtp_quit()
+            e1.smtp_quit()
+            Envelope.smtp_quit()
+        self.assertEqual("\n".join([f"dummy{i}" for i in [3, 0, 1, 2, 3, 2, 0, 1, 2, 3]]), stdout.getvalue().rstrip())
+
 
 class TestDefault(TestAbstract):
     def test_default(self):
@@ -1416,7 +1450,7 @@ class TestTransfer(TestBash):
 class TestSMTP(TestAbstract):
     def test_smtp_parameters(self):
         self.assertSubset(Envelope().smtp()._smtp.__dict__,
-                          {"host": "localhost", "port": 25, "timeout": 1, "attempts": 3, "delay": 0})
+                          {"host": "localhost", "port": 25, "timeout": 1, "attempts": 3, "delay": 1})
         self.assertSubset(Envelope().smtp(port=32)._smtp.__dict__,
                           {"host": "localhost", "port": 32})
         self.assertSubset(Envelope().smtp(timeout=5)._smtp.__dict__, {"timeout": 5})

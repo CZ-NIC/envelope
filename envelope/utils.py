@@ -302,7 +302,7 @@ class _Message:
 class SMTP:
     # cache of different smtp connections.
     # Usecase: user passes smtp server info in dict in a loop but we do want it connects just once
-    _instances = {}
+    _instances: Dict[str, smtplib.SMTP] = {}
 
     def __init__(self, host="localhost", port=25, user=None, password=None, security=None, timeout=1, attempts=3,
                  delay=1):
@@ -380,6 +380,14 @@ class SMTP:
                     else:
                         logger.warning(f"{type(e).__name__}: sending failed. {e}")
                         return False
+
+    def quit(self):
+        if self.key in self._instances:
+            self._instances[self.key].quit()
+
+    @classmethod
+    def quit_all(cls):
+        [c.quit() for c in cls._instances.values()]
 
 
 def is_gpg_fingerprint(key):
