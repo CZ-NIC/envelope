@@ -5,11 +5,11 @@ from pathlib import Path
 
 from jsonpickle import decode
 
-from .envelope import Envelope
+from .envelope import Envelope, __doc__ as doc
 from .utils import Attachment
 
 
-class SmartFormatter(argparse.HelpFormatter):
+class SmartFormatter(argparse.RawDescriptionHelpFormatter):
 
     def _split_lines(self, text, width):
         if text.startswith('R|'):
@@ -56,7 +56,7 @@ def _get_envelope(instance: Envelope, args):
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=SmartFormatter)
+    parser = argparse.ArgumentParser(description=doc, formatter_class=SmartFormatter)
     group_io = parser.add_argument_group("Input/Output")
     group_io.add_argument('--message', help='Plain text message. Empty to read.',
                           metavar="TEXT", nargs="?", action=BlankTrue)

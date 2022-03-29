@@ -19,9 +19,11 @@ from getpass import getpass
 from itertools import chain
 from pathlib import Path
 from quopri import decodestring
-from typing import Union, List, Set, Optional
+from typing import Union, List, Set, Optional, Any
 
-from .utils import Address, Attachment, AutoSubmittedHeader, SMTP, _Message, is_gpg_fingerprint, assure_list, \
+import magic
+
+from .utils import Address, Attachment, AutoSubmittedHeader, SMTPHandler, _Message, is_gpg_fingerprint, assure_list, \
     assure_fetched
 
 smime_import_error = "Cannot import M2Crypto. Run: `sudo apt install swig && pip3 install M2Crypto`"
@@ -30,29 +32,26 @@ try:
     import gnupg
 except ImportError:
     gnupg = None
-import magic
 
-__doc__ = """
-
-
-Quick layer python-gnupg, smime, smtplib and email handling packages.
+__doc__ = """Quick layer over python-gnupg, M2Crypto, smtplib, magic and email handling packages.
 Their common usecases merged into a single function. Want to sign a text and tired of forgetting how to do it right?
 You do not need to know everything about GPG or S/MIME, you do not have to bother with importing keys.
-Do not hassle with reconnecting SMTP server. Do not study various headers meanings to let your users unsubscribe via a URL.
-You insert a message and attachments and receive signed and/or encrypted output to the file or to your recipients' e-mail. 
-Just single line of code. With the great help of the examples below.
+Do not hassle with reconnecting to an SMTP server. Do not study various headers meanings
+to let your users unsubscribe via a URL. You insert a message, attachments and inline images
+and receive signed and/or encrypted output to the file or to your recipients' e-mail.
+Just single line of code.
+
+Envelope("my message")
+    .subject("hello world")
+    .to("example@example.com")
+    .attach(file_contents, name="attached-file.txt")
+    .smtp("localhost", 587, "user", "pass", "starttls")
+    .signature()
+    .send()
 
 Usage:
-  * launch as application, see ./envelope.py --help
+  * launch as an application, see ./envelope.py --help
   * import as a module to your application, ex: `from envelope import Envelope` 
-
-Example:
-
-gpg(message="Hello world",
-        output="/tmp/output_file",
-        encrypt_file="/tmp/remote_key.asc",
-        sender="me@email.com",
-        to="remote_person@example.com")
 """
 
 logger = logging.getLogger(__name__)
@@ -81,17 +80,22 @@ class Envelope:
                 is_email = SIMULATION if bool(self._subject) else False
                 self._start(send=is_email)
             else:
-                # nothing to do, let's assume this is a bone of an e-mail by appending `--send False` flag to produce an output
+                # nothing to do, let's assume this is a bone of an e-mail by appending `--send False` flag
+                # to produce an output
                 self._start(send=SIMULATION)
         return self._get_result_str()
 
     def __repr__(self):
         """
         :return: Prints out basic representation.
-            However this is not a serialization: you cannot reconstruct any complicated objects having attachments or custom headers.
+         However this is not a serialization: you cannot reconstruct any complicated objects
+         having attachments or custom headers.
         """
-        l = []
-        quote = lambda x: '"' + x.replace('"', r'\"') + '"' if type(x) is str else x
+
+        def quote(x):
+            return '"' + x.replace('"', r'\"') + '"' if type(x) is str else x
+
+        o = []
 
         text, html = self._message.get(str)
         message = {}
@@ -100,7 +104,7 @@ class Envelope:
                        "message(plain)": text}
         elif text or html:
             message = {"message": text or html}
-        l.extend(f'{k}={quote(v)}' for k, v in {"subject": self._subject,
+        o.extend(f'{k}={quote(v)}' for k, v in {"subject": self._subject,
                                                 "from_": self._from,
                                                 "to": self._to,
                                                 "cc": self._cc,
@@ -110,9 +114,9 @@ class Envelope:
                                                 **message
                                                 }.items() if v)
 
-        if not l:
+        if not o:
             return super().__repr__()
-        return f"Envelope({', '.join(l)})"
+        return f"Envelope({', '.join(o)})"
 
     def __bytes__(self):
         self._result_fresh(True)
@@ -194,8 +198,8 @@ class Envelope:
         XX option to specify the GPG decrypting key
         XX make key and cert work from bash too and do some tests
 
-        Note that if you will send this reconstructed message, you might not probably receive it due to the Message-ID duplication.
-        Delete at least Message-ID header prior to re-sending.
+        Note that if you will send this reconstructed message, you might not probably receive it
+        due to the Message-ID duplication. Delete at least Message-ID header prior to re-sending.
 
         :param message: Any attainable contents to build an Envelope object from, including email.message.Message.
         :param path: (Alternative to `message`.) Path to the file that should be loaded.
@@ -218,26 +222,26 @@ class Envelope:
         header_row = re.compile(r"([^\t:]+):(.*)")
         text = assure_fetched(message, str)
         is_header = True
-        header = []  # [whole line, header name, header val] XX header is not used, deprecated
+        headers = []  # [whole line, header name, header val] XX var headers is not used, deprecated
         body = []
         for line in text.splitlines():
             if is_header:  # we are parsing e-mail template header first
                 # are we still parsing the header?
                 m = header_row.match(line)
                 if m:
-                    header.append([line, m.group(1).strip(), m.group(2).strip()])
+                    headers.append([line, m.group(1).strip(), m.group(2).strip()])
                     continue
                 else:
-                    if line.startswith(("\t", " ")) and header:  # this is not end of header, just line continuation
-                        header[-1][0] += " " + line.strip()
-                        header[-1][2] += " " + line.strip()
+                    if line.startswith(("\t", " ")) and headers:  # this is not end of header, just line continuation
+                        headers[-1][0] += " " + line.strip()
+                        headers[-1][2] += " " + line.strip()
                         continue
                     is_header = False  # header has ended
                     if line.strip() == "":  # next line will be body
                         continue
                     else:  # header is missing or incorrect, there is body only
-                        body = [l[0] for l in header]
-                        header = []
+                        body = [h[0] for h in headers]
+                        headers = []
             if not is_header:
                 body.append(line)
 
@@ -318,8 +322,8 @@ class Envelope:
         self._cc: List[Address] = []
         self._bcc: List[Address] = []
         self._reply_to: List[Address] = []
-        self._subject: str = None
-        self._subject_encrypted: Union[str, False] = True
+        self._subject: Union[str, None] = None
+        self._subject_encrypted: Union[str, bool] = True
         self._smtp = None
         self._attachments: List[Attachment] = []
         self._mime = AUTO
@@ -333,7 +337,7 @@ class Envelope:
         self._result = []  # text output for str() conversion
         self._result_cache = None
         self._result_cache_hash = None
-        self._smtp = SMTP()
+        self._smtp = SMTPHandler()
         self.auto_submitted = AutoSubmittedHeader(self)  # allows fluent interface to set header
 
         # if a parameter is not set, use class defaults, else init with parameter
@@ -472,7 +476,8 @@ class Envelope:
         if boundary is not None:
             self._message.boundary = boundary
         if alternative not in (AUTO, PLAIN, HTML):
-            raise ValueError(f"Invalid alternative {alternative} for message, choose one of the: {AUTO}, {PLAIN}, {HTML}")
+            raise ValueError(f"Invalid alternative {alternative} for message,"
+                             f" choose one of the: {AUTO}, {PLAIN}, {HTML}")
         if text is path is None:
             # reading value
             b = getattr(self._message, alternative)
@@ -509,7 +514,6 @@ class Envelope:
                 return b.decode(charset)
             except UnicodeError:
                 raise ValueError(f"Cannot decode the message correctly, it is not in Unicode. {b}")
-
 
         # write value
         if type(text) is _Message:  # constructor internally adopts default's self.default._message
@@ -704,7 +708,8 @@ class Envelope:
                 self._headers[key] = str(val)
         return self
 
-    def smtp(self, host="localhost", port=25, user=None, password=None, security=None, timeout=1, attempts=3, delay=1):
+    def smtp(self, host: Any = "localhost", port=25, user=None, password=None, security=None, timeout=1, attempts=3,
+             delay=1):
         """
         Obtain SMTP server connection.
         Note that you may safely call this in a loop,
@@ -744,16 +749,17 @@ class Envelope:
                 except KeyError as e:
                     raise FileNotFoundError(f"INI file {ini} exists but section [SMTP] is missing") from e
 
-        if type(host) is SMTP:  # constructor internally adopts default's self.default._smtp
+        if type(host) is SMTPHandler:  # constructor internally adopts default's self.default._smtp
             self._smtp = host
         elif type(host) is dict:  # ex: {"host": "localhost", "port": 1234}
-            self._smtp = SMTP(**host)
+            self._smtp = SMTPHandler(**host)
         elif type(host) is list:  # ex: ["localhost", 1234]
-            self._smtp = SMTP(*host)
+            self._smtp = SMTPHandler(*host)
         elif isinstance(host, smtplib.SMTP):
-            self._smtp = SMTP(host)
+            self._smtp = SMTPHandler(host)
         else:
-            self._smtp = SMTP(host, port, user, password, security, timeout=timeout, attempts=attempts, delay=delay)
+            self._smtp = SMTPHandler(host, port, user, password, security, timeout=timeout, attempts=attempts,
+                                     delay=delay)
         return self
 
     def attach(self, attachment=None, mimetype=None, name=None, inline=None, *, path=None):
@@ -782,7 +788,7 @@ class Envelope:
         self._attachments += [Attachment(o) for o in assure_list(attachment)]
         return self
 
-    def signature(self, key=True, passphrase=None, attach_key=None, cert=None, *, key_path=None):
+    def signature(self, key: Any = True, passphrase=None, attach_key=None, cert=None, *, key_path=None):
         """
         Turn signing on.
         :param key: Signing key
@@ -1039,7 +1045,8 @@ class Envelope:
                                 sign = fallback_sign
                             else:
                                 raise RuntimeError("No GPG sign key found")
-                    elif not is_gpg_fingerprint(sign):  # sign is Path or key contents, import it and get its fingerprint
+                    elif not is_gpg_fingerprint(sign):
+                        # sign is Path or key contents, import it and get its fingerprint
                         result = self._gnupg.import_keys(assure_fetched(sign, bytes))
                         sign = result.fingerprints[0]
 
@@ -1152,7 +1159,8 @@ class Envelope:
         if not any(chain(self._to, self._cc, self._bcc)):
             exc.append("No recipient e-mail specified")
         if self.__from is None:
-            exc.append("No sender e-mail specified. If not planning to decipher later, put sender=False or --no-sender flag.")
+            exc.append("No sender e-mail specified."
+                       " If not planning to decipher later, put sender=False or --no-sender flag.")
         if exc:
             raise RuntimeError("Encrypt key present. " + ", ".join(exc))
         status = self._gnupg.encrypt(
@@ -1195,10 +1203,10 @@ class Envelope:
         """
         return set(x.address for x in self._to + self._cc + self._bcc + ([self.__from] if self.__from else []))
 
-    def _encrypt_smime_now(self, email, sign, encrypt):
+    def _encrypt_smime_now(self, email, sign, encrypt: Union[None, bool, bytes, List[bytes]]):
         """
 
-        :type encrypt: Union[None, False, bytes, list[bytes]]
+        :type encrypt: Can be None, False, bytes or list[bytes]
         """
         with warnings.catch_warnings():
             # m2crypto.py:13: DeprecationWarning: the imp module is deprecated in favour of importlib;
@@ -1207,6 +1215,8 @@ class Envelope:
             try:
                 from M2Crypto import BIO, Rand, SMIME, X509, EVP  # we save up to 30 - 120 ms to load it here
             except ImportError:
+                # noinspection PyPep8Naming
+                BIO = Rand = SMIME = X509 = EVP = None
                 raise ImportError(smime_import_error)
         output_buffer = BIO.MemoryBuffer()
         signed_buffer = BIO.MemoryBuffer()
@@ -1223,7 +1233,8 @@ class Envelope:
             # Since s.load_key shall not accept file contents, we have to set the variables manually
             sign = assure_fetched(sign, bytes)
             # XX remove getpass conversion to bytes callback when https://gitlab.com/m2crypto/m2crypto/issues/260 is resolved
-            cb = (lambda x: bytes(self._passphrase, 'ascii')) if self._passphrase else (lambda x: bytes(getpass(), 'ascii'))
+            cb = (lambda x: bytes(self._passphrase, 'ascii')) if self._passphrase \
+                else (lambda x: bytes(getpass(), 'ascii'))
             try:
                 smime.pkey = EVP.load_key_string(sign, callback=cb)
             except TypeError:
@@ -1281,7 +1292,7 @@ class Envelope:
         # encrypted message structure according to RFC3156
         email = EmailMessage()
         # real subject might be hidden until decrypted
-        email["Subject"] = ("Encrypted message" if self._subject_encrypted is True else self._subject_encrypted)\
+        email["Subject"] = ("Encrypted message" if self._subject_encrypted is True else self._subject_encrypted) \
             if self._subject_encrypted else self._subject
         email.set_type("multipart/encrypted")
         email.set_param("protocol", "application/pgp-encrypted")
@@ -1436,7 +1447,7 @@ class Envelope:
                 email["Subject"] = self._subject
         return email
 
-    def recipients(self, *, clear=False) -> Set[Address]:
+    def recipients(self, *, clear=False) -> Union[Set[Address], 'Envelope']:
         """ Return set of all recipients – To, Cc, Bcc
             :param: clear If true, all To, Cc and Bcc recipients are removed and the object is returned.
 
@@ -1453,15 +1464,16 @@ class Envelope:
             return self
         return {x for x in set(self._to + self._cc + self._bcc)}
 
-    def attachments(self, name=None, inline=None) -> Union[Attachment, List[Attachment]]:
+    def attachments(self, name=None, inline=None) -> Union[Attachment, List[Attachment], bool]:
         """ Access the attachments.
             XX make available from CLI too
                 --attachments(-inline)(-enclosed) [name]
             :type name: str Set the name of the only desired attachment to be returned.
             :type inline: bool Filter inline/enclosed attachments only.
-            :return Attachment when a name is set, otherwise list of all the attachments.
+            :return Attachment or False when a name is set, otherwise list of all the attachments.
         """
-        attachments = [a for a in self._attachments if bool(a.inline) == inline] if inline is not None else self._attachments
+        attachments = [a for a in self._attachments if bool(a.inline) == inline] if inline is not None \
+            else self._attachments
 
         if name is not None:
             for a in attachments:
@@ -1489,7 +1501,7 @@ class Envelope:
                 passed = False
                 logger.warning(f"Could not parse domain from the sender address '{self.__from}'")
             else:
-                def dig(query_or_list, rr="TXT", search_start=None):
+                def dig(query_or_list, rr="TXT"):
                     if type(query_or_list) is not list:
                         query_or_list = [query_or_list]
                     for query in query_or_list:
@@ -1545,7 +1557,7 @@ class Envelope:
         Envelope().smtp_quit() → closing only those which match the SMTP server provided to the Envelope object
         """
         if self is None:
-            SMTP.quit_all()
+            SMTPHandler.quit_all()
         else:
             self._smtp.quit()
 
@@ -1561,14 +1573,16 @@ class Parser:
     def parse(self, o: Message, add_headers=False):
         if add_headers:
             for k, val in o.items():
-                # We skip "Content-Type" and "Content-Transfer-Encoding" because we decode text payload before importing.
-                # We skip MIME-Version because it may be another one in an encrypted sub-message we take the headers from too.
+                # We skip "Content-Type" and "Content-Transfer-Encoding" since we decode text payload before importing.
+                # We skip MIME-Version since it may be another one
+                # in an encrypted sub-message we take the headers from too.
                 if k.lower() in ("content-type", "content-transfer-encoding", "mime-version"):
                     continue
                 try:
                     if isinstance(val, header.Header):
                         # when diacritics appear in Subject, object is returned instead of a string
-                        # when maxline is not set, it uses a default one (75 chars?) and gets encoded into multiple chunks
+                        # when maxline is not set, it uses a default one (75 chars?)
+                        # and gets encoded into multiple chunks
                         # while policy.header_store_parse parses just the first
                         # val = val.encode()
                         self.e.header(k, val)
@@ -1584,7 +1598,8 @@ class Parser:
                 [self.parse(x) for x in payload]
             elif subtype in ("related", "mixed"):
                 for p in payload:
-                    if p.get_content_maintype() in ["text", "multipart"] and p.get_content_disposition() != "attachment":
+                    if p.get_content_maintype() in ["text", "multipart"] \
+                            and p.get_content_disposition() != "attachment":
                         self.parse(p)
                     else:
                         # decode=True -> strip CRLFs, convert base64 transfer encoding to bytes etc

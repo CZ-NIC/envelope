@@ -1,14 +1,14 @@
 import io
 import logging
-import smtplib
 import ssl
 from collections import defaultdict
 from email.utils import getaddresses, parseaddr
 from os import environ
 from pathlib import Path
+from smtplib import SMTP, SMTP_SSL, SMTPAuthenticationError, SMTPException, SMTPSenderRefused
 from socket import gaierror, timeout as timeout_exc
 from time import sleep
-from typing import Union, Dict
+from typing import Union, Dict, Type
 
 import magic
 
@@ -269,7 +269,7 @@ class _Message:
             val = str(val)
         return val
 
-    def get(self, type_: Union[bytes, str] = bytes) -> (Union[bytes, str, None], Union[bytes, str, None]):
+    def get(self, type_: Union[Type[bytes], Type[str]] = bytes) -> (Union[bytes, str, None], Union[bytes, str, None]):
         """
         :param type_: Set to str if we should return str instead of bytes.
          Note it raises a warning if bytes were not in Unicode.
@@ -299,17 +299,17 @@ class _Message:
             return text or html
 
 
-class SMTP:
+class SMTPHandler:
     # cache of different smtp connections.
     # Usecase: user passes smtp server info in dict in a loop but we do want it connects just once
-    _instances: Dict[str, smtplib.SMTP] = {}
+    _instances: Dict[str, SMTP] = {}
 
     def __init__(self, host="localhost", port=25, user=None, password=None, security=None, timeout=1, attempts=3,
                  delay=1):
         self.attempts = attempts
         self.delay = delay  # If sending timeouts, delay N seconds before another attempt.
 
-        if isinstance(host, smtplib.SMTP):
+        if isinstance(host, SMTP):
             self.instance = host
         else:
             self.instance = None
@@ -332,18 +332,18 @@ class SMTP:
 
             context = ssl.create_default_context()
             if self.security == "tls":
-                smtp = smtplib.SMTP_SSL(self.host, self.port, timeout=self.timeout, context=context)
+                smtp = SMTP_SSL(self.host, self.port, timeout=self.timeout, context=context)
             else:
-                smtp = smtplib.SMTP(self.host, self.port, timeout=self.timeout)
+                smtp = SMTP(self.host, self.port, timeout=self.timeout)
                 if self.security == "starttls":
                     smtp.starttls(context=context)
             if self.user:
                 try:
                     smtp.login(self.user, self.password)
-                except smtplib.SMTPAuthenticationError as e:
+                except SMTPAuthenticationError as e:
                     logger.error(f"SMTP authentication failed: {self.key}.\n{e}")
                     return False
-        except smtplib.SMTPException as e:
+        except SMTPException as e:
             logger.error(f"SMTP connection failed: {self.key}.\n{e}")
             return False
         except (gaierror, ConnectionError):
@@ -362,16 +362,16 @@ class SMTP:
 
                 # recipients cannot be taken from headers when encrypting, we have to re-list them again
                 return smtp.send_message(email, from_addr=from_addr, to_addrs=to_addrs)
-            except (timeout_exc, smtplib.SMTPException) as e:
+            except [timeout_exc, SMTPException] as e:
                 del self._instances[self.key]  # this connection is gone, reconnect next time
-                if isinstance(e, smtplib.SMTPSenderRefused):
+                if isinstance(e, SMTPSenderRefused):
                     logger.warning(f"SMTP sender refused, unable to reconnect. {e}")
                     return False
                 elif isinstance(e, timeout_exc):
                     if self.delay:
                         sleep(self.delay)
                     continue
-                elif isinstance(e, smtplib.SMTPException):
+                elif isinstance(e, SMTPException):
                     if attempt + 1 < self.attempts:
                         logger.info(f"{type(e).__name__}, attempt {attempt + 1}. {e}")
                         if self.delay:
@@ -395,17 +395,17 @@ def is_gpg_fingerprint(key):
     return isinstance(key, str) and len(key) * 4 < 512  # 512 is the smallest possible GPG key
 
 
-def assure_list(l):
+def assure_list(v):
     """ Accepts object and returns list, if object is not list, it's appended to a list. If None, returns empty list.
         "test" → ["test"]
         (5,1) → [(5,1)]
         ["test", "foo"] → ["test", "foo"]
     """
-    if l is None:
+    if v is None:
         return []
-    elif type(l) is not list:
-        return [l]
-    return l
+    elif type(v) is not list:
+        return [v]
+    return v
 
 
 def assure_fetched(message, retyped=None):

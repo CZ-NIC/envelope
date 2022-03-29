@@ -13,7 +13,7 @@ from typing import Tuple, Union
 
 from envelope import Envelope
 from envelope.envelope import HTML, PLAIN, Parser, AUTO
-from envelope.utils import Address, SMTP
+from envelope.utils import Address, SMTPHandler
 
 logging.basicConfig(stream=sys.stderr, level=logging.WARNING)
 
@@ -255,6 +255,7 @@ class TestEnvelope(TestAbstract):
 
         # create cache under the hood
         self.assertFalse(e._result)
+        # noinspection PyStatementEffect
         e.as_message()["header1"]
         self.assertTrue(e._result)
 
@@ -282,6 +283,10 @@ class TestEnvelope(TestAbstract):
         # Strangely, putting apostrophes around the charset would not work
         # e.header("Content-Type", "text/plain;charset='cp1250'")
         # e._header["Content-Type"] == "text/plain;")
+
+    def test_repr(self):
+        e = Envelope("hello").to("test@example.com")
+        self.assertEqual('Envelope(to=[test@example.com], message="hello")', repr(e))
 
 
 class TestSmime(TestAbstract):
@@ -1008,7 +1013,7 @@ class TestSupportive(TestAbstract):
             return "{'host': '" + name + "', 'port': 25, 'user': None, 'password': None," \
                                          " 'security': None, 'timeout': 1, 'attempts': 3, 'delay': 1}"
 
-        SMTP._instances = {key(name): DummySMTPConnection(name) for name in (f"dummy{i}" for i in range(4))}
+        SMTPHandler._instances = {key(name): DummySMTPConnection(name) for name in (f"dummy{i}" for i in range(4))}
 
         e1 = Envelope().smtp("dummy1").smtp("dummy2")  # this object uses dummy2 only
         e2 = Envelope().smtp("dummy3")  # this object uses dummy3
