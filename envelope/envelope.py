@@ -708,8 +708,8 @@ class Envelope:
                 self._headers[key] = str(val)
         return self
 
-    def smtp(self, host: Any = "localhost", port=25, user=None, password=None, security=None, timeout=1, attempts=3,
-             delay=1):
+    def smtp(self, host: Any = "localhost", port=25, user=None, password=None, security=None, timeout=3, attempts=3,
+             delay=3):
         """
         Obtain SMTP server connection.
         Note that you may safely call this in a loop,

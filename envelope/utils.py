@@ -304,8 +304,8 @@ class SMTPHandler:
     # Usecase: user passes smtp server info in dict in a loop but we do want it connects just once
     _instances: Dict[str, SMTP] = {}
 
-    def __init__(self, host="localhost", port=25, user=None, password=None, security=None, timeout=1, attempts=3,
-                 delay=1):
+    def __init__(self, host="localhost", port=25, user=None, password=None, security=None, timeout=3, attempts=3,
+                 delay=3):
         self.attempts = attempts
         self.delay = delay  # If sending timeouts, delay N seconds before another attempt.
 
@@ -362,7 +362,7 @@ class SMTPHandler:
 
                 # recipients cannot be taken from headers when encrypting, we have to re-list them again
                 return smtp.send_message(email, from_addr=from_addr, to_addrs=to_addrs)
-            except [timeout_exc, SMTPException] as e:
+            except (timeout_exc, SMTPException) as e:
                 del self._instances[self.key]  # this connection is gone, reconnect next time
                 if isinstance(e, SMTPSenderRefused):
                     logger.warning(f"SMTP sender refused, unable to reconnect. {e}")

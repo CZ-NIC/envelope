@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## 1.5.4
+## 1.5.4 (2022-04-04)
 - disable validate_email module blacklist updater #17
 - SMTP envelope MAIL FROM address #16
 - SMTP exposes timeout #20 , attempts, delay

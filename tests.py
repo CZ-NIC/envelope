@@ -1011,7 +1011,7 @@ class TestSupportive(TestAbstract):
 
         def key(name):
             return "{'host': '" + name + "', 'port': 25, 'user': None, 'password': None," \
-                                         " 'security': None, 'timeout': 1, 'attempts': 3, 'delay': 1}"
+                                         " 'security': None, 'timeout': 3, 'attempts': 3, 'delay': 3}"
 
         SMTPHandler._instances = {key(name): DummySMTPConnection(name) for name in (f"dummy{i}" for i in range(4))}
 
@@ -1455,7 +1455,7 @@ class TestTransfer(TestBash):
 class TestSMTP(TestAbstract):
     def test_smtp_parameters(self):
         self.assertSubset(Envelope().smtp()._smtp.__dict__,
-                          {"host": "localhost", "port": 25, "timeout": 1, "attempts": 3, "delay": 1})
+                          {"host": "localhost", "port": 25, "timeout": 3, "attempts": 3, "delay": 3})
         self.assertSubset(Envelope().smtp(port=32)._smtp.__dict__,
                           {"host": "localhost", "port": 32})
         self.assertSubset(Envelope().smtp(timeout=5)._smtp.__dict__, {"timeout": 5})
