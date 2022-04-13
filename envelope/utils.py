@@ -390,9 +390,10 @@ class SMTPHandler:
         [c.quit() for c in cls._instances.values()]
 
 
-def is_gpg_fingerprint(key):
-    """ Check if we have key fingerprint in the variable or the key contents itself """
-    return isinstance(key, str) and len(key) * 4 < 512  # 512 is the smallest possible GPG key
+def is_gpg_importable_key(key):
+    """ Check if the variable contains the key contents itself
+     (it may contain a fingerprint or an e-mail address too) """
+    return len(key) >= 512  # 512 is the smallest possible GPG key
 
 
 def assure_list(v):

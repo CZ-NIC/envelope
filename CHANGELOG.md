@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## 1.6
+- GPG encryption possible with arbitrary keys only #9 #14
+- fix: when signing key fails, do not sign with the default GPG private key
+
 ## 1.5.4 (2022-04-04)
 - disable validate_email module blacklist updater #17
 - SMTP envelope MAIL FROM address #16

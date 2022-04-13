@@ -22,7 +22,7 @@ if p.exists():
 
 setup(
     name='envelope',
-    version='1.5.4',
+    version='1.6.0rc1',
     packages=['envelope'],
     author='Edvard Rejthar',
     author_email='edvard.rejthar@nic.cz',

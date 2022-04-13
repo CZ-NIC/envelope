@@ -60,7 +60,8 @@ def main():
     group_io = parser.add_argument_group("Input/Output")
     group_io.add_argument('--message', help='Plain text message. Empty to read.',
                           metavar="TEXT", nargs="?", action=BlankTrue)
-    group_io.add_argument('--input', help='Path to message file. (Alternative to `message` parameter.)', metavar="FILE")
+    group_io.add_argument('--input', help='Path to message file. (Alternative to the `message` parameter.)'
+                          , metavar="FILE")
     group_io.add_argument('--output',
                           help='Path to file to be written to (else the contents is returned if ciphering or True if sending).',
                           metavar="FILE")
@@ -77,26 +78,28 @@ def main():
                             action=BlankTrue, metavar="FINGERPRINT|CONTENTS")
     group_ciph.add_argument('--cert', help='S/MIME: Certificate contents if not included in the key.',
                             action=BlankTrue, metavar="CONTENTS")
-    group_ciph.add_argument('--passphrase', help='If signing key needs passphrase.')
+    group_ciph.add_argument('--passphrase', help='Passphrase to the signing key if needed.')
     group_ciph.add_argument('--sign-path',
-                            help='Filename with the sender\'s private key. (Alternative to `sign` parameter.)',
+                            help='Filename with the sender\'s private key. (Alternative to the `sign` parameter.)',
                             metavar="KEY-PATH")
     group_ciph.add_argument('--cert-path', help='S/MIME: Filename with the sender\'s S/MIME private cert'
-                                                ' if cert not included in the key. (Alternative to `cert` parameter.)',
+                                                ' if cert not included in the key.'
+                                                ' (Alternative to the `cert` parameter.)',
                             metavar="CERT-PATH")
 
     group_ciph.add_argument('--encrypt', help='R|* GPG:'
                                               "\n  * Blank for user default key"
+                                              "\n  * \"auto\" for turning on encrypting if there is a matching key for every recipient"
                                               "\n  * key ID/fingerprint"
                                               "\n  * Any attainable contents with the key to be signed with"
                                               " (will be imported into keyring)"
-                                              "\n  * \"auto\" for turning on encrypting if there is a matching key for every recipient"
+                                              "\n  * list of the identities specified by key ID / fingerprint / e-mail address / raw key data"
                                               "\n* S/MIME any attainable contents with certificate to be encrypted with or their list",
                             nargs="*", action=BlankTrue, metavar="GPG-KEY/SMIME-CERTIFICATE-CONTENTS")
-    group_ciph.add_argument('--encrypt-path', help='Filename(s) with the recipient\'s public key.'
-                                                   ' (Alternative to `encrypt` parameter.)',
+    group_ciph.add_argument('--encrypt-path', help='Filename(s) with the recipient\'s public key(s).'
+                                                   ' (Alternative to the `encrypt` parameter.)',
                             nargs="*", metavar="PATH")
-    group_ciph.add_argument('--attach-key', help="Appending public key to the attachments when sending.",
+    group_ciph.add_argument('--attach-key', help="Append GPG public key as an attachment when sending.",
                             action="store_true")
 
     group_recip = parser.add_argument_group("Recipients")
@@ -183,12 +186,17 @@ def main():
     # we explicitly say we do not want to decipher later if encrypting
     if args["no_sender"]:
         args["from_"] = False
+    else:
+        args["from_"] = args["from"]
+    del args["from"]
     del args["no_sender"]
 
     # user is saying that encryption key has been already imported
     enc = args["encrypt"]
     if enc and enc is not True:
-        if enc.lower() in ["1", "true", "yes"]:
+        if type(args["encrypt"]) is list:
+            pass
+        elif enc.lower() in ["1", "true", "yes"]:
             args["encrypt"] = True
         elif enc.lower() in ["0", "false", "no"]:
             args["encrypt"] = False
@@ -240,9 +248,6 @@ def main():
 
     args["headers"] = args["header"]
     del args["header"]
-
-    args["from_"] = args["from"]
-    del args["from"]
 
     check = args.pop("check")
     preview = args.pop("preview")

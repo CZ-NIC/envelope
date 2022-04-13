@@ -146,7 +146,7 @@ Whenever any attainable contents is mentioned, we mean plain **text**, **bytes**
   * **message**: Message / body text.
     If no string is set, message gets read. Besides, when "Content-Transfer-Encoding" is set to "base64" or "quoted-printable", it gets decoded (useful when quickly reading an EML file content `cat file.eml | envelope --message`).
     * **--message**: String. Empty to read.
-    * **--input**: *(CLI only)* Path to the message file. (Alternative to `--message` parameter.)
+    * **--input**: *(CLI only)* Path to the message file. (Alternative to the `--message` parameter.)
     * **.message()**: Read current message in `str`.
     * **.message(text)**: Set the message to [any attainable contents](#any-attainable-contents).
     * **.message(path=None, alternative="auto", boundary=None)**
@@ -246,7 +246,7 @@ Whenever any attainable contents is mentioned, we mean plain **text**, **bytes**
             .to("person1@example.com, John <person2@example.com>")
             .to(["person3@example.com"])
             .to()  # ["person1@example.com", "John <person2@example.com>", "person3@example.com"] 
-        ```
+    ```
     * **Envelope(to=)**: E-mail or their list.
 * **cc**: E-mail or their list. Multiple addresses may be given in a string, delimited by a comma (or semicolon). (The same is valid for `to`, `cc`, `bcc` and `reply-to`.)
     * **--cc**: One or more e-mail addresses. Empty to read.
@@ -438,45 +438,61 @@ Note that if neither *gpg* nor *smime* is specified, we try to determine the met
     * **`key`** parameter
         * GPG: 
             * Blank (*CLI*) or True (*module*) for user default key
-            * key ID/fingerprint
-            * [Any attainable contents](#any-attainable-contents) with the key to be signed with (will be imported into keyring)
             * "auto" for turning on signing if there is a key matching to the "from" header
+            * key ID/fingerprint
+            * e-mail address of the identity whose key is to be signed with
+            * [Any attainable contents](#any-attainable-contents) with the key to be signed with (will be imported into keyring)
         * S/MIME: [Any attainable contents](#any-attainable-contents) with key to be signed with. May contain signing certificate as well.            
     * **--sign key**: (for `key` see above)
-    * **--sign-path**: Filename with the sender\'s private key. (Alternative to `sign` parameter.)
+    * **--sign-path**: Filename with the sender\'s private key. (Alternative to the `sign` parameter.)
     * **--passphrase**: Passphrase to the key if needed.
     * **--attach-key**: GPG: Blank for appending public key to the attachments when sending.
     * **--cert**: S/MIME: Certificate contents if not included in the key.
-    * **--cert-path**: S/MIME: Filename with the sender's private cert if cert not included in the key. (Alternative to `cert` parameter.)
+    * **--cert-path**: S/MIME: Filename with the sender's private cert if cert not included in the key. (Alternative to the `cert` parameter.)
     * **.sign(key=True, passphrase=, attach_key=False, cert=None, key_path=None)**: Sign now (and you may specify the parameters). (For `key` see above.)
     * **.signature(key=True, passphrase=, attach_key=False, cert=None, key_path=None)**: Sign later (when launched with *.sign()*, *.encrypt()* or *.send()* functions
-    * **Envelope(sign=key)**: (for `key` see above)        
-    * **Envelope(passphrase=)**: Passphrase to the key if needed.
-    * **Envelope(attach_key=)**: GPG: Append public key to the attachments when sending.
+    * **Envelope(sign=key)**: (for `key` see above)
+    * **Envelope(passphrase=)**: Passphrase to the signing key if needed.
+    * **Envelope(attach_key=)**: If true, append GPG public key as an attachment when sending.
     * **Envelope(cert=)**: S/MIME: [Any attainable contents](#any-attainable-contents)
 ### Encrypting
   * **encrypt**:  Recipient GPG public key or S/MIME certificate to be encrypted with. 
     * **`key`** parameter
         * GPG:
-            * Blank (*CLI*) or True (*module*) to force encrypt
-            * key ID/fingerprint
-            * [Any attainable contents](#any-attainable-contents) with the key to be encrypted with (will be imported into keyring)
+            * Blank (*CLI*) or True (*module*) to force encrypt with the user default keys (identities in the "from", "to", "cc" and "bcc" headers) 
             * "auto" for turning on encrypting if there is a matching key for every recipient
+            * key ID/fingerprint
+            * e-mail address of the identity whose key is to be encrypted with
+            * [Any attainable contents](#any-attainable-contents) with the key to be encrypted with (will be imported into keyring)
+            * list of the identities specified by key ID / fingerprint / e-mail address / raw key data
         * S/MIME [any attainable contents](#any-attainable-contents) with a certificate to be encrypted with or their list
     * **--encrypt [key]**: (for `key` see above) Put 0/false/no to disable `encrypt-path`.
-    * **--encrypt-path** *(CLI only)*: Filename(s) with the recipient\'s public key. (Alternative to `encrypt` parameter.)
+    * **--encrypt-path** *(CLI only)*: Filename(s) with the recipient\'s public key(s). (Alternative to the `encrypt` parameter.)
     * **.encrypt(key=True, sign=, key_path=)**:
-        * **`sign`** You may specify boolean or default signing key ID/fingerprint or "auto" for GPG or [any attainable contents](#any-attainable-contents) with a S/MIME key + signing certificate.
-        * **`key_path`**: Key/certificate contents (alternative to `key` parameter)
+        * **`sign`** See signing, ex: you may specify boolean or default signing key ID/fingerprint or "auto" for GPG or [any attainable contents](#any-attainable-contents) with an S/MIME key + signing certificate.
+        * **`key_path`**: Key/certificate contents (alternative to the `key` parameter)
     * **.encryption(key=True, key_path=)**: Encrypt later (when launched with *.sign()*, *.encrypt()* or *.send()* functions. If needed, in the parameters specify [any attainable contents](#any-attainable-contents) with GPG encryption key or S/MIME encryption certificate. 
+    * **Envelope(encrypt=key)**: (for `key` see above)
     ```bash
     # message gets encrypted for multiple S/MIME certificates
     envelope --smime --encrypt-path recipient1.pem recipient2.pem --message "Hello"
     
     # message gets encrypted with the default GPG key
     envelope  --message "Encrypted GPG message!" --subject "Secret subject will not be shown" --encrypt --from person@example.com --to person@example.com
+    
+    # message not encrypted for the sender (from Bash)
+    envelope  --message "Encrypted GPG message!" --subject "Secret subject will not be shown" --encrypt receiver@example.com receiver2@example.com --from person@example.com --to receiver@example.com receiver2@example.com
     ```
-    * **Envelope(encrypt=)**: [Any attainable contents](#any-attainable-contents)
+    
+    ```python3
+    # message not encrypted for the sender (from Python)
+    Envelope()
+        .message("Encrypted GPG message!")
+        .subject("Secret subject will not be shown")
+        .from_("person@example.com")
+        .to(["receiver@example.com", "receiver2@example.com"])
+        .encrypt(["receiver@example.com", "receiver2@example.com"])        
+    ```
 
 #### GPG notes
 * If the GPG encryption fails, it tries to determine which recipient misses the key.  
@@ -530,10 +546,11 @@ Note that if neither *gpg* nor *smime* is specified, we try to determine the met
   * **load**: Parse [any attainable contents](#any-attainable-contents) (including email.message.Message) like an EML file to build an Envelope object.
      * It can decrypt the message and parse its (inline or enclosed) attachments.
      * Note that if you will send this reconstructed message, you might not probably receive it due to the Message-ID duplication. Delete at least Message-ID header prior to re-sending. 
-     * (*static*) **.load(message, \*, path=None, key=None, cert=None)**
+     * (*static*) **.load(message, \*, path=None, key=None, cert=None, gnupg_home=None)**
          * **message**: [Any attainable contents](#any-attainable-contents)
          * **path**: Path to the file, alternative to the `message`
          * **key**, **cert**: Specify when decrypting an S/MIME message (may be bundled together to the `key`)
+         * **gnupg_home**: Path to the GNUPG_HOME or None if the environment default should be used.
          ```python3
          Envelope.load("Subject: testing message").subject()  # "testing message"
          ```

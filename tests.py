@@ -18,8 +18,13 @@ from envelope.utils import Address, SMTPHandler
 logging.basicConfig(stream=sys.stderr, level=logging.WARNING)
 
 GPG_PASSPHRASE = "test"
-GPG_IDENTITY_1_FINGERPRINT = "F14F2E8097E0CCDE93C4E871F4A4F26779FA03BB"
+IDENTITY_1_GPG_FINGERPRINT = "F14F2E8097E0CCDE93C4E871F4A4F26779FA03BB"
+IDENTITY_1 = "envelope-example-identity@example.com"
+IDENTITY_2 = "envelope-example-identity-2@example.com"
+IDENTITY_3 = "envelope-example-identity-3@example.com"
 GNUPG_HOME = "tests/gpg_ring/"
+PGP_MESSAGE = "-----BEGIN PGP MESSAGE-----"
+MESSAGE = "dumb message"
 environ["GNUPGHOME"] = GNUPG_HOME
 
 
@@ -131,11 +136,11 @@ class TestAbstract(unittest.TestCase):
 
 class TestEnvelope(TestAbstract):
     def test_message_generating(self):
-        self.check_lines(Envelope("dumb message")
+        self.check_lines(Envelope(MESSAGE)
                          .subject("my subject")
                          .send(False),
                          ("Subject: my subject",
-                          "dumb message",), 10)
+                          MESSAGE,), 10)
 
     def test_1000_split(self):
         self.check_lines(Envelope().message("short text").subject("my subject").send(False),
@@ -315,7 +320,7 @@ class TestSmime(TestAbstract):
         # MIIEggYJKoZIhvcNAQcCoIIEczCCBG8CAQExCzAJBgUrDgMCGgUAMAsGCSqGSIb3
         # DQEHAaCCAmwwggJoMIIB0aADAgECAhROmwkIH63oarp3NpQqFoKTy1Q3tTANBgkq
         # ... other lines changes every time
-        self.check_lines(Envelope("dumb message")
+        self.check_lines(Envelope(MESSAGE)
                          .smime()
                          .subject("my subject")
                          .reply_to("test-reply@example.com")
@@ -323,12 +328,12 @@ class TestSmime(TestAbstract):
                          .send(False),
                          ("Subject: my subject",
                           "Reply-To: test-reply@example.com",
-                          "dumb message",
+                          MESSAGE,
                           'Content-Disposition: attachment; filename="smime.p7s"',
                           "MIIEggYJKoZIhvcNAQcCoIIEczCCBG8CAQExCzAJBgUrDgMCGgUAMAsGCSqGSIb3",), 10)
 
     def test_smime_key_cert_together(self):
-        self.check_lines(Envelope("dumb message")
+        self.check_lines(Envelope(MESSAGE)
                          .smime()
                          .signature(self.key_cert_together)
                          .sign(),
@@ -336,7 +341,7 @@ class TestSmime(TestAbstract):
                           "MIIEggYJKoZIhvcNAQcCoIIEczCCBG8CAQExCzAJBgUrDgMCGgUAMAsGCSqGSIb3"))
 
     def test_smime_key_cert_together_passphrase(self):
-        self.check_lines(Envelope("dumb message")
+        self.check_lines(Envelope(MESSAGE)
                          .smime()
                          .signature(Path("tests/smime/key-cert-together-passphrase.pem"), passphrase=GPG_PASSPHRASE)
                          .sign(),
@@ -357,7 +362,7 @@ class TestSmime(TestAbstract):
         # nnXprxG2Q+/0GHJw48R1/B2d4Ln1sYJe5BXl3LVr7QWpwPb+62AZ1TN8793jSic6
         # jBl/v6gDTRoEEjnb8RAkyvDJ7d6OOokgFOfCfTAUOBoZhZrqMCsGCSqGSIb3DQEH
         # ATAUBggqhkiG9w0DBwQIt4seJLnZZW+ACBRKsu4Go7lm
-        self.check_lines(Envelope("dumb message")
+        self.check_lines(Envelope(MESSAGE)
                          .smime()
                          .reply_to("test-reply@example.com")
                          .subject("my message")
@@ -372,7 +377,7 @@ class TestSmime(TestAbstract):
 
     def test_multiple_recipients(self):
         from M2Crypto import SMIME
-        msg = "dumb message"
+        msg = MESSAGE
         msg_b = bytes(msg, "utf-8")
 
         def decrypt(key, cert, text):
@@ -405,6 +410,44 @@ class TestSmime(TestAbstract):
                                  output))
         self.assertEqual(msg_b, decrypt(self.smime_key, self.smime_cert, output))
 
+    def test_smime_decrypt(self):
+        e = Envelope.load(path="tests/eml/smime_encrypt.eml", key=self.smime_key, cert=self.smime_cert)
+        self.assertEqual(MESSAGE, e.message())
+
+    def test_smime_decrypt_attachments(self):
+        body = "an encrypted message with the attachments"  # note that the inline image is not referenced in the text
+        encrypted_envelope = (Envelope(body)
+                              .smime()
+                              .reply_to("test-reply@example.com")
+                              .subject("my message")
+                              .encryption(Path(self.smime_cert))
+                              .attach(path=self.text_attachment)
+                              .attach(self.image_file, inline=True)
+                              .as_message().as_string()
+                              )
+
+        e = Envelope.load(encrypted_envelope, key=self.smime_key, cert=self.smime_cert)
+
+        # body stayed the same
+        self.assertEqual(body, e.message())
+
+        # attachments are as expected
+        self.assertEqual(2, len(e.attachments()))
+        self.assertEqual(1, len(e.attachments(inline=True)))
+        self.assertEqual(e.attachments(inline=True)[0].data, self.image_file.read_bytes())
+        self.assertEqual(Path(self.text_attachment).read_bytes(), e.attachments("generic.txt").data)
+
+    # XX smime_sign.eml is not used right now.
+    # Make signature verification possible first.
+    # def test_smime_sign(self):
+    #     e = Envelope.load(path="tests/eml/smime_sign.eml", key=self.smime_key, cert=self.smime_cert)
+    #     self.assertEqual(MESSAGE, e.message())
+
+    def test_smime_key_cert_together(self):
+        # XX verify signature
+        e = Envelope.load(path="tests/eml/smime_key_cert_together.eml", key=self.key_cert_together)
+        self.assertEqual(MESSAGE, e.message())
+
 
 class TestGPG(TestAbstract):
     # Example identity
@@ -431,39 +474,39 @@ class TestGPG(TestAbstract):
         # =qCHO
         # -----END PGP SIGNATURE-----
 
-        self.check_lines(Envelope("dumb message")
-                         .gpg("tests/gpg_ring/")
+        self.check_lines(Envelope(MESSAGE)
+                         .gpg(GNUPG_HOME)
                          .sign(),
-                         ('dumb message',
+                         (MESSAGE,
                           '-----BEGIN PGP SIGNATURE-----',
                           '-----END PGP SIGNATURE-----',), 10)
 
     def test_gpg_auto_sign(self):
         # mail from "envelope-example-identity@example.com" is in ring
-        self.check_lines(Envelope("dumb message")
-                         .gpg("tests/gpg_ring/")
+        self.check_lines(Envelope(MESSAGE)
+                         .gpg(GNUPG_HOME)
                          .from_("envelope-example-identity@example.com")
                          .sign("auto"),
-                         ('dumb message',
+                         (MESSAGE,
                           '-----BEGIN PGP SIGNATURE-----',
                           '-----END PGP SIGNATURE-----',), 10)
 
         # mail from "envelope-example-identity-not-stated-in-ring@example.com" should not be signed
-        output = str(Envelope("dumb message")
-                     .gpg("tests/gpg_ring/")
+        output = str(Envelope(MESSAGE)
+                     .gpg(GNUPG_HOME)
                      .from_("envelope-example-identity-not-stated-in-ring@example.com")
                      .sign("auto")).splitlines()
         self.assertNotIn('-----BEGIN PGP SIGNATURE-----', output)
 
         # force-signing without specifying a key nor sending address should produce a message signed with a first-found key
-        output = str(Envelope("dumb message")
-                     .gpg("tests/gpg_ring/")
+        output = str(Envelope(MESSAGE)
+                     .gpg(GNUPG_HOME)
                      .sign(True)).splitlines()
         self.assertIn('-----BEGIN PGP SIGNATURE-----', output)
 
         # force-signing without specifying a key and with sending from an e-mail which is not in the keyring must fail
-        self.check_lines(Envelope("dumb message")
-                         .gpg("tests/gpg_ring/")
+        self.check_lines(Envelope(MESSAGE)
+                         .gpg(GNUPG_HOME)
                          .from_("envelope-example-identity-not-stated-in-ring@example.com")
                          .signature(True), raises=RuntimeError)
 
@@ -478,14 +521,14 @@ class TestGPG(TestAbstract):
         # =rK+/
         # -----END PGP MESSAGE-----
 
-        message = (Envelope("dumb message")
+        message = (Envelope(MESSAGE)
                    .gpg(GNUPG_HOME)
-                   .from_("envelope-example-identity@example.com")
-                   .to("envelope-example-identity-2@example.com")
+                   .from_(IDENTITY_1)
+                   .to(IDENTITY_2)
                    .encrypt())
-        self.check_lines(message, ("-----BEGIN PGP MESSAGE-----",), 10)
+        self.check_lines(message, (PGP_MESSAGE,), 10)
 
-        self.assertIn("dumb message", self.bash("gpg", "--decrypt", piped=str(message), envelope=False))
+        self.assertIn(MESSAGE, self.bash("gpg", "--decrypt", piped=str(message), envelope=False))
 
     def test_gpg_encrypt(self):
         # Message will look like this:
@@ -518,10 +561,10 @@ class TestGPG(TestAbstract):
         #
         # --===============1001129828818615570==--
 
-        e = str(Envelope("dumb message")
-                .to("envelope-example-identity-2@example.com")
-                .gpg("tests/gpg_ring/")
-                .from_("envelope-example-identity@example.com")
+        e = str(Envelope(MESSAGE)
+                .to(IDENTITY_2)
+                .gpg(GNUPG_HOME)
+                .from_(IDENTITY_1)
                 .subject("dumb subject")
                 .encryption())
 
@@ -535,62 +578,201 @@ class TestGPG(TestAbstract):
                           ), 10, not_in='Subject: dumb subject')
 
         lines = e.splitlines()
-        message = "\n".join(lines[lines.index("-----BEGIN PGP MESSAGE-----"):])
+        message = "\n".join(lines[lines.index(PGP_MESSAGE):])
         self.check_lines(self.bash("gpg", "--decrypt", piped=message, envelope=False),
                          ('Content-Type: multipart/mixed; protected-headers="v1";',
                           'Subject: dumb subject',
                           'Content-Type: text/plain; charset="utf-8"',
-                          'dumb message'
+                          MESSAGE
                           ))
+
+    def test_arbitrary_encrypt(self):
+        """ Keys to be encrypted with explicitly chosen  """
+        temp = [TemporaryDirectory() for _ in range(4)]  # must exist in the scope to preserve the dirs
+        rings = [t.name for t in temp]
+        message = MESSAGE
+        key1_raw = Path("tests/gpg_keys/envelope-example-identity@example.com.bytes.key").read_bytes()
+        key1_armored = Path("tests/gpg_keys/envelope-example-identity@example.com.key").read_text()
+        _importer = Envelope("just importer")
+
+        # helper methods
+        def decrypt(s, ring, equal=True):
+            m = self.assertEqual if equal else self.assertNotEqual
+            m(message, Envelope.load(s, gnupg_home=rings[ring]).message())
+
+        def importer(ring, key, passphrase=None):
+            _importer.gpg(rings[ring]).sign(Path("tests/gpg_keys/" + key), passphrase=passphrase)
+
+        # Message encrypted for envelope-example-identity@example.com only, not for the sender
+        e1 = str(Envelope(message)
+                 .to(IDENTITY_1)
+                 .gpg(GNUPG_HOME)
+                 .from_(IDENTITY_2)
+                 .subject("dumb subject")
+                 .encryption(IDENTITY_1).as_message())
+
+        # message is decipherable only from the keyring the right key is in
+        self.assertEqual(message, Envelope.load(e1, gnupg_home=(GNUPG_HOME)).message())
+        decrypt(e1, 0, False)
+        # importing other key does not help
+        importer(0, "envelope-example-identity-2@example.com.key", GPG_PASSPHRASE)
+        decrypt(e1, 0, False)
+        # importing the right key does help
+        importer(0, "envelope-example-identity@example.com.key")
+        decrypt(e1, 0)
+
+        # message encrypted for multiple recipients
+        e2 = str(Envelope(message)
+                 .to(IDENTITY_1)
+                 .gpg(GNUPG_HOME)
+                 .from_(IDENTITY_3)
+                 .encryption([IDENTITY_1, IDENTITY_2])
+                 .as_message())
+
+        decrypt(e2, 1, False)
+        importer(1, "envelope-example-identity-2@example.com.key", GPG_PASSPHRASE)
+        decrypt(e2, 1)
+        importer(2, "envelope-example-identity@example.com.key", GPG_PASSPHRASE)
+        decrypt(e2, 2)
+
+        # message not encrypted for a recipient but for a sender only (for some unknown reason)
+        e3 = str(Envelope(message)
+                 .to(IDENTITY_2)
+                 .gpg(GNUPG_HOME)
+                 .from_(IDENTITY_1)
+                 .encryption([IDENTITY_1, ])
+                 .as_message())
+
+        decrypt(e3, 1, False)  # ring 1 has "envelope-example-identity-2@example.com"
+        decrypt(e3, 2)  # ring 2 has "envelope-example-identity@example.com"
+
+        # message encrypted for combination of fingerprints and e-mails
+        e3 = str(Envelope(message)
+                 .to("envelope-example-identity-3@example.com, envelope-example-identity@example.com")
+                 .gpg(GNUPG_HOME)
+                 .from_(IDENTITY_2)
+                 .encryption([IDENTITY_2, IDENTITY_1_GPG_FINGERPRINT])
+                 .as_message())
+
+        decrypt(e3, 0)  # ring 0 has both
+        decrypt(e3, 1)  # ring 1 has "envelope-example-identity-2@example.com"
+        decrypt(e3, 2)  # ring 2 has "envelope-example-identity@example.com"
+        decrypt(e3, 3, False)  # ring 3 has none
+
+        # trying to encrypt with an unknown key while/without specifying decipherers explicitly
+        for e in [Envelope(message).encryption([IDENTITY_3, IDENTITY_1_GPG_FINGERPRINT]),
+                  Envelope(message).encryption()]:
+            with self.assertLogs('envelope', level='WARNING') as cm:
+                self.assertEqual('None', str(e
+                                             .to(f"{IDENTITY_3}, {IDENTITY_1}")
+                                             .from_(IDENTITY_2)
+                                             .gpg(GNUPG_HOME)
+                                             .as_message()))
+                self.assertIn(f'WARNING:envelope.envelope:Key for {IDENTITY_3} seems missing,'
+                              f' see: GNUPGHOME=tests/gpg_ring/ gpg --list-keys', cm.output)
+                self.assertIn('ERROR:envelope.envelope:Signing/encrypting failed.', cm.output)
+                self.assertNotIn(f'WARNING:envelope.envelope:Key for {IDENTITY_2} seems missing', cm.output)
+
+        # import raw unarmored key in a list ("envelope-example-identity@example.com" into ring 1)
+        e4 = Envelope(message).encryption([IDENTITY_2, key1_raw]).to(IDENTITY_3).from_(IDENTITY_2).gpg(
+            rings[1]).as_message()
+        decrypt(e4, 1)
+        decrypt(e4, 2)
+
+        # multiple encryption keys in bash
+        def bash(ring, from_, to, encrypt, valid=True):
+            contains = PGP_MESSAGE if valid else "Signing/encrypting failed."
+            self.assertIn(contains, self.bash("--from", from_, "--to", *to, "--encrypt", *encrypt, piped=message,
+                                              env={"GNUPGHOME": rings[ring]}))
+
+        bash(1, IDENTITY_1, (IDENTITY_2,), ())  # ring 1 has both
+        bash(1, IDENTITY_1, (IDENTITY_2,), (IDENTITY_2,))
+        # not specifying the exact encryption identities leads to an error
+        bash(0, IDENTITY_1, (IDENTITY_2, IDENTITY_3), (), False)  # ring 0 has both, but misses ID=3
+        bash(0, IDENTITY_1, (IDENTITY_2, IDENTITY_3), (IDENTITY_1, IDENTITY_2))
+        bash(3, IDENTITY_1, (IDENTITY_2,), (), False)  # ring 3 has none
+        bash(3, IDENTITY_1, (IDENTITY_2, IDENTITY_3), (key1_armored,))  # insert ID=1 into ring 3
+        bash(3, IDENTITY_2, (IDENTITY_1,), (), False)  # ID=2 still misses in ring 3
+        bash(3, IDENTITY_2, (IDENTITY_1,), ("--no-sender",))  # --no-sender supress the need for ID=2
+
+    def test_arbitrary_encrypt_with_signing(self):
+        model = (Envelope(MESSAGE)
+                 .to(f"{IDENTITY_3}, {IDENTITY_1}")
+                 .from_(IDENTITY_2)
+                 .gpg(GNUPG_HOME))
+
+        def logged(signature, encryption, warning=False):
+            e = (model.copy().signature(signature).encryption(encryption))
+            if warning:
+                with self.assertLogs('envelope', level='WARNING') as cm:
+                    self.assertEqual("", str(e))
+                    self.assertIn(warning, str(cm.output))
+            else:
+                self.assertIn(PGP_MESSAGE, str(e))
+
+        logged(False, [IDENTITY_3, "invalid"],
+               f'WARNING:envelope.envelope:Key for {IDENTITY_3},'
+               ' invalid seems missing, see: GNUPGHOME=tests/gpg_ring/ gpg --list-keys')
+        logged(False, [IDENTITY_1])
+        logged(IDENTITY_1, [IDENTITY_1])
+        logged(IDENTITY_3, [IDENTITY_1],
+               f'WARNING:envelope.envelope:The secret key for {IDENTITY_3} seems to not be used,'
+               f" check if it is in the keyring: GNUPGHOME=tests/gpg_ring/ gpg --list-secret-keys")
+        logged(IDENTITY_3, False,
+               f'WARNING:envelope.envelope:The secret key for {IDENTITY_3} seems to not be used,'
+               f" check if it is in the keyring: GNUPGHOME=tests/gpg_ring/ gpg --list-secret-keys")
+
+        self.assertEqual("", str(model.copy().encrypt(IDENTITY_2, sign=IDENTITY_3)))
+        self.assertIn(PGP_MESSAGE, str(model.copy().encrypt(IDENTITY_2, sign=IDENTITY_1)))
 
     def test_gpg_auto_encrypt(self):
         # mail `from` "envelope-example-identity@example.com" is in ring
-        self.check_lines(Envelope("dumb message")
-                         .gpg("tests/gpg_ring/")
-                         .from_("envelope-example-identity@example.com")
-                         .to("envelope-example-identity@example.com")
+        self.check_lines(Envelope(MESSAGE)
+                         .gpg(GNUPG_HOME)
+                         .from_(IDENTITY_1)
+                         .to(IDENTITY_1)
                          .encrypt("auto"),
-                         ('-----BEGIN PGP MESSAGE-----',
-                          '-----END PGP MESSAGE-----',), (10, 15), not_in="dumb message")
+                         (PGP_MESSAGE,
+                          '-----END PGP MESSAGE-----',), (10, 15), not_in=MESSAGE)
 
         # mail `to` "envelope-unknown@example.com" unknown, must be both signed and encrypted
-        self.check_lines(Envelope("dumb message")
-                         .gpg("tests/gpg_ring/")
-                         .from_("envelope-example-identity@example.com")
-                         .to("envelope-example-identity-2@example.com")
+        self.check_lines(Envelope(MESSAGE)
+                         .gpg(GNUPG_HOME)
+                         .from_(IDENTITY_1)
+                         .to(IDENTITY_2)
                          .signature("auto")
                          .encrypt("auto"),
-                         ('-----BEGIN PGP MESSAGE-----',
-                          '-----END PGP MESSAGE-----',), 20, not_in="dumb message")
+                         (PGP_MESSAGE,
+                          '-----END PGP MESSAGE-----',), 20, not_in=MESSAGE)
 
         # mail `from` "envelope-unknown@example.com" unknown, must not be encrypted
-        self.check_lines(Envelope("dumb message")
-                         .gpg("tests/gpg_ring/")
+        self.check_lines(Envelope(MESSAGE)
+                         .gpg(GNUPG_HOME)
                          .from_("envelope-unknown@example.com")
-                         .to("envelope-example-identity@example.com")
+                         .to(IDENTITY_1)
                          .encrypt("auto"),
-                         ('dumb message',), (0, 2), not_in='-----BEGIN PGP MESSAGE-----')
+                         (MESSAGE,), (0, 2), not_in=PGP_MESSAGE)
 
         # mail `to` "envelope-unknown@example.com" unknown, must not be encrypted
-        self.check_lines(Envelope("dumb message")
-                         .gpg("tests/gpg_ring/")
-                         .from_("envelope-example-identity@example.com")
+        self.check_lines(Envelope(MESSAGE)
+                         .gpg(GNUPG_HOME)
+                         .from_(IDENTITY_1)
                          .to("envelope-unknown@example.com")
                          .encrypt("auto"),
-                         ('dumb message',), (0, 2), not_in='-----BEGIN PGP MESSAGE-----')
+                         (MESSAGE,), (0, 2), not_in=PGP_MESSAGE)
 
         # force-encrypting without having key must return empty response
-        self.check_lines(Envelope("dumb message")
-                         .gpg("tests/gpg_ring/")
-                         .from_("envelope-example-identity@example.com")
+        self.check_lines(Envelope(MESSAGE)
+                         .gpg(GNUPG_HOME)
+                         .from_(IDENTITY_1)
                          .to("envelope-unknown@example.com")
                          .encryption(True), longer=(0, 1), result=False)
 
     def test_gpg_sign_passphrase(self):
-        self.check_lines(Envelope("dumb message")
-                         .to("envelope-example-identity-2@example.com")
-                         .gpg("tests/gpg_ring/")
-                         .from_("envelope-example-identity@example.com")
+        self.check_lines(Envelope(MESSAGE)
+                         .to(IDENTITY_2)
+                         .gpg(GNUPG_HOME)
+                         .from_(IDENTITY_1)
                          .signature("3C8124A8245618D286CF871E94CE2905DB00CDB7", GPG_PASSPHRASE),  # passphrase needed
                          ("-----BEGIN PGP SIGNATURE-----",), 10)
 
@@ -598,72 +780,123 @@ class TestGPG(TestAbstract):
         temp = TemporaryDirectory()
 
         # no signature - empty ring
-        self.check_lines(Envelope("dumb message")
+        self.check_lines(Envelope(MESSAGE)
                          .gpg(temp.name)
                          .signature(),
                          raises=RuntimeError)
 
         # import key to the ring
-        self.check_lines(Envelope("dumb message")
+        self.check_lines(Envelope(MESSAGE)
                          .gpg(temp.name)
                          .sign(Path("tests/gpg_keys/envelope-example-identity@example.com.key")),
-                         ('dumb message',
+                         (MESSAGE,
                           '-----BEGIN PGP SIGNATURE-----',
                           '-----END PGP SIGNATURE-----',), 10)
 
         # key in the ring from last time
-        self.check_lines(Envelope("dumb message")
+        self.check_lines(Envelope(MESSAGE)
                          .gpg(temp.name)
                          .signature(),
-                         ('dumb message',
+                         (MESSAGE,
                           '-----BEGIN PGP SIGNATURE-----',
                           '-----END PGP SIGNATURE-----',), 10)
 
         # cannot encrypt for identity-2
-        self.check_lines(Envelope("dumb message")
+        self.check_lines(Envelope(MESSAGE)
                          .gpg(temp.name)
-                         .from_("envelope-example-identity@example.com")
-                         .to("envelope-example-identity-2@example.com")
+                         .from_(IDENTITY_1)
+                         .to(IDENTITY_2)
                          .encryption(),
                          result=False)
 
         # signing should fail since we have not imported key for identity-2
-        self.check_lines(Envelope("dumb message")
+        self.check_lines(Envelope(MESSAGE)
                          .gpg(temp.name)
-                         .from_("envelope-example-identity-2@example.com")
+                         .from_(IDENTITY_2)
                          .signature(),
                          raises=RuntimeError)
 
         # however it should pass when we explicitly use an existing GPG key to be signed with
-        self.check_lines(Envelope("dumb message")
+        self.check_lines(Envelope(MESSAGE)
                          .gpg(temp.name)
-                         .from_("envelope-example-identity-2@example.com")
-                         .signature(GPG_IDENTITY_1_FINGERPRINT),
-                         ('dumb message',
+                         .from_(IDENTITY_2)
+                         .signature(IDENTITY_1_GPG_FINGERPRINT),
+                         (MESSAGE,
                           '-----BEGIN PGP SIGNATURE-----',
                           '-----END PGP SIGNATURE-----',), 10, result=True)
 
         # import encryption key - no passphrase needed while importing or using public key
-        self.check_lines(Envelope("dumb message")
+        self.check_lines(Envelope(MESSAGE)
                          .gpg(temp.name)
-                         .from_("envelope-example-identity@example.com")
-                         .to("envelope-example-identity-2@example.com")
+                         .from_(IDENTITY_1)
+                         .to(IDENTITY_2)
                          .encryption(Path("tests/gpg_keys/envelope-example-identity-2@example.com.key")),
                          result=True)
 
         # signing with an invalid passphrase should fail for identity-2
-        self.check_lines(Envelope("dumb message")
+        self.check_lines(Envelope(MESSAGE)
                          .gpg(temp.name)
-                         .from_("envelope-example-identity-2@example.com")
+                         .from_(IDENTITY_2)
                          .signature(passphrase="INVALID PASSPHRASE"),
                          result=False)
 
         # signing with a valid passphrase should pass
-        self.check_lines(Envelope("dumb message")
+        self.check_lines(Envelope(MESSAGE)
                          .gpg(temp.name)
-                         .from_("envelope-example-identity-2@example.com")
+                         .from_(IDENTITY_2)
                          .signature(passphrase=GPG_PASSPHRASE),
                          result=True)
+
+    def test_signed_gpg(self):
+        # XX we might test signature verification
+        e = Envelope.load(path="tests/eml/test_signed_gpg.eml")
+        self.assertEqual(MESSAGE, e.message())
+
+    def test_encrypted_gpg(self):
+        e = Envelope.load(path="tests/eml/test_encrypted_gpg.eml")
+        self.assertEqual("dumb encrypted message", e.message())
+
+    def test_encrypted_signed_gpg(self):
+        e = Envelope.load(path="tests/eml/test_encrypted_signed_gpg.eml")
+        self.assertEqual("dumb encrypted and signed message", e.message())
+
+    def test_encrypted_gpg_subject(self):
+        body = "just a body text"
+        subject = "This is an encrypted subject"
+        encrypted_subject = "Encrypted message"
+        ref = (Envelope(body)
+               .gpg(GNUPG_HOME)
+               .to(IDENTITY_2)
+               .from_(IDENTITY_1)
+               .encryption())
+        encrypted_eml = ref.subject(subject).as_message().as_string()
+
+        # subject has been encrypted
+        self.assertIn("Subject: " + encrypted_subject, encrypted_eml)
+        self.assertNotIn(subject, encrypted_eml)
+
+        # subject has been decrypted
+        e = Envelope.load(encrypted_eml)
+        self.assertEqual(body, e.message())
+        self.assertEqual(subject, e.subject())
+
+        # further meddling with the encrypt parameter
+        def check_decryption(reference, other_subject=encrypted_subject):
+            encrypted = reference.as_message().as_string()
+            self.assertIn(other_subject, encrypted)
+            self.assertNotIn(subject, encrypted)
+
+            decrypted = Envelope.load(encrypted).as_message().as_string()
+            self.assertIn(subject, decrypted)
+            self.assertNotIn(other_subject, decrypted)
+
+        front_text = "Front text"
+        check_decryption(ref.subject(subject, encrypted=True))  # the default behaviour
+        check_decryption(ref.subject(subject, front_text), front_text)  # choose another placeholder text
+
+        always_visible = ref.subject(subject, encrypted=False).as_message().as_string()  # do not encrypt the subject
+        self.assertIn(subject, always_visible)
+        self.assertIn(subject, Envelope.load(always_visible).as_message().as_string())
 
 
 class TestMime(TestAbstract):
@@ -736,21 +969,21 @@ class TestRecipients(TestAbstract):
     def test_from(self):
         id1 = "identity-1@example.com"
         id2 = "identity-2@example.com"
-        self.check_lines(Envelope("dumb message").sender(id1),
+        self.check_lines(Envelope(MESSAGE).sender(id1),
                          f"From: {id1}", not_in=f"Sender: {id1}")
-        self.check_lines(Envelope("dumb message", sender=id1),
-                         f"From: {id1}", not_in=f"Sender: {id1}")
-
-        self.check_lines(Envelope("dumb message", from_=id1),
-                         f"From: {id1}", not_in=f"Sender: {id1}")
-        self.check_lines(Envelope("dumb message").from_(id1),
+        self.check_lines(Envelope(MESSAGE, sender=id1),
                          f"From: {id1}", not_in=f"Sender: {id1}")
 
-        self.check_lines(Envelope("dumb message")
+        self.check_lines(Envelope(MESSAGE, from_=id1),
+                         f"From: {id1}", not_in=f"Sender: {id1}")
+        self.check_lines(Envelope(MESSAGE).from_(id1),
+                         f"From: {id1}", not_in=f"Sender: {id1}")
+
+        self.check_lines(Envelope(MESSAGE)
                          .from_(id1)
                          .sender(id2),
                          (f"From: {id1}", f"Sender: {id2}"))
-        self.check_lines(Envelope("dumb message")
+        self.check_lines(Envelope(MESSAGE)
                          .sender(id2)
                          .from_(id1),
                          (f"From: {id1}", f"Sender: {id2}"))
@@ -758,13 +991,13 @@ class TestRecipients(TestAbstract):
     def test_from_addr(self):
         mail1 = "envelope-from@example.com"
         mail2 = "header-from@example.com"
-        e = Envelope("dumb message").from_addr(mail1).from_(mail2)
+        e = Envelope(MESSAGE).from_addr(mail1).from_(mail2)
         self.assertEqual(mail1, e.from_addr())
         self.assertEqual(mail2, e.from_())
         self.assertIn("Have not been sent from " + mail1, str(e.send(False)))
-        e = Envelope("dumb message").from_(mail2)
+        e = Envelope(MESSAGE).from_(mail2)
         self.assertIn("Have not been sent from " + mail2, str(e.send(False)))
-        e = Envelope("dumb message", from_addr=mail1).from_(mail2)
+        e = Envelope(MESSAGE, from_addr=mail1).from_(mail2)
         self.assertIn("Have not been sent from " + mail1, str(e.send(False)))
         self.assertIn("Have not been sent from " + mail1, self.bash("--from-addr", mail1, "--send", "0", file=self.eml))
 
@@ -888,7 +1121,7 @@ class TestSubject(TestAbstract):
     def test_cache_recreation(self):
         s1 = "Test"
         s2 = "Another"
-        e = Envelope("dumb message").subject(s1)
+        e = Envelope(MESSAGE).subject(s1)
         self.check_lines(e, f"Subject: {s1}")
 
         e.subject(s2)
@@ -898,7 +1131,7 @@ class TestSubject(TestAbstract):
 class TestHeaders(TestAbstract):
     def test_generic_header_manipulation(self):
         # Add a custom header and delete it
-        e = Envelope("dumb message").subject("my subject").header("custom", "1")
+        e = Envelope(MESSAGE).subject("my subject").header("custom", "1")
         self.assertEqual(e.header("custom"), "1")
         self.assertIs(e.header("custom", replace=True), e)
 
@@ -924,7 +1157,7 @@ class TestHeaders(TestAbstract):
         id1 = "person@example.com"
         id2 = "person2@example.com"
         id3 = "person3@example.com"
-        e = Envelope("dumb message") \
+        e = Envelope(MESSAGE) \
             .subject(s) \
             .header("custom", "1") \
             .cc(id1)  # set headers via their specific methods
@@ -944,8 +1177,8 @@ class TestHeaders(TestAbstract):
 
     def test_date(self):
         """ Automatic adding of the Date header can be disabled. """
-        self.assertIn(f"Date: ", str(Envelope("dumb message")))
-        self.assertNotIn(f"Date: ", str(Envelope("dumb message").date(False)))
+        self.assertIn(f"Date: ", str(Envelope(MESSAGE)))
+        self.assertNotIn(f"Date: ", str(Envelope(MESSAGE).date(False)))
 
     def test_email_addresses(self):
         e = (Envelope()
@@ -1057,9 +1290,9 @@ class TestBash(TestAbstract):
 
         def get_encrypted(subject, subject_encrypted):
             ref = self.bash("--attach", self.text_attachment, "--send", "0",
-                            "--gpg", "tests/gpg_ring/",
-                            "--to", "envelope-example-identity-2@example.com",
-                            "--from", "envelope-example-identity@example.com",
+                            "--gpg", GNUPG_HOME,
+                            "--to", IDENTITY_2,
+                            "--from", IDENTITY_1,
                             "--encrypt",
                             "--subject", subject,
                             "--subject-encrypted", subject_encrypted, piped="text")
@@ -1308,98 +1541,6 @@ class TestLoad(TestBash):
 
         self.assertEqual("An invalid header", e.message())
         self.assertEqual("Support Team <no_reply-2345@example.com>", e.from_())
-
-
-class TestDecrypt(TestSmime, TestGPG):
-
-    def test_smime_decrypt(self):
-        e = Envelope.load(path="tests/eml/smime_encrypt.eml", key=self.smime_key, cert=self.smime_cert)
-        self.assertEqual("dumb message", e.message())
-
-    def test_smime_decrypt_attachments(self):
-        body = "an encrypted message with the attachments"  # note that the inline image is not referenced in the text
-        encrypted_envelope = (Envelope(body)
-                              .smime()
-                              .reply_to("test-reply@example.com")
-                              .subject("my message")
-                              .encryption(Path(self.smime_cert))
-                              .attach(path=self.text_attachment)
-                              .attach(self.image_file, inline=True)
-                              .as_message().as_string()
-                              )
-
-        e = Envelope.load(encrypted_envelope, key=self.smime_key, cert=self.smime_cert)
-
-        # body stayed the same
-        self.assertEqual(body, e.message())
-
-        # attachments are as expected
-        self.assertEqual(2, len(e.attachments()))
-        self.assertEqual(1, len(e.attachments(inline=True)))
-        self.assertEqual(e.attachments(inline=True)[0].data, self.image_file.read_bytes())
-        self.assertEqual(Path(self.text_attachment).read_bytes(), e.attachments("generic.txt").data)
-
-    # XX smime_sign.eml is not used right now.
-    # Make signature verification possible first.
-    # def test_smime_sign(self):
-    #     e = Envelope.load(path="tests/eml/smime_sign.eml", key=self.smime_key, cert=self.smime_cert)
-    #     self.assertEqual("dumb message", e.message())
-
-    def test_smime_key_cert_together(self):
-        # XX verify signature
-        e = Envelope.load(path="tests/eml/smime_key_cert_together.eml", key=self.key_cert_together)
-        self.assertEqual("dumb message", e.message())
-
-    def test_signed_gpg(self):
-        # XX we might test signature verification
-        e = Envelope.load(path="tests/eml/test_signed_gpg.eml")
-        self.assertEqual("dumb message", e.message())
-
-    def test_encrypted_gpg(self):
-        e = Envelope.load(path="tests/eml/test_encrypted_gpg.eml")
-        self.assertEqual("dumb encrypted message", e.message())
-
-    def test_encrypted_signed_gpg(self):
-        e = Envelope.load(path="tests/eml/test_encrypted_signed_gpg.eml")
-        self.assertEqual("dumb encrypted and signed message", e.message())
-
-    def test_encrypted_gpg_subject(self):
-        body = "just a body text"
-        subject = "This is an encrypted subject"
-        encrypted_subject = "Encrypted message"
-        ref = (Envelope(body)
-               .gpg("tests/gpg_ring/")
-               .to("envelope-example-identity-2@example.com")
-               .from_("envelope-example-identity@example.com")
-               .encryption())
-        encrypted_eml = ref.subject(subject).as_message().as_string()
-
-        # subject has been encrypted
-        self.assertIn("Subject: " + encrypted_subject, encrypted_eml)
-        self.assertNotIn(subject, encrypted_eml)
-
-        # subject has been decrypted
-        e = Envelope.load(encrypted_eml)
-        self.assertEqual(body, e.message())
-        self.assertEqual(subject, e.subject())
-
-        # further meddling with the encrypt parameter
-        def check_decryption(reference, other_subject=encrypted_subject):
-            encrypted = reference.as_message().as_string()
-            self.assertIn(other_subject, encrypted)
-            self.assertNotIn(subject, encrypted)
-
-            decrypted = Envelope.load(encrypted).as_message().as_string()
-            self.assertIn(subject, decrypted)
-            self.assertNotIn(other_subject, decrypted)
-
-        front_text = "Front text"
-        check_decryption(ref.subject(subject, encrypted=True))  # the default behaviour
-        check_decryption(ref.subject(subject, front_text), front_text)  # choose another placeholder text
-
-        always_visible = ref.subject(subject, encrypted=False).as_message().as_string()  # do not encrypt the subject
-        self.assertIn(subject, always_visible)
-        self.assertIn(subject, Envelope.load(always_visible).as_message().as_string())
 
 
 class TestTransfer(TestBash):
