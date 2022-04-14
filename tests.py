@@ -1116,6 +1116,29 @@ class TestRecipients(TestAbstract):
         self.assertEqual("", e4.from_().name)
         self.assertFalse(e4.from_().is_valid())
 
+    def test_multiple_recipients_format(self):
+        """ You can use either tuple, list, generator, set, frozenset for specifying multiple values """
+        one = [IDENTITY_1]
+        two = [IDENTITY_1, IDENTITY_2]
+        three = [IDENTITY_1, IDENTITY_2, IDENTITY_3]
+
+        # try single value, tuple and list
+        self.assertEqual(one, Envelope(MESSAGE).to(IDENTITY_1).to())
+        self.assertEqual(one, Envelope(MESSAGE).to((IDENTITY_1,)).to())
+        self.assertEqual(two, Envelope(MESSAGE).to([IDENTITY_1, IDENTITY_2]).to())
+        self.assertEqual(two, Envelope(MESSAGE).to((IDENTITY_1, IDENTITY_2)).to())
+        # try single string with multiple recipients
+        self.assertEqual(two, Envelope(MESSAGE).to(f"{IDENTITY_1}, {IDENTITY_2}").to())
+        self.assertEqual(two, Envelope(MESSAGE).to(f"{IDENTITY_1}; {IDENTITY_2}").to())
+        self.assertEqual(three, Envelope(MESSAGE).to((f"{IDENTITY_1}; {IDENTITY_2}", IDENTITY_3)).to())
+        # try generator
+        self.assertEqual(two, Envelope(MESSAGE).to((x for x in (IDENTITY_1, IDENTITY_2))).to())
+        # try set, frozenset
+        self.assertEqual(set(two), set(Envelope(MESSAGE).to({IDENTITY_1, IDENTITY_2}).to()))
+        self.assertEqual(set(two), set(Envelope(MESSAGE).to({IDENTITY_1, IDENTITY_2}).to(IDENTITY_1).to()))
+        self.assertEqual(set(three), set(Envelope(MESSAGE).to({IDENTITY_1, IDENTITY_2}).to(IDENTITY_3).to()))
+        self.assertEqual(set(two), set(Envelope(MESSAGE).to(frozenset([IDENTITY_1, IDENTITY_2])).to()))
+
 
 class TestSubject(TestAbstract):
     def test_cache_recreation(self):
@@ -1338,9 +1361,11 @@ class TestAttachment(TestAbstract):
         e = Envelope() \
             .attach(Path(self.text_attachment), "text/csv", "foo") \
             .attach(mimetype="text/csv", name="foo", path=self.text_attachment) \
-            .attach(Path(self.text_attachment), "foo", "text/csv")
+            .attach(Path(self.text_attachment), "foo", "text/csv") \
+            .attach([(Path(self.text_attachment), "text/csv", "foo",)]) \
+            .attach(((Path(self.text_attachment), "text/csv", "foo",),))
         model = repr(e.attachments()[0])
-        self.assertTrue(all(repr(a) == model for a in e.attachments()))
+        [self.assertEqual(model, repr(a)) for a in e.attachments()]
 
     def test_inline(self):
         def e():

@@ -8,6 +8,7 @@ from pathlib import Path
 from smtplib import SMTP, SMTP_SSL, SMTPAuthenticationError, SMTPException, SMTPSenderRefused
 from socket import gaierror, timeout as timeout_exc
 from time import sleep
+from types import GeneratorType
 from typing import Union, Dict, Type
 
 import magic
@@ -145,7 +146,7 @@ class Address(str):
                      if not (real_name == address == "")]
         if single:
             if len(addresses) != 1:
-                raise ValueError(f"Single e-mail address expected: {email_or_list}")
+                raise ValueError(f"Single e-mail address expected: {email_or_list}") # XXXX tady generátor neprojde
             return addresses[0]
         # if len(addresses) == 0:
         #     raise ValueError(f"E-mail address cannot be parsed: {email_or_list}")
@@ -397,14 +398,19 @@ def is_gpg_importable_key(key):
 
 
 def assure_list(v):
-    """ Accepts object and returns list, if object is not list, it's appended to a list. If None, returns empty list.
+    """ Accepts object and returns list.
+    If object is tuple, generator, set, frozenset, it's converted to a list.
+    If object is not a list, it's appended to a list.
+    If None, returns an empty list.
         "test" → ["test"]
-        (5,1) → [(5,1)]
+        (5,1) → [5,1]
         ["test", "foo"] → ["test", "foo"]
     """
     if v is None:
         return []
-    elif type(v) is not list:
+    elif isinstance(v, (tuple, GeneratorType, set, frozenset)):
+        return list(v)
+    elif not isinstance(v, list):
         return [v]
     return v
 

@@ -19,6 +19,7 @@ from getpass import getpass
 from itertools import chain
 from pathlib import Path
 from quopri import decodestring
+from types import GeneratorType
 from typing import Union, List, Set, Optional, Any
 
 import magic
@@ -400,42 +401,43 @@ class Envelope:
         return deepcopy(self)
 
     @staticmethod
-    def _parse_addresses(registry, email_or_list):
-        addresses = assure_list(email_or_list)
+    def _parse_addresses(registry, email_or_more):
+        addresses = assure_list(email_or_more)
         if any(not x for x in addresses):
             registry.clear()
         addresses = [x for x in addresses if x]  # filter out possible "" or False
         if addresses:
             registry += (a for a in Address.parse(addresses) if a not in registry)
 
-    def to(self, email_or_list=None) -> Union["Envelope", List[Address]]:
+    def to(self, email_or_more=None) -> Union["Envelope", List[Address]]:
         """ Multiple addresses may be given in a string, delimited by comma (or semicolon).
          (The same is valid for `to`, `cc`, `bcc` and `reply-to`.)
 
-            :param email_or_list: str|List[str] Set e-mail address/es. If None, we are reading.
-            return: Envelope if `email_or_list` set or List[Address]
+            :param email_or_more: str|Tuple[str]|List[str]|Generator[str]|Set[str]|Frozenset[str]
+             Set e-mail address/es. If None, we are reading.
+            return: Envelope if `email_or_more` set or List[Address] if not set
         """
-        if email_or_list is None:
+        if email_or_more is None:
             return self._to
-        self._parse_addresses(self._to, email_or_list)
+        self._parse_addresses(self._to, email_or_more)
         return self
 
-    def cc(self, email_or_list=None) -> Union["Envelope", List[Address]]:
-        if email_or_list is None:
+    def cc(self, email_or_more=None) -> Union["Envelope", List[Address]]:
+        if email_or_more is None:
             return self._cc
-        self._parse_addresses(self._cc, email_or_list)
+        self._parse_addresses(self._cc, email_or_more)
         return self
 
-    def bcc(self, email_or_list=None) -> Union["Envelope", List[Address]]:
-        if email_or_list is None:
+    def bcc(self, email_or_more=None) -> Union["Envelope", List[Address]]:
+        if email_or_more is None:
             return self._bcc
-        self._parse_addresses(self._bcc, email_or_list)
+        self._parse_addresses(self._bcc, email_or_more)
         return self
 
-    def reply_to(self, email_or_list=None) -> Union["Envelope", List[Address]]:
-        if email_or_list is None:
+    def reply_to(self, email_or_more=None) -> Union["Envelope", List[Address]]:
+        if email_or_more is None:
             return self._reply_to
-        self._parse_addresses(self._reply_to, email_or_list)
+        self._parse_addresses(self._reply_to, email_or_more)
         return self
 
     def body(self, text=None, *, path=None):
@@ -780,13 +782,14 @@ class Envelope:
                            .attach(b"GIF89a\x03\x00\x03...", filename="file.gif", inline=True) -> <img src='cid:file.gif' />
                            .attach("file.jpg", inline="foo") -> <img src='cid:foo' />
         """
-        if type(attachment) is list:
+        if isinstance(attachment, (tuple, list, GeneratorType, set, frozenset)):
+            # putting all these types normally work, however, only list is acknowledged in the documentation for now
             if path or mimetype or name:
-                raise ValueError("Cannot specify both path, mimetype or name and put list in attachment_or_list.")
+                raise ValueError("Cannot specify both path, mimetype or name and put a list in attachment.")
         else:
             if path:
                 attachment = Path(path)
-            attachment = attachment, mimetype, name, inline
+            attachment = [(attachment, mimetype, name, inline)]
         self._attachments += [Attachment(o) for o in assure_list(attachment)]
         return self
 

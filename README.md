@@ -231,7 +231,7 @@ Whenever any attainable contents is mentioned, we mean plain **text**, **bytes**
     a = Envelope(from_="identity@example.com").from_()
     a == "identity@example.com", a.host == "example.com"
     ```
-* **to**: E-mail or list. When encrypting, we use keys of these identities. Multiple addresses may be given in a string, delimited by a comma (or semicolon). (The same is valid for `to`, `cc`, `bcc` and `reply-to`.)
+* **to**: E-mail or more (their tuple, list, generator, set or frozenset). When encrypting, we use keys of these identities. Multiple addresses may be given in a string, delimited by a comma (or semicolon). (The same is valid for `to`, `cc`, `bcc` and `reply-to`.)
     * **--to**: One or more e-mail addresses. Empty to read.
       ```bash
       $ envelope --to first@example.com second@example.com --message "hello" 
@@ -239,7 +239,7 @@ Whenever any attainable contents is mentioned, we mean plain **text**, **bytes**
       first@example.com
       second@example.com
       ```  
-    * **.to(email_or_list)**: If None, current list of [Addresses](#address) returned. If False or "", current list is cleared. 
+    * **.to(email_or_more)**: If None, current list of [Addresses](#address) returned. If False or "", current list is cleared. 
     ```python3
         Envelope()
             .to("person1@example.com")
@@ -247,10 +247,10 @@ Whenever any attainable contents is mentioned, we mean plain **text**, **bytes**
             .to(["person3@example.com"])
             .to()  # ["person1@example.com", "John <person2@example.com>", "person3@example.com"] 
     ```
-    * **Envelope(to=)**: E-mail or their list.
-* **cc**: E-mail or their list. Multiple addresses may be given in a string, delimited by a comma (or semicolon). (The same is valid for `to`, `cc`, `bcc` and `reply-to`.)
+    * **Envelope(to=)**: E-mail or more (their tuple, list, generator, set or frozenset).
+* **cc**: E-mail or more (their tuple, list, generator, set or frozenset). Multiple addresses may be given in a string, delimited by a comma (or semicolon). (The same is valid for `to`, `cc`, `bcc` and `reply-to`.)
     * **--cc**: One or more e-mail addresses. Empty to read.
-    * **.cc(email_or_list)**: If None, current list of [Addresses](#address) returned. If False or "", current list is cleared.
+    * **.cc(email_or_more)**: If None, current list of [Addresses](#address) returned. If False or "", current list is cleared.
         ```python3
         Envelope()
             .cc("person1@example.com")
@@ -259,13 +259,13 @@ Whenever any attainable contents is mentioned, we mean plain **text**, **bytes**
             .cc()  # ["person1@example.com", "John <person2@example.com>", "person3@example.com"] 
         ```
     * **Envelope(cc=)**
-* **bcc**: E-mail or their list. Multiple addresses may be given in a string, delimited by a comma (or semicolon). (The same is valid for `to`, `cc`, `bcc` and `reply-to`.) The header is not sent.
+* **bcc**: E-mail or more (their tuple, list, generator, set or frozenset). Multiple addresses may be given in a string, delimited by a comma (or semicolon). (The same is valid for `to`, `cc`, `bcc` and `reply-to`.) The header is not sent.
     * **--bcc**: One or more e-mail addresses. Empty to read.
-    * **.bcc(email_or_list)**: If None, current list of [Addresses](#address) returned. If False or "", current list is cleared.
+    * **.bcc(email_or_more)**: If None, current list of [Addresses](#address) returned. If False or "", current list is cleared.
     * **Envelope(bcc=)**
-* **reply-to**: E-mail or their list. Multiple addresses may be given in a string, delimited by a comma (or semicolon). (The same is valid for `to`, `cc`, `bcc` and `reply-to`.) The field is not encrypted.
+* **reply-to**: E-mail or more (their tuple, list, generator, set or frozenset). Multiple addresses may be given in a string, delimited by a comma (or semicolon). (The same is valid for `to`, `cc`, `bcc` and `reply-to`.) The field is not encrypted.
     * **--reply-to**: E-mail address or empty to read value.
-    * **.reply_to(email_or_list)**: If None, current list of [Addresses](#address) returned. If False or "", current list is cleared.
+    * **.reply_to(email_or_more)**: If None, current list of [Addresses](#address) returned. If False or "", current list is cleared.
     * **Envelope(reply_to=)**
 * **from_addr**: SMTP envelope MAIL FROM address.
     * **--from-addr**: E-mail address or empty to read value.
@@ -359,7 +359,7 @@ Whenever any attainable contents is mentioned, we mean plain **text**, **bytes**
            # Reference it like: .message("Hey, this is an inline image: <img src='cid:foo' />")
           ```
     
-    * **Envelope(attachments=)**: Attachment or their list. Attachment is defined by [any attainable contents](#any-attainable-contents), optionally in tuple with the file name to be used in the e-mail and/or mime type and/or True for being inline: `contents [,mime type] [,file name] [, True for inline]`
+    * **Envelope(attachments=)**: Attachment or more (their tuple, list, generator, set or frozenset). Attachment is defined by [any attainable contents](#any-attainable-contents), optionally in tuple with the file name to be used in the e-mail and/or mime type and/or True for being inline: `contents [,mime type] [,file name] [, True for inline]`
     ```python3
     Envelope(attachments=[(Path("/tmp/file.txt"), "displayed-name.txt", "text/plain"), Path("/tmp/another-file.txt"])
     ```    
