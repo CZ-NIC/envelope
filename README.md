@@ -213,14 +213,14 @@ Whenever any attainable contents is mentioned, we mean plain **text**, **bytes**
 ### Recipients
 * **from**: E-mail – needed to choose our key if encrypting.
     * **--from** E-mail. Empty to read value.
-    * **--sender** Alias for *--from* if not set. Otherwise appends header "Sender".
+    * **--sender** Alias for *--from* if not set. Otherwise, header "Sender" is appended.
     * **--no-sender** Declare we want to encrypt and never decrypt back.
     * **.from_(email)**: E-mail or False. If None, current `From` returned as an [Address](#address) object (even an empty one).
     * **.sender(email)**: E-mail or False – an alias for *.from_*, will fill up `From` header. If `From` has already been set, this will fill `Sender` header. If None, current `Sender` returned as an [Address](#address) object (even an empty one).
     * **Envelope(from_=)**: Sender e-mail or False to explicitly omit. When encrypting without sender, we do not use their key so that we will not be able to decipher again.       
     * **Envelope(sender=)** *(see --sender)*
     ```python3
-    # These statement are identical.
+    # These statements are identical.
     Envelope(from_="identity@example.com")    
     Envelope(sender="identity@example.com")
   
@@ -231,7 +231,7 @@ Whenever any attainable contents is mentioned, we mean plain **text**, **bytes**
     a = Envelope(from_="identity@example.com").from_()
     a == "identity@example.com", a.host == "example.com"
     ```
-* **to**: E-mail or more (their tuple, list, generator, set or frozenset). When encrypting, we use keys of these identities. Multiple addresses may be given in a string, delimited by a comma (or semicolon). (The same is valid for `to`, `cc`, `bcc` and `reply-to`.)
+* **to**: E-mail or more in an iterable. When encrypting, we use keys of these identities. Multiple addresses may be given in a string, delimited by a comma (or semicolon). (The same is valid for `to`, `cc`, `bcc` and `reply-to`.)
     * **--to**: One or more e-mail addresses. Empty to read.
       ```bash
       $ envelope --to first@example.com second@example.com --message "hello" 
@@ -247,8 +247,8 @@ Whenever any attainable contents is mentioned, we mean plain **text**, **bytes**
             .to(["person3@example.com"])
             .to()  # ["person1@example.com", "John <person2@example.com>", "person3@example.com"] 
     ```
-    * **Envelope(to=)**: E-mail or more (their tuple, list, generator, set or frozenset).
-* **cc**: E-mail or more (their tuple, list, generator, set or frozenset). Multiple addresses may be given in a string, delimited by a comma (or semicolon). (The same is valid for `to`, `cc`, `bcc` and `reply-to`.)
+    * **Envelope(to=)**: E-mail or more in an iterable.
+* **cc**: E-mail or more in an iterable. Multiple addresses may be given in a string, delimited by a comma (or semicolon). (The same is valid for `to`, `cc`, `bcc` and `reply-to`.)
     * **--cc**: One or more e-mail addresses. Empty to read.
     * **.cc(email_or_more)**: If None, current list of [Addresses](#address) returned. If False or "", current list is cleared.
         ```python3
@@ -259,11 +259,11 @@ Whenever any attainable contents is mentioned, we mean plain **text**, **bytes**
             .cc()  # ["person1@example.com", "John <person2@example.com>", "person3@example.com"] 
         ```
     * **Envelope(cc=)**
-* **bcc**: E-mail or more (their tuple, list, generator, set or frozenset). Multiple addresses may be given in a string, delimited by a comma (or semicolon). (The same is valid for `to`, `cc`, `bcc` and `reply-to`.) The header is not sent.
+* **bcc**: E-mail or more in an iterable. Multiple addresses may be given in a string, delimited by a comma (or semicolon). (The same is valid for `to`, `cc`, `bcc` and `reply-to`.) The header is not sent.
     * **--bcc**: One or more e-mail addresses. Empty to read.
     * **.bcc(email_or_more)**: If None, current list of [Addresses](#address) returned. If False or "", current list is cleared.
     * **Envelope(bcc=)**
-* **reply-to**: E-mail or more (their tuple, list, generator, set or frozenset). Multiple addresses may be given in a string, delimited by a comma (or semicolon). (The same is valid for `to`, `cc`, `bcc` and `reply-to`.) The field is not encrypted.
+* **reply-to**: E-mail or more in an iterable. Multiple addresses may be given in a string, delimited by a comma (or semicolon). (The same is valid for `to`, `cc`, `bcc` and `reply-to`.) The field is not encrypted.
     * **--reply-to**: E-mail address or empty to read value.
     * **.reply_to(email_or_more)**: If None, current list of [Addresses](#address) returned. If False or "", current list is cleared.
     * **Envelope(reply_to=)**
@@ -359,9 +359,9 @@ Whenever any attainable contents is mentioned, we mean plain **text**, **bytes**
            # Reference it like: .message("Hey, this is an inline image: <img src='cid:foo' />")
           ```
     
-    * **Envelope(attachments=)**: Attachment or more (their tuple, list, generator, set or frozenset). Attachment is defined by [any attainable contents](#any-attainable-contents), optionally in tuple with the file name to be used in the e-mail and/or mime type and/or True for being inline: `contents [,mime type] [,file name] [, True for inline]`
+    * **Envelope(attachments=)**: Attachment or their list. Attachment is defined by [any attainable contents](#any-attainable-contents), optionally in tuple with the file name to be used in the e-mail and/or mime type and/or True for being inline: `contents [,mime type] [,file name] [, True for inline]`
     ```python3
-    Envelope(attachments=[(Path("/tmp/file.txt"), "displayed-name.txt", "text/plain"), Path("/tmp/another-file.txt"])
+    Envelope(attachments=[(Path("/tmp/file.txt"), "displayed-name.txt", "text/plain"), Path("/tmp/another-file.txt")])
     ```    
     * **mime**: Sets contents mime subtype: "**auto**" (default), "**html**" or "**plain**" for plain text. 
         Maintype is always set to "text".                 
@@ -464,8 +464,8 @@ Note that if neither *gpg* nor *smime* is specified, we try to determine the met
             * key ID/fingerprint
             * e-mail address of the identity whose key is to be encrypted with
             * [Any attainable contents](#any-attainable-contents) with the key to be encrypted with (will be imported into keyring)
-            * list of the identities specified by key ID / fingerprint / e-mail address / raw key data
-        * S/MIME [any attainable contents](#any-attainable-contents) with a certificate to be encrypted with or their list
+            * an iterable with the identities specified by key ID / fingerprint / e-mail address / raw key data
+        * S/MIME [any attainable contents](#any-attainable-contents) with a certificate to be encrypted with or more in an iterable
     * **--encrypt [key]**: (for `key` see above) Put 0/false/no to disable `encrypt-path`.
     * **--encrypt-path** *(CLI only)*: Filename(s) with the recipient\'s public key(s). (Alternative to the `encrypt` parameter.)
     * **.encrypt(key=True, sign=, key_path=)**:
@@ -490,8 +490,8 @@ Note that if neither *gpg* nor *smime* is specified, we try to determine the met
         .message("Encrypted GPG message!")
         .subject("Secret subject will not be shown")
         .from_("person@example.com")
-        .to(["receiver@example.com", "receiver2@example.com"])
-        .encrypt(["receiver@example.com", "receiver2@example.com"])        
+        .to(("receiver@example.com", "receiver2@example.com"))
+        .encrypt(("receiver@example.com", "receiver2@example.com"))        
     ```
 
 #### GPG notes

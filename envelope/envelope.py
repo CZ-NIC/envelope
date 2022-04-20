@@ -280,7 +280,7 @@ class Envelope:
         Encrypting
         :param encrypt: Recipients public key string or Path or stream (ex: from open()).
         :param subject_encrypted: Text used instead of the real protected subject while PGP encrypting. False to not encrypt.
-        :param to: E-mail or list. If encrypting used so that we choose the key they will be able to decipher with.
+        :param to: E-mail or more in an iterable. If encrypting used so that we choose the key they will be able to decipher with.
         :param from_: E-mail of the sender. If encrypting used so that we choose our key to be still able
                         to decipher the message later with.
                         If False, we explicitly declare to give up on deciphering later.
@@ -292,12 +292,12 @@ class Envelope:
         :param smtp: tuple or dict of these optional parameters: host, port, username, password, security ("tlsstart").
             Or link to existing INI file with the SMTP section.
         :param send: True for sending the mail. False will just print the output.
-        :param cc: E-mail or their list.
-        :param bcc: E-mail or their list.
+        :param cc: E-mail or more in an iterable.
+        :param bcc: E-mail or more in an iterable.
         :param attachments: Attachment or their list. Attachment is defined by file path or stream (ex: from open()),
             optionally in tuple with the file name in the e-mail and/or mimetype.
         :param headers: List of headers which are tuples of name, value. Ex: [("X-Mailer", "my-cool-application"), ...]
-        :param sender: Alias for "from" if not set. Otherwise appends header "Sender".
+        :param sender: Alias for "from" if not set. Otherwise, header "Sender" is appended.
         :param from_addr: Envelope MAIL FROM address for SMTP.
         """
         # user defined variables
@@ -376,6 +376,10 @@ class Envelope:
             elif k == "cert":
                 self.signature(None, cert=v)
             elif k == "attachments":
+                # as a tuple with a single attachment (and its details) is allowed here,
+                # we have to distinguish from a list that contains multiple attachments
+                if isinstance(v, tuple):
+                    v = [v]
                 self.attach(v)
             elif k == "headers":  # [(header-name, val), ...]
                 for it in v:
@@ -860,15 +864,12 @@ class Envelope:
                 * key ID/fingerprint
                 * e-mail address of the identity whose key is to be encrypted with
                 * Any attainable contents with the key to be encrypted with (will be imported into keyring)
-                * list of the identities specified by key ID / fingerprint / e-mail address / raw key data
-            * S/MIME any attainable contents with certificate to be encrypted with or their list
-        :param key_path: Path to a file with the `key` or their list.
+                * an iterable with the identities specified by key ID / fingerprint / e-mail address / raw key data
+            * S/MIME any attainable contents with certificate to be encrypted with or more of them in an iterable
+        :param key_path: Path to a file with the `key` or more of them in an iterable.
         """
         if key_path:
-            if type(key_path) is list:
-                key = [Path(k) for k in key_path]
-            else:
-                key = Path(key_path)
+            key = [Path(k) for k in assure_list(key_path)]
         if key is True and self._encrypt not in [None, False]:
             # usecase envelope().encrypt(key="keystring").send(encrypt=True) should still have key in self._encrypt
             # (and not just "True")
@@ -888,7 +889,7 @@ class Envelope:
                 * key ID/fingerprint
                 * e-mail address of the identity whose key is to be encrypted with
                 * Any attainable contents with the key to be encrypted with (will be imported into keyring)
-                * list of the identities specified by key ID / fingerprint / e-mail address / raw key data
+                * an iterable with the identities specified by key ID / fingerprint / e-mail address / raw key data
             * S/MIME any attainable contents with certificate to be encrypted with or their list
         :param sign: Turn signing on.
             The parameter will be passed as the `key` parameter of the .signature method.

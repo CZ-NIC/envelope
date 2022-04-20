@@ -1,6 +1,5 @@
 import logging
 import sys
-import unittest
 from base64 import b64encode
 from contextlib import redirect_stdout
 from email.message import EmailMessage
@@ -10,10 +9,11 @@ from pathlib import Path
 from subprocess import PIPE, STDOUT, Popen
 from tempfile import TemporaryDirectory
 from typing import Tuple, Union
+from unittest import main, TestCase
 
 from envelope import Envelope
 from envelope.envelope import HTML, PLAIN, Parser, AUTO
-from envelope.utils import Address, SMTPHandler
+from envelope.utils import Address, SMTPHandler, assure_list, assure_fetched
 
 logging.basicConfig(stream=sys.stderr, level=logging.WARNING)
 
@@ -32,7 +32,7 @@ environ["GNUPGHOME"] = GNUPG_HOME
 #    Path("/tmp/ram/" + inspect.stack()[1][3] + ".eml").write_text(str(s))
 
 
-class TestAbstract(unittest.TestCase):
+class TestAbstract(TestCase):
     utf_header = Path("tests/eml/utf-header.eml")  # the file has encoded headers
     charset = Path("tests/eml/charset.eml")  # the file has encoded headers
     internationalized = Path("tests/eml/internationalized.eml")
@@ -132,6 +132,35 @@ class TestAbstract(unittest.TestCase):
     def assertSubset(self, dict_, subset):
         """ assertDictContainsSubset alternative """
         self.assertEqual(dict_, {**dict_, **subset})  # XX make (dict_, dict_ | subset) as of Python3.9
+
+
+class TestInternal(TestCase):
+
+    def test_assure_list(self):
+        t = ["one", "two"]
+        self.assertEqual([], assure_list(None))
+        self.assertEqual(["test"], assure_list("test"))
+        self.assertEqual([5], assure_list(5))
+        self.assertEqual([False], assure_list(False))
+        self.assertEqual([b"test"], assure_list(b"test"))
+        self.assertEqual([0, 1, 2], assure_list(x for x in range(3)))
+        self.assertEqual([0, 1, 2], assure_list([x for x in range(3)]))
+        self.assertCountEqual([0, 1, 2], assure_list({x for x in range(3)}))
+        self.assertEqual([0, 1, 2], assure_list({x: "nothing" for x in range(3)}))
+        self.assertEqual([0, 1, 2], assure_list({x: "nothing" for x in range(3)}.keys()))
+        self.assertEqual(t, assure_list(tuple(t)))
+        self.assertCountEqual(t, assure_list(frozenset(t)))
+
+    def test_assure_fetched(self):
+        self.assertEqual(b"test", assure_fetched("test", bytes))
+        self.assertEqual("test", assure_fetched("test", str))
+        self.assertEqual(False, assure_fetched(False, str))
+        self.assertEqual(None, assure_fetched(None, str))
+        self.assertEqual(b"test", assure_fetched(b"test", bytes))
+        self.assertEqual("test", assure_fetched(b"test", str))
+        self.assertEqual("test", assure_fetched(b"test", str))
+        self.assertEqual("test", assure_fetched(StringIO("test"), str))
+        self.assertEqual(b"test", assure_fetched(StringIO("test"), bytes))
 
 
 class TestEnvelope(TestAbstract):
@@ -1117,7 +1146,7 @@ class TestRecipients(TestAbstract):
         self.assertFalse(e4.from_().is_valid())
 
     def test_multiple_recipients_format(self):
-        """ You can use either tuple, list, generator, set, frozenset for specifying multiple values """
+        """ You can use iterables like tuple, list, generator, set, frozenset for specifying multiple values """
         one = [IDENTITY_1]
         two = [IDENTITY_1, IDENTITY_2]
         three = [IDENTITY_1, IDENTITY_2, IDENTITY_3]
@@ -1358,14 +1387,19 @@ class TestAttachment(TestAbstract):
         self.assertEqual("hello bytes", str(e.attachments()[1]))
 
     def test_different_order(self):
+        path = Path(self.text_attachment)
         e = Envelope() \
-            .attach(Path(self.text_attachment), "text/csv", "foo") \
+            .attach(path, "text/csv", "foo") \
             .attach(mimetype="text/csv", name="foo", path=self.text_attachment) \
-            .attach(Path(self.text_attachment), "foo", "text/csv") \
-            .attach([(Path(self.text_attachment), "text/csv", "foo",)]) \
-            .attach(((Path(self.text_attachment), "text/csv", "foo",),))
+            .attach(path, "foo", "text/csv") \
+            .attach([(path, "text/csv", "foo",)]) \
+            .attach(((path, "text/csv", "foo",),))
         model = repr(e.attachments()[0])
-        [self.assertEqual(model, repr(a)) for a in e.attachments()]
+        # a tuple with a single attachment (and its details)
+        e2 = Envelope(attachments=(path, "text/csv", "foo"))
+        # a list that contains multiple attachments
+        e3 = Envelope(attachments=[(path, "text/csv", "foo"), (path, "text/csv", "foo")])
+        [self.assertEqual(model, repr(a)) for a in e.attachments() + e2.attachments() + e3.attachments()]
 
     def test_inline(self):
         def e():
@@ -1628,4 +1662,4 @@ class TestSMTP(TestAbstract):
 
 
 if __name__ == '__main__':
-    unittest.main()
+    main()

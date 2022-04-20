@@ -1,15 +1,14 @@
-import io
 import logging
 import ssl
 from collections import defaultdict
 from email.utils import getaddresses, parseaddr
+from io import TextIOBase, BufferedIOBase
 from os import environ
 from pathlib import Path
 from smtplib import SMTP, SMTP_SSL, SMTPAuthenticationError, SMTPException, SMTPSenderRefused
 from socket import gaierror, timeout as timeout_exc
 from time import sleep
-from types import GeneratorType
-from typing import Union, Dict, Type
+from typing import Union, Dict, Type, Iterable
 
 import magic
 
@@ -146,7 +145,7 @@ class Address(str):
                      if not (real_name == address == "")]
         if single:
             if len(addresses) != 1:
-                raise ValueError(f"Single e-mail address expected: {email_or_list}") # XXXX tady generátor neprojde
+                raise ValueError(f"Single e-mail address expected: {email_or_list}")  # XXXX tady generátor neprojde
             return addresses[0]
         # if len(addresses) == 0:
         #     raise ValueError(f"E-mail address cannot be parsed: {email_or_list}")
@@ -408,11 +407,9 @@ def assure_list(v):
     """
     if v is None:
         return []
-    elif isinstance(v, (tuple, GeneratorType, set, frozenset)):
+    if isinstance(v, Iterable) and not isinstance(v, (TextIOBase, BufferedIOBase, str, bytes)):
         return list(v)
-    elif not isinstance(v, list):
-        return [v]
-    return v
+    return [v]
 
 
 def assure_fetched(message, retyped=None):
@@ -430,13 +427,13 @@ def assure_fetched(message, retyped=None):
         return None
     elif isinstance(message, Path):
         message = message.read_bytes()
-    elif isinstance(message, (io.TextIOBase, io.BufferedIOBase)):
+    elif isinstance(message, (TextIOBase, BufferedIOBase)):
         message = message.read()
-    elif type(message) not in [str, bytes, bool]:
+    elif not isinstance(message, (str, bytes, bool)):
         raise ValueError(f"Expected str, bytes, stream or pathlib.Path: {message}")
 
-    if retyped is bytes and type(message) is str:
+    if retyped is bytes and isinstance(message, str):
         message = message.encode("utf-8")
-    elif retyped is str and type(message) is bytes:
+    elif retyped is str and isinstance(message, bytes):
         message = message.decode("utf-8")
     return message
