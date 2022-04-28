@@ -17,8 +17,7 @@ for lines in (Path(p).read_text().splitlines() for p in ("requirements.txt", "en
 
 # load long description
 p = Path("README.md")
-if p.exists():
-    long_description = p.read_text()
+long_description = p.read_text() if p.exists() else ""
 
 setup(
     name='envelope',

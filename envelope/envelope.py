@@ -30,7 +30,7 @@ from .utils import Address, Attachment, AutoSubmittedHeader, SMTPHandler, _Messa
     is_gpg_importable_key, assure_list, assure_fetched
 
 __doc__ = """Quick layer over python-gnupg, M2Crypto, smtplib, magic and email handling packages.
-Their common usecases merged into a single function. Want to sign a text and tired of forgetting how to do it right?
+Their common use cases merged into a single function. Want to sign a text and tired of forgetting how to do it right?
 You do not need to know everything about GPG or S/MIME, you do not have to bother with importing keys.
 Do not hassle with reconnecting to an SMTP server. Do not study various headers meanings
 to let your users unsubscribe via a URL. You insert a message, attachments and inline images
@@ -77,7 +77,7 @@ class Envelope:
     def __repr__(self):
         """
         :return: Prints out basic representation.
-         However this is not a serialization: you cannot reconstruct any complicated objects
+         However, this is not a serialization: you cannot reconstruct any complicated objects
          having attachments or custom headers.
         """
 
@@ -133,7 +133,7 @@ class Envelope:
                 s = f"Attachment {a.preview()}"
             result.append(s)
 
-        if self._bcc:  # as bcc is not included as an e-mail header, we explicitly states it here
+        if self._bcc:  # as bcc is not included as an e-mail header, we explicitly state it here
             result.append("Bcc: " + ", ".join(map(str, self._bcc)))
 
         for r in self._result:
@@ -527,7 +527,7 @@ class Envelope:
         return self
 
     def sender(self, email=None) -> Union["Envelope", Address]:
-        """  Alias for "from" if not set. Otherwise appends header "Sender". If None, current `Sender` returned. """
+        """  Alias for "from" if not set. Or append header "Sender". If None, current `Sender` returned. """
         if email is None:
             return self.__sender or Address()
         self._sender = Address.parse(email, single=True, allow_false=True)
@@ -735,7 +735,7 @@ class Envelope:
                 except KeyError as e:
                     raise FileNotFoundError(f"INI file {ini} exists but section [SMTP] is missing") from e
 
-        elif type(host) is dict:  # ex: {"host": "localhost", "port": 1234}
+        if type(host) is dict:  # ex: {"host": "localhost", "port": 1234}
             self._smtp = SMTPHandler(**host)
         elif type(host) is list:  # ex: ["localhost", 1234]
             self._smtp = SMTPHandler(*host)
@@ -792,7 +792,7 @@ class Envelope:
         if key_path:
             key = Path(key_path)
         if key is True and self._sign not in [None, False]:
-            # usecase envelope().signature(key=fingerprint).send(sign=True) should still have fingerprint in self._sign
+            # use case envelope().signature(key=fingerprint).send(sign=True) should still have fingerprint in self._sign
             # (and not just "True")
             pass
         elif key is not None:
@@ -847,7 +847,7 @@ class Envelope:
         if key_path:
             key = [Path(k) for k in assure_list(key_path)]
         if key is True and self._encrypt not in [None, False]:
-            # usecase envelope().encrypt(key="keystring").send(encrypt=True) should still have key in self._encrypt
+            # use case envelope().encrypt(key="keystring").send(encrypt=True) should still have key in self._encrypt
             # (and not just "True")
             pass
         elif key is not None:
@@ -1445,7 +1445,7 @@ class Envelope:
             email.set_type("multipart/mixed")
             email.set_param("protected-headers", "v1")
             # In Thunderbird 68.8 or earlier,
-            # encrypted subject worked with "multipart/mixed" directly rather then with "text/rfc822-headers" as tested before.
+            # encrypted subject worked with "multipart/mixed" directly rather than with "text/rfc822-headers" as tested before.
             # However, I will let the code here for the case it will be needed again in the future or till when we can explain
             # why that worked before and why that stopped working now.
             #

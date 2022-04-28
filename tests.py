@@ -1650,6 +1650,8 @@ class TestSMTP(TestAbstract):
         self.assertSubset(Envelope().smtp(port=32)._smtp.__dict__,
                           {"host": "localhost", "port": 32})
         self.assertSubset(Envelope().smtp(timeout=5)._smtp.__dict__, {"timeout": 5})
+        self.assertSubset(Envelope().smtp("tests/smtp-configuration.ini")._smtp.__dict__,
+                          {"timeout": 3, "user": "envelope-example-identity@example.com", "password": "", "port": 123})
 
 
 if __name__ == '__main__':
