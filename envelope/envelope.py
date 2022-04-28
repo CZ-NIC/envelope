@@ -94,12 +94,14 @@ class Envelope:
         elif text or html:
             message = {"message": text or html}
         o.extend(f'{k}={quote(v)}' for k, v in {"subject": self._subject,
-                                                "from_": self._from,
+                                                "from_": self.__from,
                                                 "to": self._to,
                                                 "cc": self._cc,
                                                 "bcc": self._bcc,
                                                 "reply_to": self._reply_to,
                                                 "from_addr": self._from_addr,
+                                                "signature": self._sign,
+                                                "encryption": self._encrypt,
                                                 **message
                                                 }.items() if v)
 
@@ -851,8 +853,10 @@ class Envelope:
             # (and not just "True")
             pass
         elif key is not None:
-            # possible types: True, AUTO, str, bytes, list of bytes
-            self._encrypt = [assure_fetched(k, bytes) for k in key] if isinstance(key, list) else assure_fetched(key)
+            # possible types: True, AUTO, str, list of bytes
+            # (the reason str type is not converted into bytes: we want the (str) constant AUTO to not be converted)
+            self._encrypt = assure_fetched(key) if isinstance(key, (bool, str))\
+                else [assure_fetched(k, bytes) for k in assure_list(key)]
         return self
 
     def encrypt(self, key=True, sign=None, *, key_path=None):

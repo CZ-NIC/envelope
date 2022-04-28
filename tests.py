@@ -690,7 +690,8 @@ class TestGPG(TestAbstract):
         decrypt(e3, 3, False)  # ring 3 has none
 
         # trying to encrypt with an unknown key while/without specifying decipherers explicitly
-        for e in [Envelope(message).encryption([IDENTITY_3, IDENTITY_1_GPG_FINGERPRINT]),
+        # (note that we pass a generator to the .encryption to test if it takes other iterables than a list)
+        for e in [Envelope(message).encryption(x for x in [IDENTITY_3, IDENTITY_1_GPG_FINGERPRINT]),
                   Envelope(message).encryption()]:
             with self.assertLogs('envelope', level='WARNING') as cm:
                 self.assertEqual('None', str(e
@@ -704,7 +705,8 @@ class TestGPG(TestAbstract):
                 self.assertNotIn(f'WARNING:envelope.envelope:Key for {IDENTITY_2} seems missing', cm.output)
 
         # import raw unarmored key in a list ("envelope-example-identity@example.com" into ring 1)
-        e4 = Envelope(message).encryption([IDENTITY_2, key1_raw]).to(IDENTITY_3).from_(IDENTITY_2).gpg(
+        # (note that we pass a set to the .encryption to test if it takes other iterables than a list)
+        e4 = Envelope(message).encryption({IDENTITY_2, key1_raw}).to(IDENTITY_3).from_(IDENTITY_2).gpg(
             rings[1]).as_message()
         decrypt(e4, 1)
         decrypt(e4, 2)
