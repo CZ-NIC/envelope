@@ -44,7 +44,6 @@ Envelope.load(path="message.eml").attachments()
     + [Encrypting](#encrypting)
     + [Supportive](#supportive)
       - [Address](#address)
-  * [Default values](#default-values)
   * [Envelope object](#envelope-object)
     + [Converting object to str or bool](#converting-object-to-str-or-bool)
     + [Object equality](#object-equality)
@@ -646,15 +645,6 @@ e = (Envelope()
                                         # addresses only
 ```
 
-## Default values
-
-In *module* interface, you may set the defaults when accessing `Envelope.default` instance. 
-
-```python3
-Envelope.default.subject("Test subject").signature()
-Envelope("Hello")  # this message has a default subject and is signed by default when sent
-```
-
 ## Envelope object
 
 ### Converting object to str or bool
@@ -728,10 +718,10 @@ Sign the message with a key that needs passphrase.
 Envelope(message="Hello world", sign=True, passphrase="my-password")
 ```
 
-Sign a message without signing by default turned previously on and having a default keyring path. Every `Envelope` call will honour these defaults. 
+Sign a message with signing by default turned previously on and having a default keyring path. Every `factory` call will honour these defaults. 
 ```python3 
-Envelope.default.signature(True).gpg("/tmp/my-keyring")
-Envelope(message="Hello world")
+factory = Envelope().signature(True).gpg("/tmp/my-keyring").copy
+factory().(message="Hello world")
 ```
 
 ## Sending

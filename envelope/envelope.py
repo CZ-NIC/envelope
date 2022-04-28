@@ -9,8 +9,8 @@ import tempfile
 import warnings
 from base64 import b64decode
 from configparser import ConfigParser
-from copy import copy, deepcopy
-from email import message_from_bytes, message_from_string, header
+from copy import deepcopy
+from email import message_from_bytes
 from email.header import decode_header
 from email.message import EmailMessage, Message
 from email.parser import BytesParser
@@ -24,15 +24,10 @@ from typing import Union, List, Set, Optional, Any
 
 import magic
 
+from .constants import smime_import_error, gnupg, CRLF, AUTO, PLAIN, HTML, SIMULATION
+from .parser import Parser
 from .utils import Address, Attachment, AutoSubmittedHeader, SMTPHandler, _Message, \
     is_gpg_importable_key, assure_list, assure_fetched
-
-smime_import_error = "Cannot import M2Crypto. Run: `sudo apt install swig && pip3 install M2Crypto`"
-
-try:
-    import gnupg
-except ImportError:
-    gnupg = None
 
 __doc__ = """Quick layer over python-gnupg, M2Crypto, smtplib, magic and email handling packages.
 Their common usecases merged into a single function. Want to sign a text and tired of forgetting how to do it right?
@@ -56,16 +51,9 @@ Usage:
 """
 
 logger = logging.getLogger(__name__)
-CRLF = '\r\n'
-AUTO = "auto"
-PLAIN = "plain"
-HTML = "html"
-SIMULATION = "simulation"
 
 
 class Envelope:
-    default: 'Envelope'
-
     _gnupg: gnupg.GPG
 
     def __bool__(self):
@@ -75,8 +63,8 @@ class Envelope:
         self._result_fresh()
         if not self._result:
             if self._encrypt or self._sign:
-                # if subject is not set, we suppose this is just a data blob to be encrypted, no an e-mail message
-                # and a ciphered blob will get output. However if subject is set, we put send=SIMULATION
+                # if subject is not set, we suppose this is just a data blob to be encrypted, not an e-mail message
+                # and a ciphered blob will get output. However, if subject is set, we put send=SIMULATION
                 # in order to display all e-mail headers etc.
                 is_email = SIMULATION if bool(self._subject) else False
                 self._start(send=is_email)
@@ -343,7 +331,7 @@ class Envelope:
         self._smtp = SMTPHandler()
         self.auto_submitted = AutoSubmittedHeader(self)  # allows fluent interface to set header
 
-        # if a parameter is not set, use class defaults, else init with parameter
+        # init parameters with appropriate methods
         self._populate(locals())
 
     @staticmethod
@@ -362,11 +350,7 @@ class Envelope:
                     self.smime()
                 continue
             elif v is None:
-                if not hasattr(self, "default"):
-                    continue
-                v = copy(getattr(self.default, self._get_private_var(k)))  # ex `v = copy(self.default._message)`
-                if v is None or type(v) is _Message and v.is_empty():  # the default value is empty
-                    continue
+                continue
 
             if k == "passphrase":
                 self.signature(passphrase=v)
@@ -390,8 +374,6 @@ class Envelope:
                 self.encryption(v)
             elif k == "subject_encrypted":
                 self.subject(encrypted=v)
-            elif k == "_Message":  # internal stuff
-                continue
             elif v is not None and v != []:  # "to" will receive [] by default
                 getattr(self, k)(v)  # ex: self.message(message)
 
@@ -524,10 +506,6 @@ class Envelope:
                 raise ValueError(f"Cannot decode the message correctly, it is not in Unicode. {b}")
 
         # write value
-        if type(text) is _Message:  # constructor internally adopts default's self.default._message
-            self._message: _Message = text
-            return self
-
         if path:
             text = Path(path)
 
@@ -757,8 +735,6 @@ class Envelope:
                 except KeyError as e:
                     raise FileNotFoundError(f"INI file {ini} exists but section [SMTP] is missing") from e
 
-        if type(host) is SMTPHandler:  # constructor internally adopts default's self.default._smtp
-            self._smtp = host
         elif type(host) is dict:  # ex: {"host": "localhost", "port": 1234}
             self._smtp = SMTPHandler(**host)
         elif type(host) is list:  # ex: ["localhost", 1234]
@@ -1603,111 +1579,3 @@ class Envelope:
             SMTPHandler.quit_all()
         else:
             self._smtp.quit()
-
-
-class Parser:
-
-    def __init__(self, envelope: Envelope = None, key=None, cert=None, gnupg_home=None):
-        self.e = envelope
-        self.key = key
-        self.cert = cert
-        self.gnupg_home = gnupg_home
-
-    def parse(self, o: Message, add_headers=False):
-        if add_headers:
-            for k, val in o.items():
-                # We skip "Content-Type" and "Content-Transfer-Encoding" since we decode text payload before importing.
-                # We skip MIME-Version since it may be another one
-                # in an encrypted sub-message we take the headers from too.
-                if k.lower() in ("content-type", "content-transfer-encoding", "mime-version"):
-                    continue
-                try:
-                    if isinstance(val, header.Header):
-                        # when diacritics appear in Subject, object is returned instead of a string
-                        # when maxline is not set, it uses a default one (75 chars?)
-                        # and gets encoded into multiple chunks
-                        # while policy.header_store_parse parses just the first
-                        # val = val.encode()
-                        self.e.header(k, val)
-                    else:
-                        self.e.header(k, " ".join(x.strip() for x in val.splitlines()))
-                except ValueError as e:
-                    logger.warning(f"{e} at header {k}")
-
-        maintype, subtype = o.get_content_type().split("/")
-        if o.is_multipart():
-            payload: List[Message] = o.get_payload()
-            if subtype == "alternative":
-                [self.parse(x) for x in payload]
-            elif subtype in ("related", "mixed"):
-                for p in payload:
-                    if p.get_content_maintype() in ["text", "multipart"] \
-                            and p.get_content_disposition() != "attachment":
-                        self.parse(p)
-                    else:
-                        # decode=True -> strip CRLFs, convert base64 transfer encoding to bytes etc
-                        self.e.attach(p.get_payload(decode=True),
-                                      mimetype=p.get_content_type(),
-                                      name=p["Content-ID"] or p.get_filename(),
-                                      inline=bool(subtype == "related"))
-            elif subtype == "signed":
-                for p in payload:
-                    if p.get_content_type() == o.get_param("protocol"):  # ex: application/x-pkcs7-signature
-                        continue  # XX we might verify signature
-                    else:
-                        self.parse(p)
-            elif subtype == "encrypted":
-                for p in payload:
-                    if p.get_content_type() == o.get_param("protocol"):  # ex: application/pgp-encrypted
-                        continue
-                    elif p.get_content_type() == "application/octet-stream":
-                        self.parse(message_from_string(self.gpg_decrypt(p.get_payload(decode=True))), add_headers=True)
-                    else:
-                        raise ValueError(f"Cannot decrypt.")
-            else:
-                raise ValueError(f"Subtype {subtype} not implemented")
-        elif maintype == "text":
-            if subtype in (HTML, PLAIN):
-                t = o.get_payload(decode=True).strip()
-                if o.get_charsets() and o.get_charsets()[0]:
-                    try:
-                        t = t.decode(o.get_charsets()[0])
-                    except LookupError as e:
-                        t = t.decode(errors="replace")
-                        logger.warning(f"Replacing some invalid characters in {maintype}/{subtype}: {e}")
-                    except ValueError as e:
-                        t = t.decode(o.get_charsets()[0], errors="replace")
-                        logger.warning(f"Replacing some invalid characters in {maintype}/{subtype}: {e}")
-                self.e.message(t, alternative=subtype)
-            else:
-                raise ValueError(f"Unknown subtype: {subtype}")
-        elif maintype == "application" and subtype == "x-pkcs7-mime":  # decrypting S/MIME
-            self.parse(message_from_bytes(self.smime_decrypt(o.as_bytes())), add_headers=True)
-        else:
-            raise ValueError(f"Unknown maintype: {maintype}")
-        return self.e
-
-    def gpg_decrypt(self, data):
-        g = gnupg.GPG(gnupghome=self.gnupg_home)
-        output = g.decrypt(data)
-        if output.ok:
-            return str(output)
-        else:
-            raise ValueError(f"Cannot decrypt GPG data. " + output.status)
-
-    def smime_decrypt(self, data):
-        key = self.key
-        cert = self.cert
-        try:
-            from M2Crypto import BIO, Rand, SMIME, X509, EVP  # we save up to 30 - 120 ms to load it here
-        except ImportError:
-            raise ImportError(smime_import_error)
-
-        # Load private key and cert and decrypt
-        s = SMIME.SMIME()
-        s.load_key(key, cert)
-        p7, data = SMIME.smime_load_pkcs7_bio(BIO.MemoryBuffer(bytes(data)))
-        try:
-            return s.decrypt(p7)
-        except SMIME.PKCS7_Error:
-            return False

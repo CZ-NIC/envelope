@@ -1,6 +1,7 @@
 # CHANGELOG
 
-## 1.6
+## 2.0.0 (unreleased)
+- CHANGED: `Envelope.default` instance REMOVED because explicit is better than implicit. For setting defaults use `Envelope().copy()` instead 
 - CHANGED: explicitly specifying encryption keys prevents encrypting for other recipients
   - GPG encryption for arbitrary keys only possible #9 #14 
 - CHANGED: Optional parameter "email_or_list" renamed to "email_or_more" (methods `to` and friends)

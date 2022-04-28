@@ -12,7 +12,8 @@ from typing import Tuple, Union
 from unittest import main, TestCase
 
 from envelope import Envelope
-from envelope.envelope import HTML, PLAIN, Parser, AUTO
+from envelope.constants import AUTO, PLAIN, HTML
+from envelope.parser import Parser
 from envelope.utils import Address, SMTPHandler, assure_list, assure_fetched
 
 logging.basicConfig(stream=sys.stderr, level=logging.WARNING)
@@ -1161,7 +1162,7 @@ class TestRecipients(TestAbstract):
         self.assertEqual(two, Envelope(MESSAGE).to(f"{IDENTITY_1}; {IDENTITY_2}").to())
         self.assertEqual(three, Envelope(MESSAGE).to((f"{IDENTITY_1}; {IDENTITY_2}", IDENTITY_3)).to())
         # try generator
-        self.assertEqual(two, Envelope(MESSAGE).to((x for x in (IDENTITY_1, IDENTITY_2))).to())
+        self.assertEqual(two, Envelope(MESSAGE).to(x for x in (IDENTITY_1, IDENTITY_2)).to())
         # try set, frozenset
         self.assertEqual(set(two), set(Envelope(MESSAGE).to({IDENTITY_1, IDENTITY_2}).to()))
         self.assertEqual(set(two), set(Envelope(MESSAGE).to({IDENTITY_1, IDENTITY_2}).to(IDENTITY_1).to()))
@@ -1310,16 +1311,6 @@ class TestSupportive(TestAbstract):
             e1.smtp_quit()
             Envelope.smtp_quit()
         self.assertEqual("\n".join([f"dummy{i}" for i in [3, 0, 1, 2, 3, 2, 0, 1, 2, 3]]), stdout.getvalue().rstrip())
-
-
-class TestDefault(TestAbstract):
-    def test_default(self):
-        self.assertEqual(Envelope().subject(), "")
-
-        Envelope.default.subject("bar")
-        self.assertEqual(Envelope().subject("foo").subject(), "foo")
-        self.assertEqual(Envelope().subject(), "bar")
-        Envelope.default.subject("")  # restore previous state
 
 
 class TestBash(TestAbstract):
@@ -1565,7 +1556,7 @@ class TestLoad(TestBash):
         self.assertEqual({"hi", "hi2"}, Envelope.load("To: group: hi; group b: hi2;").recipients())
 
     def test_invalid_characters(self):
-        msg = "WARNING:envelope.envelope:Replacing some invalid characters in text/plain:" \
+        msg = "WARNING:envelope.parser:Replacing some invalid characters in text/plain:" \
               " 'utf-8' codec can't decode byte 0xe1 in position 1: invalid continuation byte"
         with self.assertLogs('envelope', level='WARNING') as cm:
             e = Envelope.load(self.invalid_characters)
@@ -1589,7 +1580,7 @@ class TestLoad(TestBash):
         """ Following file has some invalid headers whose parsing would normally fail. """
         msg = ['WARNING:envelope.envelope:Header List-Unsubscribe could not be successfully '
                "loaded with <mailto:RB��R@innovabrokers.com.co>: 'Header' object is not subscriptable",
-               'WARNING:envelope.envelope:Replacing some invalid characters in text/html: '
+               'WARNING:envelope.parser:Replacing some invalid characters in text/html: '
                'unknown encoding: "utf-8message-id: <123456@example.com>']
         with self.assertLogs('envelope', level='WARNING') as cm:
             e = Envelope.load(self.invalid_headers)

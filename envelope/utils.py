@@ -145,7 +145,7 @@ class Address(str):
                      if not (real_name == address == "")]
         if single:
             if len(addresses) != 1:
-                raise ValueError(f"Single e-mail address expected: {email_or_list}")  # XXXX tady generátor neprojde
+                raise ValueError(f"Single e-mail address expected: {email_or_list}")
             return addresses[0]
         # if len(addresses) == 0:
         #     raise ValueError(f"E-mail address cannot be parsed: {email_or_list}")
