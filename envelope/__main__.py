@@ -60,8 +60,8 @@ def main():
     group_io = parser.add_argument_group("Input/Output")
     group_io.add_argument('--message', help='Plain text message. Empty to read.',
                           metavar="TEXT", nargs="?", action=BlankTrue)
-    group_io.add_argument('--input', help='Path to message file. (Alternative to the `message` parameter.)'
-                          , metavar="FILE")
+    group_io.add_argument('--input', help='Path to message file. (Alternative to the `message` parameter.)',
+                          metavar="FILE")
     group_io.add_argument('--output',
                           help='Path to file to be written to (else the contents is returned if ciphering or True if sending).',
                           metavar="FILE")
@@ -80,7 +80,7 @@ def main():
                             action=BlankTrue, metavar="CONTENTS")
     group_ciph.add_argument('--passphrase', help='Passphrase to the signing key if needed.')
     group_ciph.add_argument('--sign-path',
-                            help='Filename with the sender\'s private key. (Alternative to the `sign` parameter.)',
+                            help='Filename with the from\'s private key. (Alternative to the `sign` parameter.)',
                             metavar="KEY-PATH")
     group_ciph.add_argument('--cert-path', help='S/MIME: Filename with the sender\'s S/MIME private cert'
                                                 ' if cert not included in the key.'
@@ -114,7 +114,7 @@ def main():
                              nargs="?", action=BlankTrue)
     group_recip.add_argument('--sender', help="Alias for --from if not set."
                                               " Otherwise appends the \"Sender\" header.", metavar="E-MAIL")
-    group_recip.add_argument('--no-sender', action="store_true",
+    group_recip.add_argument('--no-from', action="store_true",
                              help="We explicitly say we do not want to decipher later if encrypting.")
     group_recip.add_argument('--from-addr', help="SMTP envelope MAIL FROM address", metavar="E-MAIL",
                              nargs="?", action=BlankTrue)
@@ -184,12 +184,12 @@ def main():
     del args["input"]
 
     # we explicitly say we do not want to decipher later if encrypting
-    if args["no_sender"]:
+    if args["no_from"]:
         args["from_"] = False
     else:
         args["from_"] = args["from"]
     del args["from"]
-    del args["no_sender"]
+    del args["no_from"]
 
     # user is saying that encryption key has been already imported
     enc = args["encrypt"]
@@ -201,7 +201,7 @@ def main():
         elif enc.lower() in ["0", "false", "no"]:
             args["encrypt"] = False
 
-    # user specified encrypt key in a path. And did not disabled encryption
+    # user specified encrypt key in a path. And did not disable encryption
     if args["encrypt_path"] and args["encrypt"] is not False:
         if args["encrypt"] not in [True, None]:  # user has specified both path and the key
             raise RuntimeError("Cannot define both encrypt key data and encrypt key path.")
@@ -211,7 +211,7 @@ def main():
             args["encrypt"] = Path(args["encrypt_path"])
     del args["encrypt_path"]
 
-    # user specified sign key in a path. And did not disabled signing
+    # user specified sign key in a path. And did not disable signing
     if args["sign_path"] and args["sign"] is not False:
         if args["sign"] not in [True, None]:  # user has specified both path and the key
             raise RuntimeError("Cannot define both sign key data and sign key path.")

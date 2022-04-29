@@ -1,6 +1,7 @@
 # CHANGELOG
 
 ## 2.0.0 (unreleased)
+- CHANGED: `Envelope(sender=).sender()` alias REMOVED because to the unambiguous naming clash between the `From` and the `Sender` e-mail header. Use `Envelope().from_(...)` and `Envelope().header("Sender", ...)` instead. Pity that 'from' is a reserved keyword, "from_" looks bad.
 - CHANGED: `Envelope.default` instance REMOVED because explicit is better than implicit. For setting defaults use `Envelope().copy()` instead 
 - CHANGED: explicitly specifying encryption keys prevents encrypting for other recipients
   - GPG encryption for arbitrary keys only possible #9 #14 

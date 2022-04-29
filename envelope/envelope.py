@@ -94,7 +94,7 @@ class Envelope:
         elif text or html:
             message = {"message": text or html}
         o.extend(f'{k}={quote(v)}' for k, v in {"subject": self._subject,
-                                                "from_": self.__from,
+                                                "from_": self._from,
                                                 "to": self._to,
                                                 "cc": self._cc,
                                                 "bcc": self._bcc,
@@ -287,7 +287,8 @@ class Envelope:
         :param attachments: Attachment or their list. Attachment is defined by file path or stream (ex: from open()),
             optionally in tuple with the file name in the e-mail and/or mimetype.
         :param headers: List of headers which are tuples of name, value. Ex: [("X-Mailer", "my-cool-application"), ...]
-        :param sender: Alias for "from" if not set. Otherwise, header "Sender" is appended.
+        :param sender: REMOVED, raises an informative error.
+            Use Envelope().from_() or Envelope().header("Sender", ...) instead.
         :param from_addr: Envelope MAIL FROM address for SMTP.
         """
         # user defined variables
@@ -304,13 +305,10 @@ class Envelope:
         #   SMIME: certificate contents
         self._encrypt = None
 
-        # `_from` and `_sender` properties might be false because of `sender=False` attribute (or "--no-sender" flag)
-        # that explicitly states we have no sender
-        self._from: Union[Address, False] = None
-        self.__from: Union[Address, False] = None
-        self._sender: Union[Address, False] = None
-        self.__sender: Union[Address, False] = None
-        self._from_addr: Optional[Address] = None
+        # `self._from` might be false because of `from_=False` attribute (or "--no-from" flag)
+        # that explicitly states we have no from header
+        self._from: Union[Address, False, None] = None  # e-mail From header
+        self._from_addr: Optional[Address] = None  # SMTP envelope MAIL FROM address
         self._to: List[Address] = []
         self._cc: List[Address] = []
         self._bcc: List[Address] = []
@@ -379,7 +377,6 @@ class Envelope:
             elif v is not None and v != []:  # "to" will receive [] by default
                 getattr(self, k)(v)  # ex: self.message(message)
 
-        self._prepare_from()
         if params.get("sign") or params.get("encrypt") or params.get("send") is not None:
             self._start(send=params.get("send"))
         return self
@@ -528,20 +525,17 @@ class Envelope:
             self.header("Date", date)
         return self
 
-    def sender(self, email=None) -> Union["Envelope", Address]:
-        """  Alias for "from" if not set. Or append header "Sender". If None, current `Sender` returned. """
-        if email is None:
-            return self.__sender or Address()
-        self._sender = Address.parse(email, single=True, allow_false=True)
-        self._prepare_from()
-        return self
+    def sender(self, email=None):
+        """ REMOVED, raises an informative error. Use Envelope().from_() or Envelope().header("Sender", ...) instead."""
+        raise NotImplementedError("Method Envelope().sender() has been deprecated and was removed due"
+                                  " to the unambiguous naming clash between the From and the Sender e-mail header."
+                                  ' Use Envelope().from_(...) and Envelope().header("Sender", ...) instead.')
 
     def from_(self, email=None) -> Union["Envelope", Address]:
-        """ Set the sender header. If None, current `From` returned. """
+        """ Set the `From` header. If None, current `From` returned. """
         if email is None:
-            return self.__from or Address()
+            return self._from or Address()
         self._from = Address.parse(email, single=True, allow_false=True)
-        self._prepare_from()
         return self
 
     def from_addr(self, email=None) -> Union["Envelope", Address]:
@@ -652,8 +646,7 @@ class Envelope:
 
         # lowercase header to its method name
         specific_interface = {"to": self.to, "cc": self.cc, "bcc": self.bcc, "reply-to": self.reply_to,
-                              "from": self.from_, "sender": self.sender,
-                              "subject": self.subject
+                              "from": self.from_, "subject": self.subject
                               }
 
         k = key.lower()
@@ -662,8 +655,6 @@ class Envelope:
             if replace:
                 attr = getattr(self, self._get_private_var(k))
                 setattr(self, self._get_private_var(k), None if type(attr) is str else [])
-                if k in ("sender", "from"):
-                    self._prepare_from()
                 return self
             # Xif type(val) is str:  # None has to stay None
             # We have to type the value to `str` due to this strange fact:
@@ -855,7 +846,7 @@ class Envelope:
         elif key is not None:
             # possible types: True, AUTO, str, list of bytes
             # (the reason str type is not converted into bytes: we want the (str) constant AUTO to not be converted)
-            self._encrypt = assure_fetched(key) if isinstance(key, (bool, str))\
+            self._encrypt = assure_fetched(key) if isinstance(key, (bool, str)) \
                 else [assure_fetched(k, bytes) for k in assure_list(key)]
         return self
 
@@ -902,21 +893,6 @@ class Envelope:
                                " You probably wanted to use .signature()/.encryption() instead.")
         self._start(sign=sign, encrypt=encrypt, send=send)
         return self
-
-    def _prepare_from(self):
-        """ Prepare private variables. Resolve "from" and "sender" headers.
-
-        Due to a keyword clash we cannot use "from" as a method name and it seems convenient then to allow users
-        to use sender instead. However we do not want to block setting "Sender" header too – since sender is a real header,
-        we should somehow distinguish 'sender' from 'from'.
-        Pity that 'from' is a reserved keyword, "from_" looks bad.
-        """
-        if self._from is None and self._sender is not None:
-            self.__from = self._sender
-            self.__sender = None
-        else:
-            self.__from = self._from
-            self.__sender = self._sender
 
     def _start(self, sign=None, encrypt=None, send=None):
         """ Start processing. Either sign, encrypt or send the message and possibly set bool status of the object to True.
@@ -1025,7 +1001,7 @@ class Envelope:
                 if sign:
                     if sign in [True, AUTO]:  # try to determine sign based on the "From" header
                         fallback_sign = sign = None
-                        address_searched = self.__from.address if self.__from else False
+                        address_searched = self._from.address if self._from else False
                         if not address_searched:
                             # there is no "From" header (or the "From" header address is empty)
                             # and no default key is given, pick the first secret as a default
@@ -1075,12 +1051,12 @@ class Envelope:
 
     def _send_now(self, email, encrypt, encrypted_subject, send):
         try:
-            if not self.__from and self.__from is not False and send is True:
-                # allow ignoring sender when deliberately set to False
-                logger.error("You have to specify sender e-mail.")
+            if not self._from and self._from is not False and send is True:
+                # allow ignoring the `From` header when deliberately set to False
+                logger.error("You have to specify From e-mail.")
                 return False
-            if self.__from:
-                email["From"] = str(self.__from)
+            if self._from:
+                email["From"] = str(self._from)
             if self._to:
                 email["To"] = ",".join(map(str, self._to))
             if self._cc:
@@ -1088,9 +1064,7 @@ class Envelope:
             if self._reply_to:
                 email["Reply-To"] = ",".join(map(str, self._reply_to))
         except IndexError as e:
-            s = set(self._to + self._cc + self._bcc + self._reply_to)
-            if self.__from:
-                s.add(self.__from)
+            s = set(self._to + self._cc + self._bcc + self._reply_to + [x for x in [self._from] if x])
             logger.error(f"An e-mail address seem to be malformed.\nAll addresses: {s}\n{e}")
             return False
 
@@ -1105,8 +1079,6 @@ class Envelope:
             except TypeError:
                 # ex: Using random string with header Date
                 raise TypeError(f"Wrong header {k} value: {v}")
-        if self.__sender:
-            email["Sender"] = str(self.__sender)
         if "Date" not in email and not self._ignore_date:
             email["Date"] = formatdate(localtime=True)
         if "Message-ID" not in email and send != SIMULATION:  # we omit this field when testing
@@ -1122,7 +1094,7 @@ class Envelope:
                 return False
         else:
             if send != SIMULATION:
-                self._result.append(f"{'*' * 100}\nHave not been sent from {(self._from_addr or self.__from or '-')}"
+                self._result.append(f"{'*' * 100}\nHave not been sent from {(self._from_addr or self._from or '-')}"
                                     f" to {', '.join(self.recipients()) or '-'}")
             if encrypt:
                 if encrypted_subject:
@@ -1136,7 +1108,7 @@ class Envelope:
     def _param_hash(self):
         """ Check if headers changed from last _start call."""
         return (hash(frozenset(self._headers.items())) + hash("".join(self.recipients()))
-                + hash(self._subject) + hash(self._subject_encrypted) + hash(self.__from))
+                + hash(self._subject) + hash(self._subject_encrypted) + hash(self._from))
 
     def _sign_gpg_now(self, message, sign, send):
         status = self._gnupg.sign(
@@ -1172,9 +1144,9 @@ class Envelope:
         exc = []
         if not any(chain(self._to, self._cc, self._bcc)):
             exc.append("No recipient e-mail specified")
-        if self.__from is None:
-            exc.append("No sender e-mail specified."
-                       " If not planning to decipher later, put sender=False or --no-sender flag.")
+        if self._from is None:
+            exc.append("No From e-mail specified."
+                       " If not planning to decipher later, put from_=False or --no-from flag.")
         if exc:
             raise RuntimeError("Encrypt key present. " + ", ".join(exc))
         # According to https://gnupg.readthedocs.io/en/latest/ , the recipients should contain fingerprints
@@ -1224,7 +1196,7 @@ class Envelope:
         """
         :return: Set of e-mail addresses
         """
-        return set(x.address for x in self._to + self._cc + self._bcc + ([self.__from] if self.__from else []))
+        return set(x.address for x in self._to + self._cc + self._bcc + [x for x in [self._from] if x])
 
     def _encrypt_smime_now(self, email, sign, encrypt: Union[None, bool, bytes, List[bytes]]):
         """
@@ -1514,15 +1486,14 @@ class Envelope:
         :rtype: bool All e-mail addresses are valid and SMTP connection worked
         """
         passed = all(address.is_valid(check_mx)
-                     for address in self._to + self._cc + self._bcc + self._reply_to +
-                     [x for x in (self.__from, self.__sender) if x])
+                     for address in self._to + self._cc + self._bcc + self._reply_to + [x for x in [self._from] if x])
 
-        if self.__from:
+        if self._from:
             try:
-                domain = self.__from.address.split("@")[1]
+                domain = self._from.address.split("@")[1]
             except IndexError:
                 passed = False
-                logger.warning(f"Could not parse domain from the sender address '{self.__from}'")
+                logger.warning(f"Could not parse domain from the From address '{self._from}'")
             else:
                 def dig(query_or_list, rr="TXT"):
                     if type(query_or_list) is not list:

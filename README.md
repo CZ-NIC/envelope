@@ -99,7 +99,7 @@ Launch as a CLI application in terminal, see `envelope --help`
 ```bash
 envelope --message "Hello world" \
                --output "/tmp/output_file" \
-               --sender "me@example.com" \
+               --from "me@example.com" \
                --to "remote_person@example.com" \
                --encrypt-path "/tmp/remote_key.asc"
 ```
@@ -109,7 +109,7 @@ Comfortable way to create the structure if your IDE supports autocompletion.
 from envelope import Envelope
 Envelope().message("Hello world")\
     .output("/tmp/output_file")\
-    .sender("me@example.com")\
+    .from_("me@example.com")\
     .to("remote_person@example.com")\
     .encrypt(key_path="/tmp/remote_key.asc")
 ```
@@ -121,7 +121,7 @@ You can easily write a one-liner function that encrypts your code or sends an e-
 from envelope import Envelope
 Envelope(message="Hello world",
         output="/tmp/output_file",
-        sender="me@example.com",
+        from_="me@example.com",
         to="remote_person@example.com",
         encrypt="/tmp/remote_key.asc")
 ```
@@ -212,19 +212,16 @@ Whenever any attainable contents is mentioned, we mean plain **text**, **bytes**
 ### Recipients
 * **from**: E-mail – needed to choose our key if encrypting.
     * **--from** E-mail. Empty to read value.
-    * **--sender** Alias for *--from* if not set. Otherwise, header "Sender" is appended.
-    * **--no-sender** Declare we want to encrypt and never decrypt back.
-    * **.from_(email)**: E-mail or False. If None, current `From` returned as an [Address](#address) object (even an empty one).
-    * **.sender(email)**: E-mail or False – an alias for *.from_*, will fill up `From` header. If `From` has already been set, this will fill `Sender` header. If None, current `Sender` returned as an [Address](#address) object (even an empty one).
-    * **Envelope(from_=)**: Sender e-mail or False to explicitly omit. When encrypting without sender, we do not use their key so that we will not be able to decipher again.       
-    * **Envelope(sender=)** *(see --sender)*
+    * **--no-from** Declare we want to encrypt and never decrypt back.
+    * **.from_(email)**: E-mail | False | None. If None, current `From` returned as an [Address](#address) object (even an empty one).
+    * **Envelope(from_=)**: Sender e-mail or False to explicitly omit. When encrypting without sender, we do not use their key so that we will not be able to decipher again.
     ```python3
     # These statements are identical.
     Envelope(from_="identity@example.com")    
-    Envelope(sender="identity@example.com")
+    Envelope().from_("identity@example.com")
   
     # This statement produces both From header and Sender header.
-    Envelope(from_="identity@example.com", sender="identity2@example.com")
+    Envelope(from_="identity@example.com", headers=[("Sender", "identity2@example.com")])
   
     # reading an Address object
     a = Envelope(from_="identity@example.com").from_()
@@ -443,11 +440,11 @@ Note that if neither *gpg* nor *smime* is specified, we try to determine the met
             * [Any attainable contents](#any-attainable-contents) with the key to be signed with (will be imported into keyring)
         * S/MIME: [Any attainable contents](#any-attainable-contents) with key to be signed with. May contain signing certificate as well.            
     * **--sign key**: (for `key` see above)
-    * **--sign-path**: Filename with the sender\'s private key. (Alternative to the `sign` parameter.)
+    * **--sign-path**: Filename with the From\'s private key. (Alternative to the `sign` parameter.)
     * **--passphrase**: Passphrase to the key if needed.
     * **--attach-key**: GPG: Blank for appending public key to the attachments when sending.
     * **--cert**: S/MIME: Certificate contents if not included in the key.
-    * **--cert-path**: S/MIME: Filename with the sender's private cert if cert not included in the key. (Alternative to the `cert` parameter.)
+    * **--cert-path**: S/MIME: Filename with the From's private cert if cert not included in the key. (Alternative to the `cert` parameter.)
     * **.sign(key=True, passphrase=, attach_key=False, cert=None, key_path=None)**: Sign now (and you may specify the parameters). (For `key` see above.)
     * **.signature(key=True, passphrase=, attach_key=False, cert=None, key_path=None)**: Sign later (when launched with *.sign()*, *.encrypt()* or *.send()* functions
     * **Envelope(sign=key)**: (for `key` see above)
@@ -522,14 +519,14 @@ Note that if neither *gpg* nor *smime* is specified, we try to determine the met
             Ex: whilst we have to use quoted-printable (as seen in __str__), here the output will be plain text.
     * **--preview**
     * **.preview()**
-  * **check**: Check all e-mail addresses and SMTP connection and return True/False if succeeded. Tries to find SPF, DKIM and DMARC DNS records depending on the sender's domain and print them out.
+  * **check**: Check all e-mail addresses and SMTP connection and return True/False if succeeded. Tries to find SPF, DKIM and DMARC DNS records depending on the From's domain and print them out.
     * **--check**
     * **.check(check_mx=True, check_smtp=True)**
         * `check_mx` E-mail addresses can be checked for MX record, not only for their format.  
         * `check_smtp` We try to connect to the SMTP host.
     
     ```bash
-    $ envelope --smtp localhost 25 --sender me@example.com --check 
+    $ envelope --smtp localhost 25 --from me@example.com --check 
     SPF found on the domain example.com: v=spf1 -all
     See: dig -t SPF example.com && dig -t TXT example.com
     DKIM found: ['v=DKIM1; g=*; k=rsa; p=...']
@@ -696,7 +693,7 @@ Sign and encrypt the message so that's decryptable by keys for me@example.com an
 ```python3 
 Envelope(message="Hello world", sign=True,
         encrypt=True,
-        sender="me@example.com",
+        from_="me@example.com",
         to="remote_person@example.com")
 ```
 
@@ -704,7 +701,7 @@ Sign and encrypt the message so that's decryptable by keys for me@example.com an
 ```python3 
 Envelope(message="Hello world", sign=True,
         encrypt=Path("/tmp/remote_key.asc"),
-        sender="me@example.com",
+        from_="me@example.com",
         to="remote_person@example.com")
 ```
 
@@ -876,7 +873,7 @@ envelope --message "Hello world" --subject "S/MIME signing test" --sign-path [ke
 ## DNS validation tools
 This is just a short explanation on these anti-spam mechanisms so that you can take basic notion what is going on.
 
-Every time, the receiver should ask the sender's domain these questions over DNS.  
+Every time, the receiver should ask the From's domain these questions over DNS.  
 
 ### SPF
 The receiver asks the sender's domain: Do you allow the senders IP/domain to send the e-mail on your behalf? Is the IP/domain the mail originates from enlisted as valid in the DNS of the SMTP envelope MAIL FROM address domain? 
@@ -886,7 +883,7 @@ Check your domain on SPF:
 dig -t TXT example.com
 ```
 
-SPF technology is tied to the SMTP envelope MAIL FROM address which is specified with the `.from_addr` method and then stored into the Return-Path header by the receiving server, and it has nothing in common with the headers like From `.from_`, Sender `.sender`, or Reply-To `.reply_to`. 
+SPF technology is tied to the SMTP envelope MAIL FROM address which is specified with the `.from_addr` method and then stored into the Return-Path header by the receiving server, and it has nothing in common with the headers like From `.from_`, Reply-To `.reply_to`, or Sender `.header("Sender")`. 
 
 ### DKIM
 The receiver asks the sender's domain: Give me the public key so that I may check the hash in the e-mail header that assert the message was composed by your private key. So that the e-mail comes trustworthy from you and nobody modified it on the way.

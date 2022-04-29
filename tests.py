@@ -725,7 +725,7 @@ class TestGPG(TestAbstract):
         bash(3, IDENTITY_1, (IDENTITY_2,), (), False)  # ring 3 has none
         bash(3, IDENTITY_1, (IDENTITY_2, IDENTITY_3), (key1_armored,))  # insert ID=1 into ring 3
         bash(3, IDENTITY_2, (IDENTITY_1,), (), False)  # ID=2 still misses in ring 3
-        bash(3, IDENTITY_2, (IDENTITY_1,), ("--no-sender",))  # --no-sender supress the need for ID=2
+        bash(3, IDENTITY_2, (IDENTITY_1,), ("--no-from",))  # --no-sender supress the need for ID=2
 
     def test_arbitrary_encrypt_with_signing(self):
         model = (Envelope(MESSAGE)
@@ -1001,10 +1001,10 @@ class TestRecipients(TestAbstract):
     def test_from(self):
         id1 = "identity-1@example.com"
         id2 = "identity-2@example.com"
-        self.check_lines(Envelope(MESSAGE).sender(id1),
-                         f"From: {id1}", not_in=f"Sender: {id1}")
-        self.check_lines(Envelope(MESSAGE, sender=id1),
-                         f"From: {id1}", not_in=f"Sender: {id1}")
+        self.check_lines(Envelope(MESSAGE).header("sender", id1),
+                         f"sender: {id1}", not_in=f"From: {id1}")
+        self.check_lines(Envelope(MESSAGE, headers=[("sender", id1)]),
+                         f"sender: {id1}", not_in=f"From: {id1}")
 
         self.check_lines(Envelope(MESSAGE, from_=id1),
                          f"From: {id1}", not_in=f"Sender: {id1}")
@@ -1013,10 +1013,10 @@ class TestRecipients(TestAbstract):
 
         self.check_lines(Envelope(MESSAGE)
                          .from_(id1)
-                         .sender(id2),
+                         .header("Sender", id2),
                          (f"From: {id1}", f"Sender: {id2}"))
         self.check_lines(Envelope(MESSAGE)
-                         .sender(id2)
+                         .header("Sender", id2)
                          .from_(id1),
                          (f"From: {id1}", f"Sender: {id2}"))
 
@@ -1119,22 +1119,21 @@ class TestRecipients(TestAbstract):
         """ Be sure to receive an address even if the header misses. """
         e1 = Envelope.load("Empty message")
         self.assertTrue(isinstance(e1.from_(), Address))
-        self.assertTrue(isinstance(e1.sender(), Address))
         self.assertTrue(isinstance(e1.to(), list))
         self.assertTrue(isinstance(e1.cc(), list))
         self.assertTrue(isinstance(e1.bcc(), list))
         self.assertTrue(isinstance(e1.reply_to(), list))
 
         self.assertFalse(e1.from_())
-        self.assertFalse(e1.sender())
 
         self.assertEqual("", e1.from_().address)
-        self.assertEqual("", e1.sender().host)
 
         e2 = Envelope.load("From: test@example.com\n\nEmpty message")
         self.assertTrue(isinstance(e2.from_(), Address))
         self.assertTrue(e2.from_())
-        self.assertFalse(e2.sender())
+        self.assertTrue(e2.header("from"))
+        self.assertTrue(e2.header("From"))
+        self.assertFalse(e2.header("sender"))
         self.assertEqual("", e2.from_().name)
 
         e3 = Envelope.load("From: Person <test@example.com>\n\nEmpty message")
