@@ -1208,18 +1208,14 @@ class Envelope:
             # see the module's documentation for alternative uses import imp
             warnings.simplefilter("ignore", category=DeprecationWarning)
             try:
-                from M2Crypto import BIO, Rand, SMIME, X509, EVP  # we save up to 30 - 120 ms to load it here
+                from M2Crypto import BIO, SMIME, X509, EVP  # we save up to 30 - 120 ms to load it here
             except ImportError:
                 # noinspection PyPep8Naming
-                BIO = Rand = SMIME = X509 = EVP = None
+                BIO = SMIME = X509 = EVP = None
                 raise ImportError(smime_import_error)
         output_buffer = BIO.MemoryBuffer()
         signed_buffer = BIO.MemoryBuffer()
         content_buffer = BIO.MemoryBuffer(email)
-
-        # Seed the PRNG.
-        temp = str(Path(tempfile.gettempdir(), 'envelope-randpool.dat'))
-        Rand.load_file(temp, -1)
 
         # Instantiate an SMIME object.
         smime = SMIME.SMIME()
@@ -1263,7 +1259,6 @@ class Envelope:
             p7 = smime.encrypt(content_buffer)
             smime.write(output_buffer, p7)
 
-        Rand.save_file(temp)
         return output_buffer.read()
 
     def _compose_gpg_signed(self, email, text, micalg=None):

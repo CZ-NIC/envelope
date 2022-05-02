@@ -8,6 +8,7 @@
 - CHANGED: Optional parameter "email_or_list" renamed to "email_or_more" (methods `to` and friends)
   - When setting recipients, apart from list other iterables (tuple, generator, set, ...) may be used
 - fix: when signing key fails, do not sign with the default GPG private key
+- S/MIME insecure Rand PRNG removed #18
 
 ## 1.5.4 (2022-04-04)
 - disable validate_email module blacklist updater #17
