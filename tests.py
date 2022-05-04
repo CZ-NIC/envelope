@@ -29,10 +29,6 @@ MESSAGE = "dumb message"
 environ["GNUPGHOME"] = GNUPG_HOME
 
 
-# def save(s):  # XX may be removed when all testing-related cipher-file are produced
-#    Path("/tmp/ram/" + inspect.stack()[1][3] + ".eml").write_text(str(s))
-
-
 class TestAbstract(TestCase):
     utf_header = Path("tests/eml/utf-header.eml")  # the file has encoded headers
     charset = Path("tests/eml/charset.eml")  # the file has encoded headers
