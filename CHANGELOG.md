@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 2.0.1
+- fix #24 stable locale
+
 ## 2.0.0 (2022-05-04)
 - CHANGED: `Envelope(sender=).sender()` alias REMOVED because to the unambiguous naming clash between the `From` and the `Sender` e-mail header. Use `Envelope().from_(...)` and `Envelope().header("Sender", ...)` instead. Pity that 'from' is a reserved keyword, "from_" looks bad.
 - CHANGED: `Envelope.default` instance REMOVED because explicit is better than implicit. For setting defaults use `Envelope().copy()` instead 

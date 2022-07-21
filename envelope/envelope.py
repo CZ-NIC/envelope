@@ -5,7 +5,6 @@ import re
 import smtplib
 import subprocess
 import sys
-import tempfile
 import warnings
 from base64 import b64decode
 from configparser import ConfigParser
@@ -17,6 +16,7 @@ from email.parser import BytesParser
 from email.utils import make_msgid, formatdate, getaddresses
 from getpass import getpass
 from itertools import chain
+from os import environ
 from pathlib import Path
 from quopri import decodestring
 from types import GeneratorType
@@ -24,7 +24,7 @@ from typing import Union, List, Set, Optional, Any
 
 import magic
 
-from .constants import smime_import_error, gnupg, CRLF, AUTO, PLAIN, HTML, SIMULATION
+from .constants import smime_import_error, gnupg, CRLF, AUTO, PLAIN, HTML, SIMULATION, SAFE_LOCALE
 from .parser import Parser
 from .utils import Address, Attachment, AutoSubmittedHeader, SMTPHandler, _Message, \
     is_gpg_importable_key, assure_list, assure_fetched
@@ -996,6 +996,7 @@ class Envelope:
             if gpg_on:
                 self._gnupg = gnupg.GPG(gnupghome=self._get_gnupg_home(), options=["--trust-model=always"],
                                         # XX trust model might be optional
+                                        env=dict(environ, LC_ALL=SAFE_LOCALE),
                                         verbose=False) if sign or encrypt else None
                 # assure `sign` become either fingerprint of an imported key or None
                 if sign:
@@ -1495,7 +1496,8 @@ class Envelope:
                         query_or_list = [query_or_list]
                     for query in query_or_list:
                         try:
-                            text = subprocess.check_output(["dig", "-t", rr, query]).decode("utf-8")
+                            text = subprocess.check_output(["dig", "-t", rr, query],
+                                                           env=dict(environ, LC_ALL=SAFE_LOCALE)).decode("utf-8")
                             text = text[text.find("ANSWER SECTION:"):]
                             text = text[:text.find(";;")].split("\n")[1:-2]
                             res = []

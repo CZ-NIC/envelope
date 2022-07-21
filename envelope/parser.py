@@ -1,9 +1,10 @@
 import logging
 from email import header, message_from_string, message_from_bytes
 from email.message import Message
+from os import environ
 from typing import List
 
-from .constants import smime_import_error, gnupg, PLAIN, HTML
+from .constants import smime_import_error, gnupg, PLAIN, HTML, SAFE_LOCALE
 
 logger = logging.getLogger(__name__)
 
@@ -91,7 +92,7 @@ class Parser:
         return self.e
 
     def gpg_decrypt(self, data):
-        g = gnupg.GPG(gnupghome=self.gnupg_home)
+        g = gnupg.GPG(gnupghome=self.gnupg_home, env=dict(environ, LC_ALL=SAFE_LOCALE))
         output = g.decrypt(data)
         if output.ok:
             return str(output)

@@ -1278,7 +1278,8 @@ class TestSupportive(TestAbstract):
         self.assertEqual(e.get_payload(), "hello\n")
 
     def test_smtp_quit(self):
-        """ Calling .smtp_quit() object closes only its current SMTP connection, calling on closes closes them all."""
+        """ Calling .smtp_quit() on an object closes only its current SMTP connection,
+            calling on the class closes them all."""
         if (sys.version_info.major, sys.version_info.minor) < (3, 7):
             # In Python3.6, sorting of dict seemed not to be stable for the case of SMTP.key.
             # The frozen dict of SMTP.key had parameters sorted differently than here in key(name),
@@ -1617,7 +1618,9 @@ class TestTransfer(TestBash):
         self._quoted_message(Envelope.load(f"Content-Transfer-Encoding: quoted-printable\n\n{self.quoted}"))
 
     def test_quoted_printable_bash(self):
-        """ Envelope is able to load the text that is already quoted in a file. """
+        """ Envelope is able to load the text that is already quoted in a file.
+            As long_text contains non-ASCII characters, it tests the program locale also.
+            In Python3.6, the locale LC_ALL=C fails. """
         self.assertEqual(self.long_text, self.bash("--message", file=self.quopri))
 
     def test_base64(self):
