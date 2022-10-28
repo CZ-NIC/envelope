@@ -1326,7 +1326,7 @@ class Envelope:
             if mime == AUTO:
                 if html:
                     mime = PLAIN
-                elif magic.Magic(mime=True).from_buffer(t) == "text/html" \
+                elif magic.detect_from_content(t).mime_type == "text/html" \
                         or any(x for x in ("<br", "<b>", "<i>", "<p", "<img") if x in t):
                     # magic will determine a short text is HTML if there is '<a href=' but a mere '<br>' is not sufficient.
                     mime = HTML

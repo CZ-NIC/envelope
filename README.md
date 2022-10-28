@@ -71,8 +71,14 @@ sudo apt install swig
 pip3 install M2Crypto
 ```
 * Install with a single command from [PyPi](https://pypi.org/project/envelope/)
-    ```bash 
-    pip3 install envelope
+    * envelope supports both python-magic and file-magic (which share the same namespace). You must choose which
+        you have to specify either one when installing envelope.
+
+    ```bash
+    # for python-magic support, use the following command
+    pip3 install envelope[python-magic]
+    # for file-magic support, use the following command
+    pip3 install envelope[file-magic]
     ```
     * Or install current GitHub master
     ```bash

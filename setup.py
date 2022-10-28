@@ -32,7 +32,9 @@ setup(
     long_description_content_type="text/markdown",
     install_requires=install_requires,
     extras_require={
-        "smime": "M2Crypto"  # need to have: `sudo apt install swig`
+        "smime": "M2Crypto",  # need to have: `sudo apt install swig`
+        "file-magic": "file-magic",
+        "python-magic": "python-magic>=0.4.20"
     },
     entry_points={
         'console_scripts': [
