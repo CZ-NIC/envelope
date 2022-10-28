@@ -22,7 +22,7 @@ class Address(str):
     """
         You can safely access the `self.name` property to access the real name and `self.address` to access the e-mail address.
         Example: Address("John <person@example.com>") -> self.name = "John", self.address = "person@example.com"
-
+        
         Similarly, there are `self.user` and `self.host` properties.
         Example: -> self.user= "person", self.host = "example.com"
 
@@ -32,7 +32,7 @@ class Address(str):
         Address objects are equal if their e-mail address are equal. (Their real names might differ.)
         Address object is equal to a string if the string contains its e-mail address or the whole representation.
         Example: "person@example.com" == Address("John <person@example.com>") == "John <person@example.com>"  # True
-
+        
         Method casefold returns casefolded object, useful for string comparing (whereas it is still equal to the original object).
         Example Address("John <person@example.com>").casefold() -> self.name == "john"
 
