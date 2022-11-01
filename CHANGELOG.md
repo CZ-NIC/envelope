@@ -1,10 +1,8 @@
 # CHANGELOG
 
-## 2.0.2
-- Use file-magic compatibility layer in python-magic (#25).
-
 ## 2.0.1
 - fix #24 stable locale
+- allow `file-magic` instead of `python-magic` package be installed on the system (#25)
 
 ## 2.0.0 (2022-05-04)
 - CHANGED: `Envelope(sender=).sender()` alias REMOVED because to the unambiguous naming clash between the `From` and the `Sender` e-mail header. Use `Envelope().from_(...)` and `Envelope().header("Sender", ...)` instead. Pity that 'from' is a reserved keyword, "from_" looks bad.

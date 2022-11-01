@@ -22,12 +22,10 @@ from quopri import decodestring
 from types import GeneratorType
 from typing import Union, List, Set, Optional, Any
 
-import magic
-
 from .constants import smime_import_error, gnupg, CRLF, AUTO, PLAIN, HTML, SIMULATION, SAFE_LOCALE
 from .parser import Parser
 from .utils import Address, Attachment, AutoSubmittedHeader, SMTPHandler, _Message, \
-    is_gpg_importable_key, assure_list, assure_fetched
+    is_gpg_importable_key, assure_list, assure_fetched, get_mimetype
 
 __doc__ = """Quick layer over python-gnupg, M2Crypto, smtplib, magic and email handling packages.
 Their common use cases merged into a single function. Want to sign a text and tired of forgetting how to do it right?
@@ -693,7 +691,7 @@ class Envelope:
         Obtain SMTP server connection.
         Note that you may safely call this in a loop,
             envelope will remember the settings and connect only once (without reconnecting every iteration).
-        :param host: hostname, smtplib.SMTP or INI file path
+        :param host: hostname, smtplib.SMTP, INI file path, or a list or dict with the parameters (see README.md)
         :param port:
         :param user:
         :param password:
@@ -1326,7 +1324,7 @@ class Envelope:
             if mime == AUTO:
                 if html:
                     mime = PLAIN
-                elif magic.detect_from_content(t).mime_type == "text/html" \
+                elif get_mimetype(data=t) == "text/html" \
                         or any(x for x in ("<br", "<b>", "<i>", "<p", "<img") if x in t):
                     # magic will determine a short text is HTML if there is '<a href=' but a mere '<br>' is not sufficient.
                     mime = HTML

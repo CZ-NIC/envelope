@@ -74,11 +74,6 @@ pip3 install M2Crypto
     ```bash 
     pip3 install envelope
     ```
-    **Note**: envelope has a dependency on python-magic, but uses the file-magic compatibility layer in python-magic
-    which makes it compatible with file-magic as well.
-    Due to a [well-known](https://github.com/ahupp/python-magic/blob/master/COMPAT.md) name clash with the file-magic
-    library, in case you need to use the latter, don't worry to run `pip uninstall python-magic && pip install file-magic`
-    after installing envelope.
 
     * Or install current GitHub master
     ```bash
@@ -87,10 +82,8 @@ pip3 install M2Crypto
     * Or just download the project and launch `python3 -m envelope`
 * If planning to send e-mails, prepare SMTP credentials or visit [Configure your SMTP](#configure-your-smtp) tutorial.
 * If your e-mails are to be received outside your local domain, visit [DMARC](#dmarc) section.
-* If planning to sign/encrypt with GPG, install the corresponding package and possibly see [Configure your GPG](#configure-your-gpg) tutorial.
-```bash
-sudo apt install gpg
-```
+* If planning to sign/encrypt with GPG, assure you have it on the system with `sudo apt install gpg` and possibly see [Configure your GPG](#configure-your-gpg) tutorial.
+* Package [python-magic](https://pypi.org/project/python-magic/) is used as a dependency. Due to a [well-known](https://github.com/ahupp/python-magic/blob/master/COMPAT.md) name clash with the [file-magic](https://pypi.org/project/file-magic/) package, in case you need to use the latter, don't worry to run `pip uninstall python-magic && pip install file-magic` after installing envelope which is fully compatible with both projects.   
 
 ## Bash completion
 1. Run: apt-get install bash-completion jq

@@ -14,7 +14,7 @@ from unittest import main, TestCase
 from envelope import Envelope
 from envelope.constants import AUTO, PLAIN, HTML
 from envelope.parser import Parser
-from envelope.utils import Address, SMTPHandler, assure_list, assure_fetched
+from envelope.utils import Address, SMTPHandler, assure_list, assure_fetched, get_mimetype
 
 logging.basicConfig(stream=sys.stderr, level=logging.WARNING)
 
@@ -991,6 +991,25 @@ Third
 
         # but in the moment we set all three and call send or preview, we should fail
         self.assertRaises(ValueError, e1.copy().message("Test", alternative="html").preview)
+
+    def test_libmagic(self):            
+        """" Should pass with either python-magic or file-magic library installed on the system #25 """
+        # directly test get_mimetype layer
+        self.assertEqual("text/html", get_mimetype(data=b"<!DOCTYPE html>hello"))
+        self.assertEqual("image/gif", get_mimetype(path=self.image_file))
+
+        # test get_mimetype in the action while dealing attachments
+        e = (Envelope()
+             .attach("hello", "text/plain")
+             .attach(b"hello bytes")
+             .attach(Path("tests/gpg_ring/trustdb.gpg"))
+             .attach(b"<!DOCTYPE html>hello")
+             .attach("<!DOCTYPE html>hello")
+             .attach(self.image_file))
+        self.assertListEqual(["text/plain", "text/plain", "application/octet-stream",
+                             "text/html", "text/html", "image/gif"],
+                             [a.mimetype for a in e.attachments()])
+
 
 
 class TestRecipients(TestAbstract):

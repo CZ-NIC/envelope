@@ -8,7 +8,7 @@ from pathlib import Path
 from smtplib import SMTP, SMTP_SSL, SMTPAuthenticationError, SMTPException, SMTPSenderRefused
 from socket import gaierror, timeout as timeout_exc
 from time import sleep
-from typing import Union, Dict, Type, Iterable
+from typing import Tuple, Union, Dict, Type, Iterable
 
 import magic
 
@@ -194,9 +194,9 @@ class Attachment:
             raise
         if not mimetype:
             if isinstance(contents, Path):
-                mimetype = magic.detect_from_filename(str(contents)).mime_type
+                mimetype = get_mimetype(path=contents)
             else:
-                mimetype = magic.detect_from_content(contents).mime_type
+                mimetype = get_mimetype(data=data)            
 
         self.data: bytes = data
         self.mimetype = mimetype
@@ -271,7 +271,7 @@ class _Message:
             val = str(val)
         return val
 
-    def get(self, type_: Union[Type[bytes], Type[str]] = bytes) -> (Union[bytes, str, None], Union[bytes, str, None]):
+    def get(self, type_: Union[Type[bytes], Type[str]] = bytes) -> Tuple[Union[bytes, str, None], Union[bytes, str, None]]:
         """
         :param type_: Set to str if we should return str instead of bytes.
          Note it raises a warning if bytes were not in Unicode.
@@ -397,6 +397,22 @@ def is_gpg_importable_key(key):
      (it may contain a fingerprint or an e-mail address too) """
     return len(key) >= 512  # 512 is the smallest possible GPG key
 
+
+def get_mimetype(data:bytes=None, path:Path=None):
+    """ We support both python-magic and file-magic library, any of them can be on the system. #25
+        Their funcionality is the same, their API differs.
+    """
+    # XX change to match statement as of Python3.10
+    if hasattr(magic.Magic, "from_file"):  # this is python-magic
+        if data:
+            return magic.Magic(mime=True).from_buffer(data)
+        if path:
+            return magic.Magic(mime=True).from_file(str(path))
+    else:  # this is file-magic
+        if data:
+            return magic.detect_from_content(data).mime_type
+        if path:
+            return magic.detect_from_filename(str(path)).mime_type
 
 def assure_list(v):
     """ Accepts object and returns list.
