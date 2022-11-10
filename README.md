@@ -71,7 +71,6 @@ sudo apt install swig
 pip3 install M2Crypto
 ```
 * Install with a single command from [PyPi](https://pypi.org/project/envelope/)
-
     ```bash
     pip3 install envelope
     ``` 
