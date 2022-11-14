@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 2.0.2
+- Use file-magic compatibility layer in python-magic (#25).
+
 ## 2.0.1
 - fix #24 stable locale
 

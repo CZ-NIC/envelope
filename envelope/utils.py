@@ -193,8 +193,10 @@ class Attachment:
             logger.error(f"Could not fetch file {contents.absolute()}")
             raise
         if not mimetype:
-            m = magic.Magic(mime=True)
-            mimetype = m.from_file(str(contents)) if isinstance(contents, Path) else m.from_buffer(contents)
+            if isinstance(contents, Path):
+                mimetype = magic.detect_from_filename(str(contents)).mime_type
+            else:
+                mimetype = magic.detect_from_content(contents).mime_type
 
         self.data: bytes = data
         self.mimetype = mimetype
