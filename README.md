@@ -86,8 +86,8 @@ pip3 install M2Crypto
 * Package [python-magic](https://pypi.org/project/python-magic/) is used as a dependency. Due to a [well-known](https://github.com/ahupp/python-magic/blob/master/COMPAT.md) name clash with the [file-magic](https://pypi.org/project/file-magic/) package, in case you need to use the latter, don't worry to run `pip uninstall python-magic && pip install file-magic` after installing envelope which is fully compatible with both projects.   
 
 ## Bash completion
-1. Run: apt-get install bash-completion jq
-2. Copy: extra/convey-autocompletion.bash to /etc/bash_completion.d/
+1. Run: `apt install bash-completion jq`
+2. Copy: [extra/convey-autocompletion.bash](extra/convey-autocompletion.bash) to `/etc/bash_completion.d/`
 3. Restart terminal
 
 # Usage
@@ -538,6 +538,7 @@ Note that if neither *gpg* nor *smime* is specified, we try to determine the met
      e = Envelope("hello").as_message()
      print(type(e), e.get_payload())  # <class 'email.message.EmailMessage'> hello\n 
      ```
+     Note: due to a bug in a standard Python library https://github.com/python/cpython/issues/99533 and #19 you void GPG when you access the message this way wihle signing an attachment with a name longer than 34 chars.
   * **load**: Parse [any attainable contents](#any-attainable-contents) (including email.message.Message) like an EML file to build an Envelope object.
      * It can decrypt the message and parse its (inline or enclosed) attachments.
      * Note that if you will send this reconstructed message, you might not probably receive it due to the Message-ID duplication. Delete at least Message-ID header prior to re-sending. 

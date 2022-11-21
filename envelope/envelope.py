@@ -5,12 +5,15 @@ import re
 import smtplib
 import subprocess
 import sys
+from tempfile import NamedTemporaryFile
+from unittest import mock
 import warnings
 from base64 import b64decode
 from configparser import ConfigParser
 from copy import deepcopy
 from email import message_from_bytes
 from email.header import decode_header
+from email.generator import Generator
 from email.message import EmailMessage, Message
 from email.parser import BytesParser
 from email.utils import make_msgid, formatdate, getaddresses
@@ -159,7 +162,9 @@ class Envelope:
     def _get_result_str(self):
         """ concatenate output string """
         if not self._result_cache:
-            s = "\n".join(str(r) for r in self._result)
+            with mock.patch.object(Generator, '_handle_multipart_signed', Generator._handle_multipart):
+                # https://github.com/python/cpython/issues/99533 and #19
+                s = "\n".join(str(r) for r in self._result)
             self._result_cache = s  # slightly quicker next time if ever containing a huge amount of lines
         return self._result_cache
 
@@ -173,6 +178,8 @@ class Envelope:
     def as_message(self) -> Message:
         """
         :return: Message object is S/MIME is used, EmailMessage otherwise.
+        Note: due to an internal Python bug https://github.com/python/cpython/issues/99533 and #19
+        you receive void GPG when signing an attachment with a name longer than 34 chars.
         """
         self._result_fresh()
         for el in self._result:
@@ -318,14 +325,14 @@ class Envelope:
         self._mime = AUTO
         self._nl2br = AUTO
         self._headers = EmailMessage()  # object for storing headers the most standard way possible
-        self._ignore_date = False
+        self._ignore_date : bool = False
 
         # variables defined while processing
-        self._status = False  # whether we successfully encrypted/signed/send
-        self._processed = False  # prevent the user from mistakenly call .sign().send() instead of .signature().send()
-        self._result = []  # text output for str() conversion
-        self._result_cache = None
-        self._result_cache_hash = None
+        self._status : bool = False  # whether we successfully encrypted/signed/send
+        self._processed : bool = False  # prevent the user from mistakenly call .sign().send() instead of .signature().send()
+        self._result : List[Union[str, EmailMessage, Message]] = []  # text output for str() conversion
+        self._result_cache : Optional[str] = None
+        self._result_cache_hash : Optional[int] = None
         self._smtp = SMTPHandler()
         self.auto_submitted = AutoSubmittedHeader(self)  # allows fluent interface to set header
 
@@ -930,7 +937,7 @@ class Envelope:
         encrypt, sign, gpg_on = self._determine_gpg(encrypt, sign)
 
         # if we plan to send later, convert text message to the email message object
-        email = None
+        email : Optional[Union[str, EmailMessage, Message]] = None
         if send is not None or html:  # `html` means the user wants a 'multipart/alternative' e-mail message
             email = self._prepare_email(plain, html, encrypt and gpg_on, sign and gpg_on, sign)
             if not email:
@@ -1084,9 +1091,11 @@ class Envelope:
             email["Message-ID"] = make_msgid()
 
         if send and send != SIMULATION:
-            failures = self._smtp.send_message(email,
-                                               from_addr=self._from_addr,
-                                               to_addrs=list(map(str, set(self._to + self._cc + self._bcc))))
+            with mock.patch.object(Generator, '_handle_multipart_signed', Generator._handle_multipart):
+                # https://github.com/python/cpython/issues/99533 and #19
+                failures = self._smtp.send_message(email,
+                                                from_addr=self._from_addr,
+                                                to_addrs=list(map(str, set(self._to + self._cc + self._bcc))))
             if failures:
                 logger.warning(f"Unable to send to all recipients: {repr(failures)}.")
             elif failures is False:
@@ -1190,6 +1199,18 @@ class Envelope:
 
     def _gpg_list_keys(self, secret=False):
         return ((key, address) for key in self._gnupg.list_keys(secret) for _, address in getaddresses(key["uids"]))
+
+    def _gpg_verify(self, signature:bytes, data:bytes):
+        """ Allows verifying detached GPG signature.
+        * As parameters are not user-friendly
+        * it is not trivial to get them from an arbitrary message
+        * no possibility to specify the key
+        the method may change. Therefore, it is not considered public.
+         """
+        with NamedTemporaryFile() as fp:
+            fp.write(signature)
+            fp.seek(0)            
+            return bool(self._gnupg.verify_data(fp.name, data))
 
     def _get_decipherers(self) -> Set[str]:
         """

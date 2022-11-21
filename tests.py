@@ -1,4 +1,6 @@
+from email.generator import Generator
 import logging
+import re
 import sys
 from base64 import b64encode
 from contextlib import redirect_stdout
@@ -9,7 +11,7 @@ from pathlib import Path
 from subprocess import PIPE, STDOUT, Popen
 from tempfile import TemporaryDirectory
 from typing import Tuple, Union
-from unittest import main, TestCase
+from unittest import main, TestCase, mock
 
 from envelope import Envelope
 from envelope.constants import AUTO, PLAIN, HTML
@@ -876,7 +878,8 @@ class TestGPG(TestAbstract):
                          result=True)
 
     def test_signed_gpg(self):
-        # XX we might test signature verification
+        # XX we should test signature verification with e._gpg_verify(),
+        # however .load does not load application/pgp-signature content at the moment
         e = Envelope.load(path="tests/eml/test_signed_gpg.eml")
         self.assertEqual(MESSAGE, e.message())
 
@@ -925,6 +928,61 @@ class TestGPG(TestAbstract):
         always_visible = ref.subject(subject, encrypted=False).as_message().as_string()  # do not encrypt the subject
         self.assertIn(subject, always_visible)
         self.assertIn(subject, Envelope.load(always_visible).as_message().as_string())
+
+    def test_long_attachment_filename(self):
+        """
+        When whole message gets output, Message.as_string() produces this (unfold header):
+            Content-Type: text/plain
+            Content-Transfer-Encoding: base64
+            Content-Disposition: attachment; filename="AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+            MIME-Version: 1.0
+
+        When only part of the message gets output, Message.get_payload()[0].as_string() produces this (fold header):
+            Content-Type: text/plain
+            Content-Transfer-Encoding: base64
+            Content-Disposition: attachment;
+            filename="AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+            MIME-Version: 1.0
+        
+        This behaviour is observed when GPG signing attachments with file names longer than 34 chars.
+        Envelope corrects this behaviour when sending or outputting.
+        However, if the user uses Envelope.as_message(), its gets the underlying Message without the correction with GPG void.
+        See #19 and https://github.com/python/cpython/issues/99533
+        """
+        e=(Envelope(MESSAGE)
+            .to(IDENTITY_2)
+            .gpg(GNUPG_HOME)
+            .from_(IDENTITY_1)
+            .signature("3C8124A8245618D286CF871E94CE2905DB00CDB7", GPG_PASSPHRASE)
+            .attach("some data",name="A"*35))
+
+        def verify_inline_message(txt: str):
+            boundary =re.search(r'boundary="(.*)"', txt).group(1)
+            reg = fr'{boundary}.*{boundary}\n(.*)\n--{boundary}.*(-----BEGIN PGP SIGNATURE-----.*-----END PGP SIGNATURE-----)'
+            m = re.search(reg, txt, re.DOTALL)
+            return e._gpg_verify(m[2].encode(), m[1].encode())
+        
+
+        # accessing via standard email package with get_payload called on different parts keeps signature
+        sig = e.as_message().get_payload()[1].get_payload().encode()
+        data = e.as_message().get_payload()[0].as_bytes()
+        self.assertTrue(e._gpg_verify(sig, data))
+
+        # accessing via standard email package on the whole message does not keep signature
+        # When this test fails it means the Python package was corrected. Good news! Let's get rid of #19 mocking.
+        self.assertFalse(verify_inline_message(e.as_message().as_string()))
+
+        # envelope corrects this behaviour when accessed via bytes
+        self.assertTrue(verify_inline_message(bytes(e).decode()))
+
+        # envelope corrects this behaviour when accessed via str
+        self.assertTrue(verify_inline_message(str(e)))
+
+        # envelope corrects this behaviour when sending
+        def check_sending(o, email, **_):
+            self.assertTrue(verify_inline_message(e.as_message().as_string()))
+        with mock.patch.object(SMTPHandler, 'send_message', check_sending):
+            e.send()
 
 
 class TestMime(TestAbstract):

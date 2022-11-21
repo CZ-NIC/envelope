@@ -8,7 +8,7 @@ from pathlib import Path
 from smtplib import SMTP, SMTP_SSL, SMTPAuthenticationError, SMTPException, SMTPSenderRefused
 from socket import gaierror, timeout as timeout_exc
 from time import sleep
-from typing import Tuple, Union, Dict, Type, Iterable
+from typing import Optional, Tuple, Union, Dict, Type, Iterable
 
 import magic
 
@@ -257,10 +257,10 @@ class AutoSubmittedHeader:
 
 
 class _Message:
-    auto: bytes = None
-    plain: bytes = None
-    html: bytes = None
-    boundary: str = None  # you may specify e-mail boundary used when multiple alternatives present
+    auto: Optional[bytes] = None
+    plain: Optional[bytes] = None
+    html: Optional[bytes] = None
+    boundary: Optional[str] = None  # you may specify e-mail boundary used when multiple alternatives present
 
     def _decode(self, val, mime_alternative):
         try:
@@ -282,6 +282,19 @@ class _Message:
         if next(i, False):
             raise ValueError("Specified all of message alternative=plain, alternative=html and alternative=auto,"
                              " choose only two.")
+
+        # XX As of Python3.10 replace with longer but more readable:
+        # plain, html = self.plain, self.html
+        # if self.auto:
+            # match bool(plain), bool(html):
+            #     case False, _:
+            #         plain = auto
+            #     case _, False:
+            #         html = auto
+            #     case _:
+        #             raise ValueError("Specified all of message alternative=plain, alternative=html and alternative=auto,"
+        #                      " choose only two.")
+
 
         if type_ is str:
             if plain:
