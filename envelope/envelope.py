@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import binascii
+from json import loads
 import logging
 import re
 import smtplib
@@ -25,7 +26,7 @@ from quopri import decodestring
 from types import GeneratorType
 from typing import Union, List, Set, Optional, Any
 
-from .constants import smime_import_error, gnupg, CRLF, AUTO, PLAIN, HTML, SIMULATION, SAFE_LOCALE
+from .constants import ISSUE_LINK, smime_import_error, gnupg, CRLF, AUTO, PLAIN, HTML, SIMULATION, SAFE_LOCALE
 from .parser import Parser
 from .utils import Address, Attachment, AutoSubmittedHeader, SMTPHandler, _Message, \
     is_gpg_importable_key, assure_list, assure_fetched, get_mimetype
@@ -335,6 +336,8 @@ class Envelope:
         self._result_cache_hash : Optional[int] = None
         self._smtp = SMTPHandler()
         self.auto_submitted = AutoSubmittedHeader(self)  # allows fluent interface to set header
+        
+        self._multipart_report_message: Optional[Message] = None
 
         # init parameters with appropriate methods
         self._populate(locals())
@@ -1326,6 +1329,7 @@ class Envelope:
         msg_text = EmailMessage()
         # XX make it possible to be "plain" here + to have "plain" as the automatically generated html for older browsers
         # XX Should we assure it ends on CRLF? b"\r\n".join(text.splitlines()).decode("utf-8")
+        #   (or rather by EmailMessage(policy)
         if "MIME-Version" in self._headers:
             msg_text["MIME-Version"] = self._headers["MIME-Version"]
         if "Content-Type" not in self._headers:
@@ -1473,6 +1477,21 @@ class Envelope:
             self._bcc.clear()
             return self
         return {x for x in set(self._to + self._cc + self._bcc)}
+
+    def _report(self) -> Union[dict, None]:
+        """ Experimental API, hence private.
+            Works just for reading XARF reports.
+            Writing might be implemented.
+        """
+        if not self._multipart_report_message:
+            return False
+        
+        # reading XARF report http://xarf.org/
+        if dict(self._multipart_report_message.get_payload()[0]).get('Feedback-Type') == "xarf":
+            return loads(self.attachments("xarf.json").data)
+
+        raise NotImplemented("Current multipart/report has not been impemented."
+                             f"Please post current message as a new issue at {ISSUE_LINK}")
 
     def attachments(self, name=None, inline=None) -> Union[Attachment, List[Attachment], bool]:
         """ Access the attachments.

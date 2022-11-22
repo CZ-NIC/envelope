@@ -1,4 +1,5 @@
 from email.generator import Generator
+from email.utils import getaddresses, parseaddr
 import logging
 import re
 import sys
@@ -1149,6 +1150,21 @@ class TestRecipients(TestAbstract):
         self.assertEqual(c.name, "person")
         self.assertNotEqual(c.name, contact.name)
 
+    def test_addresses_with_at_sign(self):
+        disguise_addr = "first@example.cz <second@example.com>"
+        # These checks represent the email.utils behaviour that I consider buggy. 
+        # If any of these tests fails, it's a good message the underlying Python libraries are better
+        # and we may stop remedying.
+        # https://github.com/python/cpython/issues/40889#issuecomment-1094001067
+        self.assertEqual(('', 'first@example.cz'), parseaddr(disguise_addr))
+        self.assertEqual([('', 'first@example.cz'), ('', 'second@example.com')],
+         getaddresses([disguise_addr]))
+        self.assertEqual([('', 'person@example.com'), ('', 'person@example.com')],
+         getaddresses(["person@example.com <person@example.com>"]))
+
+         # XX We may remedy some of such behaviour. Better would be to fix up the Python library
+         # which seems a big task.
+
     def test_removing_contact(self):
         contact = "Person2 <person2@example.com>"
 
@@ -1729,6 +1745,42 @@ class TestSMTP(TestAbstract):
         self.assertSubset(Envelope().smtp(timeout=5)._smtp.__dict__, {"timeout": 5})
         self.assertSubset(Envelope().smtp("tests/smtp-configuration.ini")._smtp.__dict__,
                           {"timeout": 3, "user": "envelope-example-identity@example.com", "password": "", "port": 123})
+
+
+class TestReport(TestAbstract):
+    xarf = Path("tests/eml/multipart-report-xarf.eml")
+    
+    def test_loading_xarf(self):
+        # no report in an empty object
+        self.assertFalse(Envelope()._report())
+                
+        # expected XARF report
+        e = Envelope.load(self.xarf)        
+        report = e._report()
+        self.assertSubset(report["ReporterInfo"], {"ReporterOrg": 'Example'})
+        self.assertSubset(report["Report"], {'SourceIp': '192.0.2.1'})        
+
+    def test_unsupported_message(self):
+        # only `Content-Type: message/feedback-report` is implemented within `multipart/report``
+        t = self.xarf.read_text().replace("Content-Type: message/feedback-report", 
+                                          "Content-Type: message/UNSUPPORTED")
+        msg = "WARNING:envelope.envelope:Message might not have been loaded correctly. " \
+                "Parsing multipart/report / message/unsupported not implemented."
+        with self.assertLogs('envelope', level='WARNING') as cm:
+            Envelope.load(t)
+        self.assertEqual(cm.output, [msg])
+
+        # `Content-Type: message` is not implemented within `multipart/mixed`
+        msg = "WARNING:envelope.envelope:Message might not have been loaded correctly. "\
+                "Parsing multipart/mixed / message/feedback-report failed or not implemented."
+        t = self.xarf.read_text().replace("Content-Type: multipart/report", 
+                                     "Content-Type: multipart/mixed")
+        with self.assertLogs('envelope', level='WARNING') as cm:
+            Envelope.load(t)
+        self.assertEqual(cm.output, [msg])
+
+
+
 
 
 if __name__ == '__main__':

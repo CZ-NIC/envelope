@@ -1,0 +1,71 @@
+Received: by barb.example.com (Postfix, from userid 507)
+	id E56AC9D7; Mon, 21 Nov 2022 23:05:34 +0000 (UTC)
+Content-Transfer-Encoding: 7bit
+Content-Type: multipart/report; boundary="_----------=_16690719342398292402"; report-type="feedback-report"
+MIME-Version: 1.0
+Date: Mon, 21 Nov 2022 23:05:34 +0000
+From: Example Takedown Service <takedown-response+37751234@example.com>
+Subject: Issue 37751234: Malicious web shell at hxxps://malware.example[.]cz/wp-22.php
+To: abuse@example.cz
+Message-Id: <a9fd512f0a3ba8f50c462c52966557e3@takedown.example.com>
+X-Mailer: MIME::Lite 3.030 (F2.85; T2.17; A2.20; B3.15; Q3.13)
+
+This is a multi-part message in MIME format.
+
+--_----------=_16690719342398292402
+Content-Disposition: inline
+Content-Transfer-Encoding: 8bit
+Content-Type: text/plain; charset="UTF-8"
+
+Vazeny pane / Vazena pani,
+
+Ve Vaší jurisdikci jsme objevili škodlivý webshell:
+
+hxxps://malware.example[.]cz/wp-22.php [192.0.2.1]
+
+S pozdravem,
+
+Example
+
+Tento e-mail muze byt analyzovan s x–arf nastrojmi. Navstivte http://www.xarf.org/ pro vice informaci o x-arf.
+-------------------
+Dear Sir or Madam,
+
+We have discovered a malicious web shell within your jurisdiction:
+
+hxxps://malware.example[.]cz/wp-22.php [192.0.2.1]
+
+To contact us about updates regarding this attack, please respond to this email. Please note: replies to this address will be logged, but aren't always read. If you believe you have received this email in error, or you require further support, please contact: takedown@example.com.
+
+This mail can be parsed with x-arf tools. Visit http://www.xarf.org/ for more information about x-arf.
+--_----------=_16690719342398292402
+Content-Disposition: inline
+Content-Length: 51
+Content-Transfer-Encoding: binary
+Content-Type: message/feedback-report
+MIME-Version: 1.0
+X-Mailer: MIME::Lite 3.030 (F2.85; T2.17; A2.20; B3.15; Q3.13)
+Date: Mon, 21 Nov 2022 23:05:34 +0000
+
+Feedback-Type: xarf
+User-Agent: Example
+Version: 1
+--_----------=_16690719342398292402
+Content-Disposition: attachment; filename="xarf.json"
+Content-Transfer-Encoding: base64
+Content-Type: application/json; charset=utf-8; name=xarf.json; name="xarf.json"
+MIME-Version: 1.0
+X-Mailer: MIME::Lite 3.030 (F2.85; T2.17; A2.20; B3.15; Q3.13)
+Date: Mon, 21 Nov 2022 23:05:34 +0000
+
+eyJEaXNjbG9zdXJlIjp0cnVlLCJSZXBvcnRlckluZm8iOnsiUmVwb3J0ZXJPcmdFbWFpbCI6InRh
+a2Vkb3duLXJlc3BvbnNlKzM3NzUxMjM0QGV4YW1wbGUuY29tIiwiUmVwb3J0ZXJPcmdEb21haW4i
+OiJleGFtcGxlLmNvbSIsIlJlcG9ydGVyT3JnIjoiRXhhbXBsZSJ9LCJSZXBvcnQiOnsiU291cmNl
+VXJsIjoiaHR0cHM6Ly9tYWx3YXJlLmV4YW1wbGUuY3ovd3AtMjIucGhwIiwiUmVwb3J0ZXJDYXNl
+SUQiIDoiMzc3NTEyMzQiLCJEYXRlIjoiMjAyMi0xMS0yMVQyMzowNTowM1oiLCJSZXBvcnRUeXBl
+IjoiTWFsd2FyZSIsIlJlcG9ydENsYXNzIjoiQ29udGVudCIsIlNvdXJjZUlwIjoiMTkyLjAuMi4x
+IiwiUmVwb3J0ZXJOb3RlcyI6IlNlZSBodHRwczovL2luY2lkZW50LmV4YW1wbGUuY29tLzlhMTQ0
+MjA5MTIzNC8gZm9yIG1vcmUgaW5mb3JtYXRpb24ifSwiVmVyc2lvbiI6IjEifQ==
+
+--_----------=_16690719342398292402--
+

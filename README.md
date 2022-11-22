@@ -65,11 +65,6 @@ Envelope.load(path="message.eml").attachments()
 
 
 # Installation
-* If planning to use S/MIME, you should ensure some prerequisites:
-```bash
-sudo apt install swig
-pip3 install M2Crypto
-```
 * Install with a single command from [PyPi](https://pypi.org/project/envelope/)
     ```bash 
     pip3 install envelope
@@ -80,14 +75,15 @@ pip3 install M2Crypto
     pip3 install git+https://github.com/CZ-NIC/envelope.git
     ```
     * Or just download the project and launch `python3 -m envelope`
+* If planning to sign/encrypt with GPG, assure you have it on the system with `sudo apt install gpg` and possibly see [Configure your GPG](#configure-your-gpg) tutorial.
+* If planning to use S/MIME, you should ensure some prerequisites: `sudo apt install swig && pip3 install M2Crypto`
 * If planning to send e-mails, prepare SMTP credentials or visit [Configure your SMTP](#configure-your-smtp) tutorial.
 * If your e-mails are to be received outside your local domain, visit [DMARC](#dmarc) section.
-* If planning to sign/encrypt with GPG, assure you have it on the system with `sudo apt install gpg` and possibly see [Configure your GPG](#configure-your-gpg) tutorial.
 * Package [python-magic](https://pypi.org/project/python-magic/) is used as a dependency. Due to a [well-known](https://github.com/ahupp/python-magic/blob/master/COMPAT.md) name clash with the [file-magic](https://pypi.org/project/file-magic/) package, in case you need to use the latter, don't worry to run `pip uninstall python-magic && pip install file-magic` after installing envelope which is fully compatible with both projects.   
 
 ## Bash completion
 1. Run: `apt install bash-completion jq`
-2. Copy: [extra/convey-autocompletion.bash](extra/convey-autocompletion.bash) to `/etc/bash_completion.d/`
+2. Copy: [extra/envelope-autocompletion.bash](extra/envelope-autocompletion.bash) to `/etc/bash_completion.d/`
 3. Restart terminal
 
 # Usage
@@ -640,6 +636,19 @@ e = (Envelope()
                                         # return an address if no name given
 [x.get(address=True) for x in e.to()]   # ["person1@example.com", "person2@example.com", "person3@example.com"]
                                         # addresses only
+```
+
+### Experimental
+
+Since we tend to keep the API simple and do the least amount of backward incompatible changes, it is hard to decide the right way. Your suggestions are welcome! Following methods have no stable API, hence their name begins with an underscore.
+
+* `_report()`: Accessing `multipart/report`.
+
+Currently only [XARF](http://xarf.org/) is supported in the moment. You may directly access the fields.
+
+```python3
+if xarf := Envelope.load(path="xarf.eml")._report():
+  print(xarf['SourceIp'])  # '192.0.2.1'
 ```
 
 ## Envelope object

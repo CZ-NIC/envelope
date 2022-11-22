@@ -2,9 +2,12 @@ import logging
 from email import header, message_from_string, message_from_bytes
 from email.message import Message
 from os import environ
-from typing import List
+from typing import List, TYPE_CHECKING
 
-from .constants import smime_import_error, gnupg, PLAIN, HTML, SAFE_LOCALE
+from .constants import FEEDBACK_REPORT, smime_import_error, gnupg, PLAIN, HTML, SAFE_LOCALE
+
+if TYPE_CHECKING:
+    from .envelope import Envelope
 
 logger = logging.getLogger(__name__)
 
@@ -12,7 +15,7 @@ logger = logging.getLogger(__name__)
 class Parser:
 
     def __init__(self, envelope: 'Envelope' = None, key=None, cert=None, gnupg_home=None):
-        self.e = envelope
+        self.e : 'Envelope' = envelope
         self.key = key
         self.cert = cert
         self.gnupg_home = gnupg_home
@@ -43,12 +46,18 @@ class Parser:
             payload: List[Message] = o.get_payload()
             if subtype == "alternative":
                 [self.parse(x) for x in payload]
-            elif subtype in ("related", "mixed"):
+            elif subtype in ("related", "mixed", "report"):
                 for p in payload:
                     if p.get_content_maintype() in ["text", "multipart"] \
                             and p.get_content_disposition() != "attachment":
                         self.parse(p)
+                    elif subtype == "report" and p.get_content_maintype() == "message":
+                        if p.get_content_type() != FEEDBACK_REPORT:  # only XARF implemented
+                            raise ValueError(f"Parsing {maintype}/{subtype} / {p.get_content_type()} not implemented.")
+                        self.e._multipart_report_message = p                
                     else:
+                        if p.get_payload(decode=True) is None:
+                            raise ValueError(f"Parsing {maintype}/{subtype} / {p.get_content_type()} failed or not implemented.")
                         # decode=True -> strip CRLFs, convert base64 transfer encoding to bytes etc
                         self.e.attach(p.get_payload(decode=True),
                                       mimetype=p.get_content_type(),
@@ -69,7 +78,7 @@ class Parser:
                     else:
                         raise ValueError(f"Cannot decrypt.")
             else:
-                raise ValueError(f"Subtype {subtype} not implemented")
+                raise ValueError(f"Parsing {maintype}/{subtype} not implemented")
         elif maintype == "text":
             if subtype in (HTML, PLAIN):
                 t = o.get_payload(decode=True).strip()
