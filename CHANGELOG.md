@@ -2,6 +2,8 @@
 
 ## 2.0.2
 - experimental [XARF](http://xarf.org/) reports reading
+- disguised addresses parsing
+
 ## 2.0.1 (2022-11-21)
 - fix #24 stable locale
 - allow `file-magic` instead of `python-magic` package be installed on the system (#25)

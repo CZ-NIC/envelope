@@ -44,6 +44,7 @@ Envelope.load(path="message.eml").attachments()
     + [Encrypting](#encrypting)
     + [Supportive](#supportive)
       - [Address](#address)
+    + [Experimental](#experimental)
   * [Envelope object](#envelope-object)
     + [Converting object to str or bool](#converting-object-to-str-or-bool)
     + [Object equality](#object-equality)
@@ -638,13 +639,24 @@ e = (Envelope()
                                         # addresses only
 ```
 
+For some exotic cases, Address tends to do the parsing job better than the underlying standard library (see the [bug report](https://github.com/python/cpython/issues/40889) from 2004).
+
+```python3
+from email.utils import parseaddr
+from envelope import Address
+parseaddr("alice@example.com <bob@example.malware>")
+# ('', 'alice@example.com') -> empty name and wrong address
+Address("alice@example.com <bob@example.malware>").address
+# 'bob@example.malware' -> the right address
+```
+
 ### Experimental
 
 Since we tend to keep the API simple and do the least amount of backward incompatible changes, it is hard to decide the right way. Your suggestions are welcome! Following methods have no stable API, hence their name begins with an underscore.
 
 * `_report()`: Accessing `multipart/report`.
 
-Currently only [XARF](http://xarf.org/) is supported in the moment. You may directly access the fields.
+Currently only [XARF](http://xarf.org/) is supported in the moment. You may directly access the fields, without any additional `json` parsing.
 
 ```python3
 if xarf := Envelope.load(path="xarf.eml")._report():

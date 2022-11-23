@@ -1150,20 +1150,119 @@ class TestRecipients(TestAbstract):
         self.assertEqual(c.name, "person")
         self.assertNotEqual(c.name, contact.name)
 
-    def test_addresses_with_at_sign(self):
-        disguise_addr = "first@example.cz <second@example.com>"
+    def test_disguised_addresses(self):
+        """ Malware actors use at-sign at the addresses to disguise the real e-mail.
+        
+        Python standard library is not perfect – it has troubles to parse
+         well-formed but exotic addresses.
+        The best solution would be to ameliorate the standard library.
+        However, such task is too complex. Envelope wants to be slightly better
+         and fix some of the use cases the standard library fails.
+         """
+
         # These checks represent the email.utils behaviour that I consider buggy. 
         # If any of these tests fails, it's a good message the underlying Python libraries are better
         # and we may stop remedying.
         # https://github.com/python/cpython/issues/40889#issuecomment-1094001067
+        disguise_addr = "first@example.cz <second@example.com>"
+        same = "person@example.com <person@example.com>"
         self.assertEqual(('', 'first@example.cz'), parseaddr(disguise_addr))
         self.assertEqual([('', 'first@example.cz'), ('', 'second@example.com')],
          getaddresses([disguise_addr]))
         self.assertEqual([('', 'person@example.com'), ('', 'person@example.com')],
-         getaddresses(["person@example.com <person@example.com>"]))
+         getaddresses([same]))
+        
+        # For the same input, Envelope receives better results.
+        self.assertEqual(Address(name='first@example.cz', address='second@example.com'), Address(disguise_addr))
+        self.assertEqual(Address(name='first@example.cz', address='second@example.com'), Address.parse(disguise_addr, single=True))
+        self.assertEqual(Address(name='first@example.cz', address='second@example.com'), Address.parse(disguise_addr)[0])
+        self.assertEqual(Address(address='person@example.com'), Address(same))
+        self.assertEqual(Address(address='person@example.com'), Address.parse(same)[0])
+        self.assertEqual(Address(address='person@example.com'), Address.parse(same, single=True))
 
-         # XX We may remedy some of such behaviour. Better would be to fix up the Python library
-         # which seems a big task.
+        # Try various disguised addresses
+        examples = ["person@example.com <person@example.com>", # the same
+           "person@example.com <person@example2.com>", # differs, the name hiding the address 
+           "pers'one'@'ample.com <a@example.com>", #  single address
+           "pers'one'@'ample.com, <a@example.com>",  # two addresses
+           "alone@example.com",
+           "John Smith <john.smith@example.com>",
+           # a lot of addresses, different delimiters
+           'User ((nested comment))<foo@bar.com> example@example.com ; test@example.com , hello <another@dom.com>',
+           # one of them is disguised
+           'User ((nested comment))<foo@bar.com> example@example.com ; test@example.com;hello<another@dom.cz> , ugly@example.com <another@example.com>',
+           # three of them are disguised
+           'ug@ly3@example.com <another3@example.com> ,ugly2@example.com <another2@example.com> , ugly@example.com <another@example.com>']
+
+        expected_parseaddr = [("", "person@example.com"),
+            ("person--AT--example.com", "person@example2.com"),
+            ("pers'one'--AT--'ample.com", "a@example.com"),
+            ("", "pers'one'@'ample.com"),
+            ("", "alone@example.com"),
+            ("John Smith", "john.smith@example.com"),
+            ("User (nested comment)", "foo@bar.com"),
+            ("User (nested comment)", "foo@bar.com"),
+            ("ug--AT--ly3--AT--example.com", "another3@example.com")]
+
+        expected_getaddresses = [
+                [("", "person@example.com")],
+                [("person--AT--example.com", "person@example2.com")],
+                [("pers'one'--AT--'ample.com", "a@example.com")],
+                [("", "pers'one'@'ample.com"),
+                ("", "a@example.com")],
+                [("", "alone@example.com")],
+                [("John Smith", "john.smith@example.com")],
+                [("User (nested comment)",  "foo@bar.com"),
+                ("",  "example@example.com"),
+                ("", "test@example.com"),
+                ("hello", "another@dom.com")],
+                [("User (nested comment)", "foo@bar.com"),
+                ("",  "example@example.com"),
+                ("", "test@example.com"),
+                ("hello",  "another@dom.cz"),
+                ("ugly--AT--example.com", "another@example.com")],
+                [("ug--AT--ly3--AT--example.com", "another3@example.com"),
+                ("ugly2--AT--example.com", "another2@example.com"),
+                ("ugly--AT--example.com", "another@example.com")]]
+
+        for e, r in zip(expected_parseaddr, (Address(e) for e in examples)):
+            name, addr = e
+            self.assertEqual(Address(name=name, address=addr), r)
+
+        for e, r in zip(expected_getaddresses, (Address.parse(e) for e in examples)):
+            expected = [Address(name=name, address=addr) for name, addr in e]
+            self.assertEqual(expected, r)
+
+        # As we want to be slightly better than the standard library
+        # and not better in some cases and worse than others.
+        # So we take the original test cases from the standard library
+        # and try them – they should return the same results in Envelope.
+        # https://github.com/python/cpython/blob/main/Lib/test/test_email/test_email.py
+                
+        def check(addresses, models):
+            """ Parsing addresses is exactly the same as in the standard email.utils library. """
+            compared = [Address(name=v[0], address=v[1]) for v in models if v[0] or v[1]]
+            parsed = Address.parse(addresses)
+            self.assertEqual([(a.name, a.address) for a in parsed], 
+                             [(a.name, a.address) for a in compared])
+        check(['aperson@dom.ain (Al Person)',
+                               'Bud Person <bperson@dom.ain>'],
+            [('Al Person', 'aperson@dom.ain'),
+            ('Bud Person', 'bperson@dom.ain')])
+
+        check(['foo: ;'], [('', '')])
+        check(
+           ['[]*-- =~$'],
+           [('', ''), ('', ''), ('', '*--')])
+        check(
+           ['foo: ;', '"Jason R. Mastaler" <jason@dom.ain>'],
+           [('', ''), ('Jason R. Mastaler', 'jason@dom.ain')])
+
+        """Test proper handling of a nested comment"""
+        check(['User ((nested comment)) <foo@bar.com>'], [('User (nested comment)', 'foo@bar.com')])
+
+        """Test the handling of a Header object."""
+        check(['Al Person <aperson@dom.ain>'], [('Al Person', 'aperson@dom.ain')])
 
     def test_removing_contact(self):
         contact = "Person2 <person2@example.com>"

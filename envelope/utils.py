@@ -1,4 +1,5 @@
 import logging
+import re
 import ssl
 from collections import defaultdict
 from email.utils import getaddresses, parseaddr
@@ -8,9 +9,12 @@ from pathlib import Path
 from smtplib import SMTP, SMTP_SSL, SMTPAuthenticationError, SMTPException, SMTPSenderRefused
 from socket import gaierror, timeout as timeout_exc
 from time import sleep
-from typing import Optional, Tuple, Union, Dict, Type, Iterable
+from typing import Optional, Tuple, Union, Dict, Type, TYPE_CHECKING, Iterable
 
 import magic
+
+if TYPE_CHECKING:
+    from .envelope import Envelope
 
 environ['PY3VE_IGNORE_UPDATER'] = '1'
 from validate_email import validate_email  # noqa, #17 E402, the package name is py3-validate-email
@@ -40,10 +44,11 @@ class Address(str):
 
     _name: str
     _address: str
+    disguised_address = re.compile(r"([^,;]*@[^,;]*)<(.*?@.*?)>")
 
     def __new__(cls, displayed_email=None, name=None, address=None):
         if displayed_email:
-            v = parseaddr(displayed_email)
+            v = parseaddr(cls.remedy(displayed_email))
             name, address = v[0] or name, v[1] or address
         if name:
             displayed_email = f"{name} <{address}>"
@@ -136,13 +141,14 @@ class Address(str):
             return self.address
         raise TypeError("Specify at least one of the `name` and `address` arguments.")
 
-    @staticmethod
-    def parse(email_or_list, single=False, allow_false=False):
+    @classmethod
+    def parse(cls, email_or_list, single=False, allow_false=False):
         if allow_false and email_or_list is False:  # .from_(False), .sender(False)
             return False
-        addresses = [Address(name=real_name, address=address) for real_name, address in
-                     getaddresses(assure_list(email_or_list))
-                     if not (real_name == address == "")]
+
+        addrs = getaddresses(cls.remedy(x) for x in assure_list(email_or_list))
+        addresses = [Address(name=real_name, address=address)
+            for real_name, address in addrs if not (real_name == address == "")]
         if single:
             if len(addresses) != 1:
                 raise ValueError(f"Single e-mail address expected: {email_or_list}")
@@ -150,6 +156,22 @@ class Address(str):
         # if len(addresses) == 0:
         #     raise ValueError(f"E-mail address cannot be parsed: {email_or_list}")
         return addresses
+
+    @classmethod
+    def remedy(cls, displayed_email):
+        def remedy(s):
+            """ Disguised addresses like "person@example.com <person@example2.com>" are wrongly
+            parsed as two distinguish addresses with getaddresses. Rename the at-sign in the display name
+            to "person--AT--example.com <person@example2.com>" so that the result of getaddresses is less wrong.
+            """
+            if s.group(1).strip() == s.group(2).strip():
+                # Display name is the same as the e-mail in angle brackets
+                # Ex: "person@example.com <person@example.com>"
+                # Do not replace @-sign, rather suppress the name, returning just the address.
+                return s.group(2)
+            
+            return (s.group(1).replace("@", "--AT--") + f"<{s.group(2)}>")
+        return cls.disguised_address.sub(remedy, displayed_email)
 
     def is_valid(self, check_mx=False):
         if not validate_email(self.address, check_dns=False, check_smtp=False, check_blacklist=False):
