@@ -6,7 +6,7 @@ from pathlib import Path
 from jsonpickle import decode
 
 from .envelope import Envelope, __doc__ as doc
-from .utils import Attachment
+from .attachment import Attachment
 
 
 class SmartFormatter(argparse.RawDescriptionHelpFormatter):

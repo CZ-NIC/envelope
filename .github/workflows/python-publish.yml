@@ -1,17 +1,17 @@
 # This workflows will upload a Python Package using Twine when a release is created
 # For more information see: https://help.github.com/en/actions/language-and-framework-guides/using-python-with-github-actions#publishing-to-package-registries
 
-name: Upload Python Package on push tag
+name: Upload Python Package
 
 on:
   push:
     tags:
-      - '*'
+      - '[0-9].[0-9].[0-9]'
+      - '[0-9].[0-9].[0-9]-rc.[0-9]'
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/master'  # continue for new tags on the main branch only
     steps:
     - uses: actions/checkout@v2
     - name: Set up Python

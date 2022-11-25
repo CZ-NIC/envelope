@@ -1,4 +1,3 @@
-from email.generator import Generator
 from email.utils import getaddresses, parseaddr
 import logging
 import re
@@ -15,9 +14,11 @@ from typing import Tuple, Union
 from unittest import main, TestCase, mock
 
 from envelope import Envelope
+from envelope.address import Address
 from envelope.constants import AUTO, PLAIN, HTML
 from envelope.parser import Parser
-from envelope.utils import Address, SMTPHandler, assure_list, assure_fetched, get_mimetype
+from envelope.smtp_handler import SMTPHandler
+from envelope.utils import assure_list, assure_fetched, get_mimetype
 
 logging.basicConfig(stream=sys.stderr, level=logging.WARNING)
 
@@ -301,7 +302,7 @@ class TestEnvelope(TestAbstract):
         self.check_lines(e, "header2: 1")
 
     def test_wrong_charset_message(self):
-        msg = "WARNING:envelope.utils:Cannot decode the message correctly, plain alternative bytes are not in Unicode."
+        msg = "WARNING:envelope.message:Cannot decode the message correctly, plain alternative bytes are not in Unicode."
         b = "ř".encode("cp1250")
         e = Envelope(b)
         self.check_lines(e, raises=ValueError)
@@ -402,7 +403,7 @@ class TestSmime(TestAbstract):
                              "Subject: my message",
                              "Reply-To: test-reply@example.com",
                              "Z2l0cyBQdHkgTHRkAhROmwkIH63oarp3NpQqFoKTy1Q3tTANBgkqhkiG9w0BAQEF",
-                         ), 10)
+        ), 10)
 
     def test_multiple_recipients(self):
         from M2Crypto import SMIME
@@ -944,25 +945,24 @@ class TestGPG(TestAbstract):
             Content-Disposition: attachment;
             filename="AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
             MIME-Version: 1.0
-        
+
         This behaviour is observed when GPG signing attachments with file names longer than 34 chars.
         Envelope corrects this behaviour when sending or outputting.
         However, if the user uses Envelope.as_message(), its gets the underlying Message without the correction with GPG void.
         See #19 and https://github.com/python/cpython/issues/99533
         """
-        e=(Envelope(MESSAGE)
-            .to(IDENTITY_2)
-            .gpg(GNUPG_HOME)
-            .from_(IDENTITY_1)
-            .signature("3C8124A8245618D286CF871E94CE2905DB00CDB7", GPG_PASSPHRASE)
-            .attach("some data",name="A"*35))
+        e = (Envelope(MESSAGE)
+             .to(IDENTITY_2)
+             .gpg(GNUPG_HOME)
+             .from_(IDENTITY_1)
+             .signature("3C8124A8245618D286CF871E94CE2905DB00CDB7", GPG_PASSPHRASE)
+             .attach("some data", name="A"*35))
 
         def verify_inline_message(txt: str):
-            boundary =re.search(r'boundary="(.*)"', txt).group(1)
+            boundary = re.search(r'boundary="(.*)"', txt).group(1)
             reg = fr'{boundary}.*{boundary}\n(.*)\n--{boundary}.*(-----BEGIN PGP SIGNATURE-----.*-----END PGP SIGNATURE-----)'
             m = re.search(reg, txt, re.DOTALL)
             return e._gpg_verify(m[2].encode(), m[1].encode())
-        
 
         # accessing via standard email package with get_payload called on different parts keeps signature
         sig = e.as_message().get_payload()[1].get_payload().encode()
@@ -1051,7 +1051,7 @@ Third
         # but in the moment we set all three and call send or preview, we should fail
         self.assertRaises(ValueError, e1.copy().message("Test", alternative="html").preview)
 
-    def test_libmagic(self):            
+    def test_libmagic(self):
         """" Should pass with either python-magic or file-magic library installed on the system #25 """
         # directly test get_mimetype layer
         self.assertEqual("text/html", get_mimetype(data=b"<!DOCTYPE html>hello"))
@@ -1068,7 +1068,6 @@ Third
         self.assertListEqual(["text/plain", "text/plain", "application/octet-stream",
                              "text/html", "text/html", "image/gif"],
                              [a.mimetype for a in e.attachments()])
-
 
 
 class TestRecipients(TestAbstract):
@@ -1152,7 +1151,7 @@ class TestRecipients(TestAbstract):
 
     def test_disguised_addresses(self):
         """ Malware actors use at-sign at the addresses to disguise the real e-mail.
-        
+
         Python standard library is not perfect – it has troubles to parse
          well-formed but exotic addresses.
         The best solution would be to ameliorate the standard library.
@@ -1160,7 +1159,7 @@ class TestRecipients(TestAbstract):
          and fix some of the use cases the standard library fails.
          """
 
-        # These checks represent the email.utils behaviour that I consider buggy. 
+        # These checks represent the email.utils behaviour that I consider buggy.
         # If any of these tests fails, it's a good message the underlying Python libraries are better
         # and we may stop remedying.
         # https://github.com/python/cpython/issues/40889#issuecomment-1094001067
@@ -1168,62 +1167,64 @@ class TestRecipients(TestAbstract):
         same = "person@example.com <person@example.com>"
         self.assertEqual(('', 'first@example.cz'), parseaddr(disguise_addr))
         self.assertEqual([('', 'first@example.cz'), ('', 'second@example.com')],
-         getaddresses([disguise_addr]))
+                         getaddresses([disguise_addr]))
         self.assertEqual([('', 'person@example.com'), ('', 'person@example.com')],
-         getaddresses([same]))
-        
+                         getaddresses([same]))
+
         # For the same input, Envelope receives better results.
         self.assertEqual(Address(name='first@example.cz', address='second@example.com'), Address(disguise_addr))
-        self.assertEqual(Address(name='first@example.cz', address='second@example.com'), Address.parse(disguise_addr, single=True))
-        self.assertEqual(Address(name='first@example.cz', address='second@example.com'), Address.parse(disguise_addr)[0])
+        self.assertEqual(Address(name='first@example.cz', address='second@example.com'),
+                         Address.parse(disguise_addr, single=True))
+        self.assertEqual(Address(name='first@example.cz', address='second@example.com'),
+                         Address.parse(disguise_addr)[0])
         self.assertEqual(Address(address='person@example.com'), Address(same))
         self.assertEqual(Address(address='person@example.com'), Address.parse(same)[0])
         self.assertEqual(Address(address='person@example.com'), Address.parse(same, single=True))
 
         # Try various disguised addresses
-        examples = ["person@example.com <person@example.com>", # the same
-           "person@example.com <person@example2.com>", # differs, the name hiding the address 
-           "pers'one'@'ample.com <a@example.com>", #  single address
-           "pers'one'@'ample.com, <a@example.com>",  # two addresses
-           "alone@example.com",
-           "John Smith <john.smith@example.com>",
-           # a lot of addresses, different delimiters
-           'User ((nested comment))<foo@bar.com> example@example.com ; test@example.com , hello <another@dom.com>',
-           # one of them is disguised
-           'User ((nested comment))<foo@bar.com> example@example.com ; test@example.com;hello<another@dom.cz> , ugly@example.com <another@example.com>',
-           # three of them are disguised
-           'ug@ly3@example.com <another3@example.com> ,ugly2@example.com <another2@example.com> , ugly@example.com <another@example.com>']
+        examples = ["person@example.com <person@example.com>",  # the same
+                    "person@example.com <person@example2.com>",  # differs, the name hiding the address
+                    "pers'one'@'ample.com <a@example.com>",  # single address
+                    "pers'one'@'ample.com, <a@example.com>",  # two addresses
+                    "alone@example.com",
+                    "John Smith <john.smith@example.com>",
+                    # a lot of addresses, different delimiters
+                    'User ((nested comment))<foo@bar.com> example@example.com ; test@example.com , hello <another@dom.com>',
+                    # one of them is disguised
+                    'User ((nested comment))<foo@bar.com> example@example.com ; test@example.com;hello<another@dom.cz> , ugly@example.com <another@example.com>',
+                    # three of them are disguised
+                    'ug@ly3@example.com <another3@example.com> ,ugly2@example.com <another2@example.com> , ugly@example.com <another@example.com>']
 
         expected_parseaddr = [("", "person@example.com"),
-            ("person--AT--example.com", "person@example2.com"),
-            ("pers'one'--AT--'ample.com", "a@example.com"),
-            ("", "pers'one'@'ample.com"),
-            ("", "alone@example.com"),
-            ("John Smith", "john.smith@example.com"),
-            ("User (nested comment)", "foo@bar.com"),
-            ("User (nested comment)", "foo@bar.com"),
-            ("ug--AT--ly3--AT--example.com", "another3@example.com")]
+                              ("person--AT--example.com", "person@example2.com"),
+                              ("pers'one'--AT--'ample.com", "a@example.com"),
+                              ("", "pers'one'@'ample.com"),
+                              ("", "alone@example.com"),
+                              ("John Smith", "john.smith@example.com"),
+                              ("User (nested comment)", "foo@bar.com"),
+                              ("User (nested comment)", "foo@bar.com"),
+                              ("ug--AT--ly3--AT--example.com", "another3@example.com")]
 
         expected_getaddresses = [
-                [("", "person@example.com")],
-                [("person--AT--example.com", "person@example2.com")],
-                [("pers'one'--AT--'ample.com", "a@example.com")],
-                [("", "pers'one'@'ample.com"),
-                ("", "a@example.com")],
-                [("", "alone@example.com")],
-                [("John Smith", "john.smith@example.com")],
-                [("User (nested comment)",  "foo@bar.com"),
-                ("",  "example@example.com"),
-                ("", "test@example.com"),
-                ("hello", "another@dom.com")],
-                [("User (nested comment)", "foo@bar.com"),
-                ("",  "example@example.com"),
-                ("", "test@example.com"),
-                ("hello",  "another@dom.cz"),
-                ("ugly--AT--example.com", "another@example.com")],
-                [("ug--AT--ly3--AT--example.com", "another3@example.com"),
-                ("ugly2--AT--example.com", "another2@example.com"),
-                ("ugly--AT--example.com", "another@example.com")]]
+            [("", "person@example.com")],
+            [("person--AT--example.com", "person@example2.com")],
+            [("pers'one'--AT--'ample.com", "a@example.com")],
+            [("", "pers'one'@'ample.com"),
+             ("", "a@example.com")],
+            [("", "alone@example.com")],
+            [("John Smith", "john.smith@example.com")],
+            [("User (nested comment)",  "foo@bar.com"),
+             ("",  "example@example.com"),
+             ("", "test@example.com"),
+             ("hello", "another@dom.com")],
+            [("User (nested comment)", "foo@bar.com"),
+             ("",  "example@example.com"),
+             ("", "test@example.com"),
+             ("hello",  "another@dom.cz"),
+             ("ugly--AT--example.com", "another@example.com")],
+            [("ug--AT--ly3--AT--example.com", "another3@example.com"),
+             ("ugly2--AT--example.com", "another2@example.com"),
+             ("ugly--AT--example.com", "another@example.com")]]
 
         for e, r in zip(expected_parseaddr, (Address(e) for e in examples)):
             name, addr = e
@@ -1238,25 +1239,25 @@ class TestRecipients(TestAbstract):
         # So we take the original test cases from the standard library
         # and try them – they should return the same results in Envelope.
         # https://github.com/python/cpython/blob/main/Lib/test/test_email/test_email.py
-                
+
         def check(addresses, models):
             """ Parsing addresses is exactly the same as in the standard email.utils library. """
             compared = [Address(name=v[0], address=v[1]) for v in models if v[0] or v[1]]
             parsed = Address.parse(addresses)
-            self.assertEqual([(a.name, a.address) for a in parsed], 
+            self.assertEqual([(a.name, a.address) for a in parsed],
                              [(a.name, a.address) for a in compared])
         check(['aperson@dom.ain (Al Person)',
-                               'Bud Person <bperson@dom.ain>'],
-            [('Al Person', 'aperson@dom.ain'),
-            ('Bud Person', 'bperson@dom.ain')])
+               'Bud Person <bperson@dom.ain>'],
+              [('Al Person', 'aperson@dom.ain'),
+               ('Bud Person', 'bperson@dom.ain')])
 
         check(['foo: ;'], [('', '')])
         check(
-           ['[]*-- =~$'],
-           [('', ''), ('', ''), ('', '*--')])
+            ['[]*-- =~$'],
+            [('', ''), ('', ''), ('', '*--')])
         check(
-           ['foo: ;', '"Jason R. Mastaler" <jason@dom.ain>'],
-           [('', ''), ('Jason R. Mastaler', 'jason@dom.ain')])
+            ['foo: ;', '"Jason R. Mastaler" <jason@dom.ain>'],
+            [('', ''), ('Jason R. Mastaler', 'jason@dom.ain')])
 
         """Test proper handling of a nested comment"""
         check(['User ((nested comment)) <foo@bar.com>'], [('User (nested comment)', 'foo@bar.com')])
@@ -1848,38 +1849,35 @@ class TestSMTP(TestAbstract):
 
 class TestReport(TestAbstract):
     xarf = Path("tests/eml/multipart-report-xarf.eml")
-    
+
     def test_loading_xarf(self):
         # no report in an empty object
         self.assertFalse(Envelope()._report())
-                
+
         # expected XARF report
-        e = Envelope.load(self.xarf)        
+        e = Envelope.load(self.xarf)
         report = e._report()
         self.assertSubset(report["ReporterInfo"], {"ReporterOrg": 'Example'})
-        self.assertSubset(report["Report"], {'SourceIp': '192.0.2.1'})        
+        self.assertSubset(report["Report"], {'SourceIp': '192.0.2.1'})
 
     def test_unsupported_message(self):
         # only `Content-Type: message/feedback-report` is implemented within `multipart/report``
-        t = self.xarf.read_text().replace("Content-Type: message/feedback-report", 
+        t = self.xarf.read_text().replace("Content-Type: message/feedback-report",
                                           "Content-Type: message/UNSUPPORTED")
         msg = "WARNING:envelope.envelope:Message might not have been loaded correctly. " \
-                "Parsing multipart/report / message/unsupported not implemented."
+            "Parsing multipart/report / message/unsupported not implemented."
         with self.assertLogs('envelope', level='WARNING') as cm:
             Envelope.load(t)
         self.assertEqual(cm.output, [msg])
 
         # `Content-Type: message` is not implemented within `multipart/mixed`
         msg = "WARNING:envelope.envelope:Message might not have been loaded correctly. "\
-                "Parsing multipart/mixed / message/feedback-report failed or not implemented."
-        t = self.xarf.read_text().replace("Content-Type: multipart/report", 
-                                     "Content-Type: multipart/mixed")
+            "Parsing multipart/mixed / message/feedback-report failed or not implemented."
+        t = self.xarf.read_text().replace("Content-Type: multipart/report",
+                                          "Content-Type: multipart/mixed")
         with self.assertLogs('envelope', level='WARNING') as cm:
             Envelope.load(t)
         self.assertEqual(cm.output, [msg])
-
-
-
 
 
 if __name__ == '__main__':

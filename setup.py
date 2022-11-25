@@ -21,7 +21,7 @@ long_description = p.read_text() if p.exists() else ""
 
 setup(
     name='envelope',
-    version='2.0.2-pre',
+    version='2.0.2',
     packages=['envelope'],
     author='Edvard Rejthar',
     author_email='edvard.rejthar@nic.cz',
@@ -42,5 +42,5 @@ setup(
     classifiers=[
         'Programming Language :: Python :: 3'
     ],
-    python_requires='>=3.6',
+    python_requires='>=3.7',
 )

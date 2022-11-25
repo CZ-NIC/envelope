@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 class Parser:
 
     def __init__(self, envelope: 'Envelope' = None, key=None, cert=None, gnupg_home=None):
-        self.e : 'Envelope' = envelope
+        self.e: 'Envelope' = envelope
         self.key = key
         self.cert = cert
         self.gnupg_home = gnupg_home
@@ -54,10 +54,11 @@ class Parser:
                     elif subtype == "report" and p.get_content_maintype() == "message":
                         if p.get_content_type() != FEEDBACK_REPORT:  # only XARF implemented
                             raise ValueError(f"Parsing {maintype}/{subtype} / {p.get_content_type()} not implemented.")
-                        self.e._multipart_report_message = p                
+                        self.e._multipart_report_message = p
                     else:
                         if p.get_payload(decode=True) is None:
-                            raise ValueError(f"Parsing {maintype}/{subtype} / {p.get_content_type()} failed or not implemented.")
+                            raise ValueError(
+                                f"Parsing {maintype}/{subtype} / {p.get_content_type()} failed or not implemented.")
                         # decode=True -> strip CRLFs, convert base64 transfer encoding to bytes etc
                         self.e.attach(p.get_payload(decode=True),
                                       mimetype=p.get_content_type(),

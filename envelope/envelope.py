@@ -26,10 +26,13 @@ from quopri import decodestring
 from types import GeneratorType
 from typing import Union, List, Set, Optional, Any
 
+from .address import Address
+from .attachment import Attachment
 from .constants import ISSUE_LINK, smime_import_error, gnupg, CRLF, AUTO, PLAIN, HTML, SIMULATION, SAFE_LOCALE
+from .message import _Message
 from .parser import Parser
-from .utils import Address, Attachment, AutoSubmittedHeader, SMTPHandler, _Message, \
-    is_gpg_importable_key, assure_list, assure_fetched, get_mimetype
+from .smtp_handler import SMTPHandler
+from .utils import AutoSubmittedHeader, is_gpg_importable_key, assure_list, assure_fetched, get_mimetype
 
 __doc__ = """Quick layer over python-gnupg, M2Crypto, smtplib, magic and email handling packages.
 Their common use cases merged into a single function. Want to sign a text and tired of forgetting how to do it right?
@@ -326,17 +329,17 @@ class Envelope:
         self._mime = AUTO
         self._nl2br = AUTO
         self._headers = EmailMessage()  # object for storing headers the most standard way possible
-        self._ignore_date : bool = False
+        self._ignore_date: bool = False
 
         # variables defined while processing
-        self._status : bool = False  # whether we successfully encrypted/signed/send
-        self._processed : bool = False  # prevent the user from mistakenly call .sign().send() instead of .signature().send()
-        self._result : List[Union[str, EmailMessage, Message]] = []  # text output for str() conversion
-        self._result_cache : Optional[str] = None
-        self._result_cache_hash : Optional[int] = None
+        self._status: bool = False  # whether we successfully encrypted/signed/send
+        self._processed: bool = False  # prevent the user from mistakenly call .sign().send() instead of .signature().send()
+        self._result: List[Union[str, EmailMessage, Message]] = []  # text output for str() conversion
+        self._result_cache: Optional[str] = None
+        self._result_cache_hash: Optional[int] = None
         self._smtp = SMTPHandler()
         self.auto_submitted = AutoSubmittedHeader(self)  # allows fluent interface to set header
-        
+
         self._multipart_report_message: Optional[Message] = None
 
         # init parameters with appropriate methods
@@ -940,7 +943,7 @@ class Envelope:
         encrypt, sign, gpg_on = self._determine_gpg(encrypt, sign)
 
         # if we plan to send later, convert text message to the email message object
-        email : Optional[Union[str, EmailMessage, Message]] = None
+        email: Optional[Union[str, EmailMessage, Message]] = None
         if send is not None or html:  # `html` means the user wants a 'multipart/alternative' e-mail message
             email = self._prepare_email(plain, html, encrypt and gpg_on, sign and gpg_on, sign)
             if not email:
@@ -1097,8 +1100,8 @@ class Envelope:
             with mock.patch.object(Generator, '_handle_multipart_signed', Generator._handle_multipart):
                 # https://github.com/python/cpython/issues/99533 and #19
                 failures = self._smtp.send_message(email,
-                                                from_addr=self._from_addr,
-                                                to_addrs=list(map(str, set(self._to + self._cc + self._bcc))))
+                                                   from_addr=self._from_addr,
+                                                   to_addrs=list(map(str, set(self._to + self._cc + self._bcc))))
             if failures:
                 logger.warning(f"Unable to send to all recipients: {repr(failures)}.")
             elif failures is False:
@@ -1203,7 +1206,7 @@ class Envelope:
     def _gpg_list_keys(self, secret=False):
         return ((key, address) for key in self._gnupg.list_keys(secret) for _, address in getaddresses(key["uids"]))
 
-    def _gpg_verify(self, signature:bytes, data:bytes):
+    def _gpg_verify(self, signature: bytes, data: bytes):
         """ Allows verifying detached GPG signature.
         * As parameters are not user-friendly
         * it is not trivial to get them from an arbitrary message
@@ -1212,7 +1215,7 @@ class Envelope:
          """
         with NamedTemporaryFile() as fp:
             fp.write(signature)
-            fp.seek(0)            
+            fp.seek(0)
             return bool(self._gnupg.verify_data(fp.name, data))
 
     def _get_decipherers(self) -> Set[str]:
@@ -1485,7 +1488,7 @@ class Envelope:
         """
         if not self._multipart_report_message:
             return False
-        
+
         # reading XARF report http://xarf.org/
         if dict(self._multipart_report_message.get_payload()[0]).get('Feedback-Type') == "xarf":
             return loads(self.attachments("xarf.json").data)

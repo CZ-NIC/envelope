@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## 2.0.2
+## 2.0.2 (2022-11-25)
 - experimental [XARF](http://xarf.org/) reports reading
 - disguised addresses parsing
 

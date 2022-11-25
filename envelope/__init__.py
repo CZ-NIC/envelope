@@ -1,4 +1,4 @@
 from .envelope import Envelope
-from .utils import Address
+from .address import Address
 
 __all__ = ["Envelope", "Address"]
