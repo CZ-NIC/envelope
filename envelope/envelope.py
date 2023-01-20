@@ -1262,7 +1262,7 @@ class Envelope:
                 cert = sign
             smime.x509 = X509.load_cert_string(cert)
             if not encrypt:
-                p7 = smime.sign(content_buffer, SMIME.PKCS7_DETACHED)
+                p7 = smime.sign(content_buffer, SMIME.PKCS7_DETACHED, 'sha512')
                 content_buffer = BIO.MemoryBuffer(email)  # we have to recreate it because it was sucked out
                 smime.write(output_buffer, p7, content_buffer)
             else:
