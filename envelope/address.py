@@ -78,7 +78,10 @@ class Address(str):
 
     @property
     def host(self) -> str:
-        """ XX Should it be part of Address.get? """
+        """ Get the part behind the '@' sign.
+            Example: Address("person1@example.com").host == "example.com"
+            Example: Envelope().to("person1@example.com").to().host == "example.com"
+        """
         try:
             return self._address.split("@")[1]
         except IndexError:
@@ -86,7 +89,10 @@ class Address(str):
 
     @property
     def user(self) -> str:
-        """ XX Should it be part of Address.get? """
+        """ Get the part before the '@' sign.
+            Example: Address("person1@example.com").user == "person1"
+            Example: Envelope().to("person1@example.com").to().user == "person1"
+        """
         try:
             return self._address.split("@")[0]
         except IndexError:

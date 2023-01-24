@@ -2,9 +2,9 @@
 
 [![Build Status](https://github.com/CZ-NIC/envelope/actions/workflows/run-unittest.yml/badge.svg)](https://github.com/CZ-NIC/envelope/actions) [![Downloads](https://pepy.tech/badge/envelope)](https://pepy.tech/project/envelope)
 
-Quick layer over [python-gnupg](https://bitbucket.org/vinay.sajip/python-gnupg/src), [M2Crypto](https://m2crypto.readthedocs.io/), [smtplib](https://docs.python.org/3/library/smtplib.html), [magic](https://pypi.org/project/python-magic/) and [email](https://docs.python.org/3/library/email.html?highlight=email#module-email) handling packages. Their common use cases merged into a single function. Want to sign a text and tired of forgetting how to do it right? You do not need to know everything about GPG or S/MIME, you do not have to bother with importing keys. Do not hassle with reconnecting to an SMTP server. Do not study various headers meanings to let your users unsubscribe via a URL.  
-You insert a message, attachments and inline images and receive signed and/or encrypted output to the file or to your recipients' e-mail.  
-Just single line of code. With the great help of the examples below.  
+Quick layer over [python-gnupg](https://bitbucket.org/vinay.sajip/python-gnupg/src), [M2Crypto](https://m2crypto.readthedocs.io/), [smtplib](https://docs.python.org/3/library/smtplib.html), [magic](https://pypi.org/project/python-magic/) and [email](https://docs.python.org/3/library/email.html?highlight=email#module-email) handling packages. Their common use cases merged into a single function. Want to sign a text and tired of forgetting how to do it right? You do not need to know everything about GPG or S/MIME, you do not have to bother with importing keys. Do not hassle with reconnecting to an SMTP server. Do not study various headers meanings to let your users unsubscribe via a URL.
+You insert a message, attachments and inline images and receive signed and/or encrypted output to the file or to your recipients' e-mail.
+Just single line of code. With the great help of the examples below.
 
 ```python3
 Envelope("my message")
@@ -18,10 +18,10 @@ Envelope("my message")
 
 ```python3
 # Inline image
-Envelope("My inline image: <img src='cid:image.jpg' />")    
+Envelope("My inline image: <img src='cid:image.jpg' />")
     .attach(path="image.jpg", inline=True)
 
-# Load a message and read its attachments 
+# Load a message and read its attachments
 Envelope.load(path="message.eml").attachments()
 # in bash: envelope --load message.eml --attachments
 ```
@@ -67,7 +67,7 @@ Envelope.load(path="message.eml").attachments()
 
 # Installation
 * Install with a single command from [PyPi](https://pypi.org/project/envelope/)
-    ```bash 
+    ```bash
     pip3 install envelope
     ```
 
@@ -77,10 +77,10 @@ Envelope.load(path="message.eml").attachments()
     ```
     * Or just download the project and launch `python3 -m envelope`
 * If planning to sign/encrypt with GPG, assure you have it on the system with `sudo apt install gpg` and possibly see [Configure your GPG](#configure-your-gpg) tutorial.
-* If planning to use S/MIME, you should ensure some prerequisites: `sudo apt install swig && pip3 install M2Crypto`
+* If planning to use S/MIME, you should ensure some prerequisites: `sudo apt install swig build-essential python3-dev libssl-dev && pip3 install M2Crypto`
 * If planning to send e-mails, prepare SMTP credentials or visit [Configure your SMTP](#configure-your-smtp) tutorial.
 * If your e-mails are to be received outside your local domain, visit [DMARC](#dmarc) section.
-* Package [python-magic](https://pypi.org/project/python-magic/) is used as a dependency. Due to a [well-known](https://github.com/ahupp/python-magic/blob/master/COMPAT.md) name clash with the [file-magic](https://pypi.org/project/file-magic/) package, in case you need to use the latter, don't worry to run `pip uninstall python-magic && pip install file-magic` after installing envelope which is fully compatible with both projects.   
+* Package [python-magic](https://pypi.org/project/python-magic/) is used as a dependency. Due to a [well-known](https://github.com/ahupp/python-magic/blob/master/COMPAT.md) name clash with the [file-magic](https://pypi.org/project/file-magic/) package, in case you need to use the latter, don't worry to run `pip uninstall python-magic && pip install file-magic` after installing envelope which is fully compatible with both projects.
 
 ## Bash completion
 1. Run: `apt install bash-completion jq`
@@ -91,7 +91,7 @@ Envelope.load(path="message.eml").attachments()
 As an example, let's produce in three equal ways an `output_file` with the GPG-encrypted "Hello world" content.
 ## CLI
 Launch as a CLI application in terminal, see `envelope --help`
-  
+
 ```bash
 envelope --message "Hello world" \
                --output "/tmp/output_file" \
@@ -127,7 +127,7 @@ Envelope(message="Hello world",
 Both `envelope --help` for CLI arguments help and `pydoc3 envelope` to see module arguments help should contain same information as here.
 
 ## Command list
-All parameters are optional. 
+All parameters are optional.
 
 * **--param** is used in CLI
 * **.param(value)** denotes a positional argument
@@ -135,7 +135,14 @@ All parameters are optional.
 * **Envelope(param=)** is a one-liner argument
 
 ####  Any attainable contents
-Whenever any attainable contents is mentioned, we mean plain **text**, **bytes** or **stream** (ex: from `open()`). In *module interface*, you may use a **`Path`** object to the file. In *CLI interface*, additional flags are provided instead.         
+Whenever any attainable contents is mentioned, we mean plain **text**, **bytes** or **stream** (ex: from `open()`). In *module interface*, you may use a **`Path`** object to the file. In *CLI interface*, additional flags are provided instead.
+
+If the object is not accesible, it will immediately raise `FileNotFoundError`.
+```python3
+Envelope().attach(path="file.jpg")
+# Could not fetch file .../file.jpg
+# FileNotFoundError: [Errno 2] No such file or directory: 'file.jpg'
+```
 
 ### Input / Output
   * **message**: Message / body text.
@@ -149,35 +156,35 @@ Whenever any attainable contents is mentioned, we mean plain **text**, **bytes**
         * `alternative`: "auto", "html", "plain" You may specify e-mail text alternative. Some e-mail readers prefer to display plain text version over HTML. By default, we try to determine content type automatically (see *mime*).
             ```python3
             print(Envelope().message("He<b>llo</b>").message("Hello", alternative="plain"))
-                   
+
             # (output shortened)
             # Content-Type: multipart/alternative;
             #  boundary="===============0590677381100492396=="
-            # 
+            #
             # --===============0590677381100492396==
             # Content-Type: text/plain; charset="utf-8"
             # Hello
-            # 
+            #
             # --===============0590677381100492396==
             # Content-Type: text/html; charset="utf-8"
             # He<b>llo</b>
             ```
-        * *boundary*: When specifying alternative, you may set e-mail boundary if you do not wish a random one to be created.            
+        * *boundary*: When specifying alternative, you may set e-mail boundary if you do not wish a random one to be created.
     * **.body(path=None)**: Alias of `.message` (without `alternative` and `boundary` parameter)
     * **.text(path=None)**: Alias of `.message` (without `alternative` and `boundary` parameter)
     * **Envelope(message=)**: [Any attainable contents](#any-attainable-contents)
-    
+
     Equivalents for setting a string (in *Python* and in *Bash*).
     ```python3
     Envelope(message="hello") == Envelope().message("hello")
     ```
     ```bash
     envelope --message "hello"
-    ``` 
+    ```
     Equivalents for setting contents of a file (in *Python* and in *Bash*).
     ```python3
     from pathlib import Path
-    Envelope(message=Path("file.txt")) == Envelope(message=open("file.txt")) == Envelope.message(path="file.txt") 
+    Envelope(message=Path("file.txt")) == Envelope(message=open("file.txt")) == Envelope.message(path="file.txt")
     ```
     ```bash
     envelope --input file.txt
@@ -191,11 +198,11 @@ Whenever any attainable contents is mentioned, we mean plain **text**, **bytes**
     repr(e)
     # WARNING: Cannot decode the message correctly, plain alternative bytes are not in Unicode.
     # Envelope(message="b'\x80'")
-    
+
     # When trying to output a mal-encoded message, we end up with a ValueError exception.
     e.message()
     # ValueError: Cannot decode the message correctly, it is not in Unicode. b'\x80'
-    
+
     # Setting up an encoding (even ex-post) solves the issue.
     e.header("Content-Type", "text/plain;charset=cp1250")
     e.message()  # '€'
@@ -204,7 +211,7 @@ Whenever any attainable contents is mentioned, we mean plain **text**, **bytes**
     * **--output**
     * **.output(output_file)**
     * **Envelope(output=)**
-    
+
 ### Recipients
 * **from**: E-mail – needed to choose our key if encrypting.
     * **--from** E-mail. Empty to read value.
@@ -213,12 +220,12 @@ Whenever any attainable contents is mentioned, we mean plain **text**, **bytes**
     * **Envelope(from_=)**: Sender e-mail or False to explicitly omit. When encrypting without sender, we do not use their key so that we will not be able to decipher again.
     ```python3
     # These statements are identical.
-    Envelope(from_="identity@example.com")    
+    Envelope(from_="identity@example.com")
     Envelope().from_("identity@example.com")
-  
+
     # This statement produces both From header and Sender header.
     Envelope(from_="identity@example.com", headers=[("Sender", "identity2@example.com")])
-  
+
     # reading an Address object
     a = Envelope(from_="identity@example.com").from_()
     a == "identity@example.com", a.host == "example.com"
@@ -226,18 +233,18 @@ Whenever any attainable contents is mentioned, we mean plain **text**, **bytes**
 * **to**: E-mail or more in an iterable. When encrypting, we use keys of these identities. Multiple addresses may be given in a string, delimited by a comma (or semicolon). (The same is valid for `to`, `cc`, `bcc` and `reply-to`.)
     * **--to**: One or more e-mail addresses. Empty to read.
       ```bash
-      $ envelope --to first@example.com second@example.com --message "hello" 
+      $ envelope --to first@example.com second@example.com --message "hello"
       $ envelope --to
       first@example.com
       second@example.com
-      ```  
-    * **.to(email_or_more)**: If None, current list of [Addresses](#address) returned. If False or "", current list is cleared. 
+      ```
+    * **.to(email_or_more)**: If None, current list of [Addresses](#address) returned. If False or "", current list is cleared.
     ```python3
         Envelope()
             .to("person1@example.com")
             .to("person1@example.com, John <person2@example.com>")
             .to(["person3@example.com"])
-            .to()  # ["person1@example.com", "John <person2@example.com>", "person3@example.com"] 
+            .to()  # ["person1@example.com", "John <person2@example.com>", "person3@example.com"]
     ```
     * **Envelope(to=)**: E-mail or more in an iterable.
 * **cc**: E-mail or more in an iterable. Multiple addresses may be given in a string, delimited by a comma (or semicolon). (The same is valid for `to`, `cc`, `bcc` and `reply-to`.)
@@ -248,7 +255,7 @@ Whenever any attainable contents is mentioned, we mean plain **text**, **bytes**
             .cc("person1@example.com")
             .cc("person1@example.com, John <person2@example.com>")
             .cc(["person3@example.com"])
-            .cc()  # ["person1@example.com", "John <person2@example.com>", "person3@example.com"] 
+            .cc()  # ["person1@example.com", "John <person2@example.com>", "person3@example.com"]
         ```
     * **Envelope(cc=)**
 * **bcc**: E-mail or more in an iterable. Multiple addresses may be given in a string, delimited by a comma (or semicolon). (The same is valid for `to`, `cc`, `bcc` and `reply-to`.) The header is not sent.
@@ -263,7 +270,7 @@ Whenever any attainable contents is mentioned, we mean plain **text**, **bytes**
     * **--from-addr**: E-mail address or empty to read value.
     * **.from_addr(email)**: E-mail or False. If None, current `SMTP envelope MAIL FROM` returned as an [Address](#address) object (even an empty one).
     * **.Envelope(from_addr=)**
-    
+
 ### Sending
   * **send**: Send the message to the recipients by e-mail. True (blank in *CLI*) to send now or False to print out debug information.
     * **--send**
@@ -271,12 +278,12 @@ Whenever any attainable contents is mentioned, we mean plain **text**, **bytes**
         * *send*: True to send now. False (or 0/false/no in *CLI*) to print debug information.
         * Returns the object back which converted to bool returns True if the message has been sent successfully.
     * **Envelope(send=)**
-    
+
     ```bash
     $ envelope --to "user@example.org" --message "Hello world" --send 0
     ****************************************************************************************************
     Have not been sent from - to user@example.org
-    
+
     Content-Type: text/html; charset="utf-8"
     Content-Transfer-Encoding: 7bit
     MIME-Version: 1.0
@@ -285,14 +292,14 @@ Whenever any attainable contents is mentioned, we mean plain **text**, **bytes**
     To: user@example.org
     Date: Mon, 07 Oct 2019 16:13:37 +0200
     Message-ID: <157045761791.29779.5279828659897745855@...>
-    
+
     Hello world
     ```
   * **subject**: Mail subject. Gets encrypted with GPG, stays visible with S/MIME.
     * **--subject**
     * **.subject(text=None, encrypt=None)**:
         * `text` Subject text.
-        * `encrypt` Text used instead of the real protected subject while PGP encrypting. False to not encrypt.   
+        * `encrypt` Text used instead of the real protected subject while PGP encrypting. False to not encrypt.
         * If neither parameter specified, current subject returned.
     * **Envelope(subject=)**
     * **Envelope(subject_encrypted=)**
@@ -319,7 +326,7 @@ Whenever any attainable contents is mentioned, we mean plain **text**, **bytes**
             ```ini
             [SMTP]
             host = example.com
-            port = 587            
+            port = 587
             ```
     * Do not fear to pass the `smtp` in a loop, we make just a single connection to the server. If timed out, we attempt to reconnect once.
     ```python3
@@ -333,31 +340,31 @@ Whenever any attainable contents is mentioned, we mean plain **text**, **bytes**
     envelope --attachment "/tmp/file.txt" "displayed-name.txt" "text/plain" --attachment "/tmp/another-file.txt"
     ```
     * **.attach(attachment=, mimetype=, name=, path=, inline=)**:
+        ```python3
+        Envelope().attach(path="/tmp/file.txt").attach(path="/tmp/another-file.txt")
+        ```
         * Three different usages when specifying contents:
             * **.attach(attachment=, mimetype=, name=)**: You can put [any attainable contents](#any-attainable-contents) of a single attachment into *attachment* and optionally add mime type or displayed file name.
             * **.attach(mimetype=, name=, path=)**: You can specify path and optionally mime type or displayed file name.
             * **.attach(attachment=)**: You can put a list of attachments. The list may contain tuples: `contents [,mime type] [,file name] [, True for inline]`.
-        ```python3
-        Envelope().attach(path="/tmp/file.txt").attach(path="/tmp/another-file.txt")
-        ```
         * **.attach(inline=True|str)**: Specify content-id (CID) to reference the image from within HTML message body.
            * True: Filename or attachment or path file name is set as CID.
            * str: The attachment will get this CID.
-           ```python3                     
-           Envelope().attach("file.jpg", inline=True) # <img src='cid:file.jpg' />
+           ```python3
+           from pathlib import Path
+           Envelope().attach(Path("file.jpg"), inline=True) # <img src='cid:file.jpg' />
            Envelope().attach(b"GIF89a\x03\x00\x03...", name="file.gif", inline=True) # <img src='cid:file.gif' />
-           Envelope().attach("file.jpg", inline="foo") # <img src='cid:foo' />
-          
+           Envelope().attach(Path("file.jpg"), inline="foo") # <img src='cid:foo' />
+
            # Reference it like: .message("Hey, this is an inline image: <img src='cid:foo' />")
           ```
-    
     * **Envelope(attachments=)**: Attachment or their list. Attachment is defined by [any attainable contents](#any-attainable-contents), optionally in tuple with the file name to be used in the e-mail and/or mime type and/or True for being inline: `contents [,mime type] [,file name] [, True for inline]`
     ```python3
     Envelope(attachments=[(Path("/tmp/file.txt"), "displayed-name.txt", "text/plain"), Path("/tmp/another-file.txt")])
-    ```    
-    * **mime**: Sets contents mime subtype: "**auto**" (default), "**html**" or "**plain**" for plain text. 
-        Maintype is always set to "text".                 
-        Set maintype to "text".  If a line is longer than 1000 characters, makes the message be transferred safely by bytes (otherwise these non-standard long lines might cause a transferring SMTP server to include line breaks and redundant spaces that might break up ex: DKIM signature).  
+    ```
+    * **mime**: Sets contents mime subtype: "**auto**" (default), "**html**" or "**plain**" for plain text.
+        Maintype is always set to "text".
+        Set maintype to "text".  If a line is longer than 1000 characters, makes the message be transferred safely by bytes (otherwise these non-standard long lines might cause a transferring SMTP server to include line breaks and redundant spaces that might break up ex: DKIM signature).
         In case of `Content-Type` header put to the message, **mime** section functionality **is skipped**.
         * **--mime SUBTYPE**
         * **.mime(subtype="auto", nl2br="auto")**
@@ -375,19 +382,19 @@ Whenever any attainable contents is mentioned, we mean plain **text**, **bytes**
                       .header("Generic-Header") # ["1", "2"]
             ```
         * **Envelope(headers=[(name, value)])**
-        
-        Equivalent headers: 
+
+        Equivalent headers:
         ```bash
         envelope --header X-Mailer my-app
         ```
-        
+
         ```python3
         Envelope(headers=[("X-Mailer", "my-app")])
         Envelope().header("X-Mailer", "my-app")
-        ```                
+        ```
 #### Specific headers
 These helpers are available via fluent interface.
-    
+
 * **.list_unsubscribe(uri=None, one_click=False, web=None, email=None)**: You can specify either url, email or both.
     * **.list_unsubscribe(uri)**: We try to determine whether this is e-mail and prepend brackets and 'https:'/'mailto:' if needed. Ex: `me@example.com?subject=unsubscribe`, `example.com/unsubscribe`, `<https://example.com/unsubscribe>`
     * **.list_unsubscribe(email=)**: E-mail address. Ex: `me@example.com`, `mailto:me@example.com`
@@ -399,21 +406,21 @@ These helpers are available via fluent interface.
     Envelope().list_unsubscribe("example.com/unsubscribe")
     Envelope().list_unsubscribe(web="example.com/unsubscribe")
     Envelope().list_unsubscribe("<https://example.com/unsubscribe>")
-    
+
     # This will produce:
     # List-Unsubscribe: <https://example.com/unsubscribe>, <mailto:me@example.com?subject=unsubscribe>
     Envelope().list_unsubscribe("example.com/unsubscribe", mail="me@example.com?subject=unsubscribe")
-    ```    
-    
-* **.auto_submitted**: 
-    * **.auto_submitted(val="auto-replied")**: Direct response to another message by an automatic process. 
+    ```
+
+* **.auto_submitted**:
+    * **.auto_submitted(val="auto-replied")**: Direct response to another message by an automatic process.
     * **.auto_submitted.auto_generated()**: automatic (often periodic) processes (such as UNIX "cron jobs") which are not direct responses to other messages
     * **.auto_submitted.no()**: message was originated by a human
 
 ```python3
-Envelope().auto_submitted()  # mark message as automatic        
+Envelope().auto_submitted()  # mark message as automatic
 Envelope().auto_submitted.no()  # mark message as human produced
-```    
+```
 
 ### Cipher standard method
 Note that if neither *gpg* nor *smime* is specified, we try to determine the method automatically.
@@ -428,13 +435,13 @@ Note that if neither *gpg* nor *smime* is specified, we try to determine the met
 ### Signing
   * **sign**: Sign the message.
     * **`key`** parameter
-        * GPG: 
+        * GPG:
             * Blank (*CLI*) or True (*module*) for user default key
             * "auto" for turning on signing if there is a key matching to the "from" header
             * key ID/fingerprint
             * e-mail address of the identity whose key is to be signed with
             * [Any attainable contents](#any-attainable-contents) with the key to be signed with (will be imported into keyring)
-        * S/MIME: [Any attainable contents](#any-attainable-contents) with key to be signed with. May contain signing certificate as well.            
+        * S/MIME: [Any attainable contents](#any-attainable-contents) with key to be signed with. May contain signing certificate as well.
     * **--sign key**: (for `key` see above)
     * **--sign-path**: Filename with the From\'s private key. (Alternative to the `sign` parameter.)
     * **--passphrase**: Passphrase to the key if needed.
@@ -448,10 +455,10 @@ Note that if neither *gpg* nor *smime* is specified, we try to determine the met
     * **Envelope(attach_key=)**: If true, append GPG public key as an attachment when sending.
     * **Envelope(cert=)**: S/MIME: [Any attainable contents](#any-attainable-contents)
 ### Encrypting
-  * **encrypt**:  Recipient GPG public key or S/MIME certificate to be encrypted with. 
+  * **encrypt**:  Recipient GPG public key or S/MIME certificate to be encrypted with.
     * **`key`** parameter
         * GPG:
-            * Blank (*CLI*) or True (*module*) to force encrypt with the user default keys (identities in the "from", "to", "cc" and "bcc" headers) 
+            * Blank (*CLI*) or True (*module*) to force encrypt with the user default keys (identities in the "from", "to", "cc" and "bcc" headers)
             * "auto" for turning on encrypting if there is a matching key for every recipient
             * key ID/fingerprint
             * e-mail address of the identity whose key is to be encrypted with
@@ -463,19 +470,19 @@ Note that if neither *gpg* nor *smime* is specified, we try to determine the met
     * **.encrypt(key=True, sign=, key_path=)**:
         * **`sign`** See signing, ex: you may specify boolean or default signing key ID/fingerprint or "auto" for GPG or [any attainable contents](#any-attainable-contents) with an S/MIME key + signing certificate.
         * **`key_path`**: Key/certificate contents (alternative to the `key` parameter)
-    * **.encryption(key=True, key_path=)**: Encrypt later (when launched with *.sign()*, *.encrypt()* or *.send()* functions. If needed, in the parameters specify [any attainable contents](#any-attainable-contents) with GPG encryption key or S/MIME encryption certificate. 
+    * **.encryption(key=True, key_path=)**: Encrypt later (when launched with *.sign()*, *.encrypt()* or *.send()* functions. If needed, in the parameters specify [any attainable contents](#any-attainable-contents) with GPG encryption key or S/MIME encryption certificate.
     * **Envelope(encrypt=key)**: (for `key` see above)
     ```bash
     # message gets encrypted for multiple S/MIME certificates
     envelope --smime --encrypt-path recipient1.pem recipient2.pem --message "Hello"
-    
+
     # message gets encrypted with the default GPG key
     envelope  --message "Encrypted GPG message!" --subject "Secret subject will not be shown" --encrypt --from person@example.com --to person@example.com
-    
+
     # message not encrypted for the sender (from Bash)
     envelope  --message "Encrypted GPG message!" --subject "Secret subject will not be shown" --encrypt receiver@example.com receiver2@example.com --from person@example.com --to receiver@example.com receiver2@example.com
     ```
-    
+
     ```python3
     # message not encrypted for the sender (from Python)
     Envelope()
@@ -483,11 +490,11 @@ Note that if neither *gpg* nor *smime* is specified, we try to determine the met
         .subject("Secret subject will not be shown")
         .from_("person@example.com")
         .to(("receiver@example.com", "receiver2@example.com"))
-        .encrypt(("receiver@example.com", "receiver2@example.com"))        
+        .encrypt(("receiver@example.com", "receiver2@example.com"))
     ```
 
 #### GPG notes
-* If the GPG encryption fails, it tries to determine which recipient misses the key.  
+* If the GPG encryption fails, it tries to determine which recipient misses the key.
 * By default, GPG encrypts with the key of the **from** header recipient too.
 * Key ID/fingerprint is internally ignored right now, GPG decides itself which key is to be used.
 
@@ -498,19 +505,19 @@ Note that if neither *gpg* nor *smime* is specified, we try to determine the met
       * **--attachments [NAME]** Get the list of attachments or a contents of the one specified by `NAME`
       * **.attachments(name=None, inline=None)**
         * **name** (str): The name of the only desired attachment to be returned.
-        * **inline** (bool): Filter inline/enclosed attachments only.            
+        * **inline** (bool): Filter inline/enclosed attachments only.
         * *Attachment* object has the attributes *.name* file name, *.mimetype*, *.data* raw data
             * if casted to *str*/*bytes*, its raw *.data* are returned
-  * **.copy()**: Return deep copy of the instance to be used independently. 
-  ```python3    
+  * **.copy()**: Return deep copy of the instance to be used independently.
+  ```python3
     factory = Envelope().cc("original@example.com").copy
     e1 = factory().to("to-1@example.com")
-    e2 = factory().to("to-2@example.com").cc("additional@example.com")  # 
+    e2 = factory().to("to-2@example.com").cc("additional@example.com")  #
 
     print(e1.recipients())  # {'to-1@example.com', 'original@example.com'}
     print(e2.recipients())  # {'to-2@example.com', 'original@example.com', 'additional@example.com'}
 ```
-  * Read message and subject by **.message()** and **.subject()**  
+  * Read message and subject by **.message()** and **.subject()**
   * **preview**: Returns the string of the message or data as a human-readable text.
             Ex: whilst we have to use quoted-printable (as seen in __str__), here the output will be plain text.
     * **--preview**
@@ -518,11 +525,11 @@ Note that if neither *gpg* nor *smime* is specified, we try to determine the met
   * **check**: Check all e-mail addresses and SMTP connection and return True/False if succeeded. Tries to find SPF, DKIM and DMARC DNS records depending on the From's domain and print them out.
     * **--check**
     * **.check(check_mx=True, check_smtp=True)**
-        * `check_mx` E-mail addresses can be checked for MX record, not only for their format.  
+        * `check_mx` E-mail addresses can be checked for MX record, not only for their format.
         * `check_smtp` We try to connect to the SMTP host.
-    
+
     ```bash
-    $ envelope --smtp localhost 25 --from me@example.com --check 
+    $ envelope --smtp localhost 25 --from me@example.com --check
     SPF found on the domain example.com: v=spf1 -all
     See: dig -t SPF example.com && dig -t TXT example.com
     DKIM found: ['v=DKIM1; g=*; k=rsa; p=...']
@@ -533,12 +540,12 @@ Note that if neither *gpg* nor *smime* is specified, we try to determine the met
   * **.as_message()**: Generates an email.message.Message object.
      ```python3
      e = Envelope("hello").as_message()
-     print(type(e), e.get_payload())  # <class 'email.message.EmailMessage'> hello\n 
+     print(type(e), e.get_payload())  # <class 'email.message.EmailMessage'> hello\n
      ```
      Note: due to a bug in a standard Python library https://github.com/python/cpython/issues/99533 and #19 you void GPG when you access the message this way wihle signing an attachment with a name longer than 34 chars.
   * **load**: Parse [any attainable contents](#any-attainable-contents) (including email.message.Message) like an EML file to build an Envelope object.
      * It can decrypt the message and parse its (inline or enclosed) attachments.
-     * Note that if you will send this reconstructed message, you might not probably receive it due to the Message-ID duplication. Delete at least Message-ID header prior to re-sending. 
+     * Note that if you will send this reconstructed message, you might not probably receive it due to the Message-ID duplication. Delete at least Message-ID header prior to re-sending.
      * (*static*) **.load(message, \*, path=None, key=None, cert=None, gnupg_home=None)**
          * **message**: [Any attainable contents](#any-attainable-contents)
          * **path**: Path to the file, alternative to the `message`
@@ -548,7 +555,7 @@ Note that if neither *gpg* nor *smime* is specified, we try to determine the met
          Envelope.load("Subject: testing message").subject()  # "testing message"
          ```
      * bash
-         * allows use blank `--subject` or `--message` flags to display the 
+         * allows use blank `--subject` or `--message` flags to display the
          * **--load FILE**
              ```bash
              $ envelope --load email.eml
@@ -556,22 +563,22 @@ Note that if neither *gpg* nor *smime* is specified, we try to determine the met
              Content-Transfer-Encoding: 7bit
              MIME-Version: 1.0
              Subject: testing message
-            
+
              Message body
-          
+
              $ envelope --load email.eml --subject
-             testing message          
+             testing message
              ```
-         * (*bash*) piped in content, envelope executable used with no argument    
+         * (*bash*) piped in content, envelope executable used with no argument
              ```bash
              $ echo "Subject: testing message" | envelope
              Content-Type: text/plain; charset="utf-8"
              Content-Transfer-Encoding: 7bit
              MIME-Version: 1.0
              Subject: testing message
-           
+
             $ cat email.eml | envelope
-          
+
             $ envelope < email.eml
             ```
   * **smtp_quit()**: As Envelope tends to re-use all the SMTP instances, you may want to quit them explicitly. Either call this method to the Envelope class to close all the cached connections or to an Envelope object to close only the connection it currently uses.
@@ -599,7 +606,7 @@ Empty object works too. For example, if the `From` header is not set, we get an 
 a = Envelope.load("Empty message").from_()
 bool(a) is False, a.host == ""
 Address() == Address("") == "", Address().address == ""
-``` 
+```
 
 Method `.casefold()` returns casefolded `Address` object which is useful for comparing with strings whereas comparing with other `Address` object casefolds automatically
 ```python3
@@ -612,7 +619,7 @@ Method `.is_valid(check_mx=False)` returns boolean if the format is valid. When 
 
 Since the `Address` is a subclass of `str`, you can safely join such objects.
 
-```python3    
+```python3
 ", ".join([a, a]) # "John <person@example.com>, "John <person@example.com>"
 a + " hello"  #  "John <person@example.com> hello"
 ```
@@ -624,7 +631,7 @@ Address object is equal to a string if the string contains its e-mail address or
 "person@example.com" == Address("John <person@example.com>") == "John <person@example.com>"  # True
 ```
 
-Concerning `to`, `cc`, `bcc` and `reply-to`, multiple addresses may always be given in a string, delimited by comma (or semicolon). The `.get(address:bool, name:bool)` method may be called on an `Address` object to filter the desired information. 
+Concerning `to`, `cc`, `bcc` and `reply-to`, multiple addresses may always be given in a string, delimited by comma (or semicolon). The `.get(address:bool, name:bool)` method may be called on an `Address` object to filter the desired information.
 ```python3
 e = (Envelope()
     .to("person1@example.com")
@@ -711,7 +718,7 @@ with open("/tmp/message.txt") as f:
 ```
 
 Sign and encrypt the message so that's decryptable by keys for me@example.com and remote_person@example.com (that should already be loaded in the keyring).
-```python3 
+```python3
 Envelope(message="Hello world", sign=True,
         encrypt=True,
         from_="me@example.com",
@@ -719,7 +726,7 @@ Envelope(message="Hello world", sign=True,
 ```
 
 Sign and encrypt the message so that's decryptable by keys for me@example.com and remote_person@example.com (that get's imported to the keyring from the file).
-```python3 
+```python3
 Envelope(message="Hello world", sign=True,
         encrypt=Path("/tmp/remote_key.asc"),
         from_="me@example.com",
@@ -732,12 +739,12 @@ Envelope(message="Hello world", sign=True, gnupg="/tmp/my-keyring/")
 ```
 
 Sign the message with a key that needs passphrase.
-```python3 
+```python3
 Envelope(message="Hello world", sign=True, passphrase="my-password")
 ```
 
-Sign a message with signing by default turned previously on and having a default keyring path. Every `factory` call will honour these defaults. 
-```python3 
+Sign a message with signing by default turned previously on and having a default keyring path. Every `factory` call will honour these defaults.
+```python3
 factory = Envelope().signature(True).gpg("/tmp/my-keyring").copy
 factory().(message="Hello world")
 ```
@@ -756,17 +763,17 @@ envelope --to "user@example.org" --message "Hello world" --send
 Send while having specified the SMTP server host, port, username, password.
 
 ```bash
-envelope --to "user@example.org" message "Hello world" --send --smtp localhost 123 username password 
+envelope --to "user@example.org" message "Hello world" --send --smtp localhost 123 username password
 ```
 
 Send while having specified the SMTP server through a dictionary.
 ```bash
-envelope --to "user@example.org" --message "Hello world" --send --smtp '{"host": "localhost", "port": "123"}' 
+envelope --to "user@example.org" --message "Hello world" --send --smtp '{"host": "localhost", "port": "123"}'
 ```
 
 Send while having specified the SMTP server via module call.
 ```python3
-Envelope(message="Hello world", to="user@example.org", send=True, smtp={"host":"localhost"}) 
+Envelope(message="Hello world", to="user@example.org", send=True, smtp={"host":"localhost"})
 ```
 
 ## Attachment
@@ -776,15 +783,15 @@ Envelope(attachment=Path("/tmp/file.txt"))  # file name will be 'file.txt'
 
 with open("/tmp/file.txt") as f:
     Envelope(attachment=f)  # file name will be 'file.txt'
-    
+
 with open("/tmp/file.txt") as f:
     Envelope(attachment=(f, "filename.txt"))
-    
+
 Envelope().attach(path="/tmp/file.txt", name="filename.txt")
 ```
 
 ## Inline images
-The only thing you have to do is to set the `inline=True` parameter of the attachment. Then, you can reference the image from within your message, with the help of `cid` keyword. For more details, see *attachments* in the [Sending](#sending) section. 
+The only thing you have to do is to set the `inline=True` parameter of the attachment. Then, you can reference the image from within your message, with the help of `cid` keyword. For more details, see *attachments* in the [Sending](#sending) section.
 ```python3
 (Envelope()
     .attach(path="/tmp/file.jpg", inline=True)
@@ -845,7 +852,7 @@ RQ8QtLLEza+rs+1lgcPgdBZEHFpYpgDb0AUvYg9d
 ```
 
 # Related affairs
-Sending an e-mail does not mean it will be received. Sending it successfully through your local domain does not mean a public mailbox will accept it as well. If you are not trustworthy enough, your e-mail may not even appear at the recipient's spam bin, it can just be discarded without notice. 
+Sending an e-mail does not mean it will be received. Sending it successfully through your local domain does not mean a public mailbox will accept it as well. If you are not trustworthy enough, your e-mail may not even appear at the recipient's spam bin, it can just be discarded without notice.
 
 ## Configure your SMTP
 It is always easier if you have an account on an SMTP server the application is able to send e-mails with. If it is not the case, various SMTP server exist but as a quick and non-secure solution, I've tested [bytemark/smtp](https://hub.docker.com/r/bytemark/smtp/) docker image that allows you to start up a SMTP server by a single line.
@@ -870,18 +877,18 @@ GNUPGHOME=/var/www/.gnupg sudo -H -u www-data gpg --export [APPLICATION_EMAIL] |
 GNUPGHOME=/var/www/.gnupg sudo -H -u www-data envelope --message "Hello world" --subject "GPG signing test" --sign [key ID] --from [application e-mail] --to [your e-mail] --send  # you now receive e-mail and may import the key and set the trust to the key
 ```
 
-It takes few hours to a key to propagate. If the key cannot be imported in your e-mail client because not found on the servers, try in the morning again or check the online search form at http://hkps.pool.sks-keyservers.net.  
+It takes few hours to a key to propagate. If the key cannot be imported in your e-mail client because not found on the servers, try in the morning again or check the online search form at http://hkps.pool.sks-keyservers.net.
 Put your fingerprint on the web or on the business card then so that everybody can check your signature is valid.
 
 ### Configure your S/MIME
 If you are supposed to use S/MIME, you would probably be told where to take your key and certificate from. If planning to try it all by yourself, generate your `certificate.pem`.
- 
+
 * Either: Do you have private key?
 ```bash
 openssl req -key YOUR-KEY.pem -nodes -x509 -days 365 -out certificate.pem  # will generate privkey.pem alongside
 ```
- 
-* Or: Do not you have private key? 
+
+* Or: Do not you have private key?
 ```bash
 openssl req -newkey rsa:1024 -nodes -x509 -days 365 -out certificate.pem  # will generate privkey.pem alongside
 ```
@@ -894,17 +901,17 @@ envelope --message "Hello world" --subject "S/MIME signing test" --sign-path [ke
 ## DNS validation tools
 This is just a short explanation on these anti-spam mechanisms so that you can take basic notion what is going on.
 
-Every time, the receiver should ask the From's domain these questions over DNS.  
+Every time, the receiver should ask the From's domain these questions over DNS.
 
 ### SPF
-The receiver asks the sender's domain: Do you allow the senders IP/domain to send the e-mail on your behalf? Is the IP/domain the mail originates from enlisted as valid in the DNS of the SMTP envelope MAIL FROM address domain? 
+The receiver asks the sender's domain: Do you allow the senders IP/domain to send the e-mail on your behalf? Is the IP/domain the mail originates from enlisted as valid in the DNS of the SMTP envelope MAIL FROM address domain?
 
 Check your domain on SPF:
 ```bash
 dig -t TXT example.com
 ```
 
-SPF technology is tied to the SMTP envelope MAIL FROM address which is specified with the `.from_addr` method and then stored into the Return-Path header by the receiving server, and it has nothing in common with the headers like From `.from_`, Reply-To `.reply_to`, or Sender `.header("Sender")`. 
+SPF technology is tied to the SMTP envelope MAIL FROM address which is specified with the `.from_addr` method and then stored into the Return-Path header by the receiving server, and it has nothing in common with the headers like From `.from_`, Reply-To `.reply_to`, or Sender `.header("Sender")`.
 
 ### DKIM
 The receiver asks the sender's domain: Give me the public key so that I may check the hash in the e-mail header that assert the message was composed by your private key. So that the e-mail comes trustworthy from you and nobody modified it on the way.
@@ -912,7 +919,7 @@ The receiver asks the sender's domain: Give me the public key so that I may chec
 Check your domain on DKIM:
 ```bash
 dig -t TXT [selector]._domainkey.example.com
-``` 
+```
 You can obtain the `selector` from an e-mail message you received. Check the line `DKIM-Signature` and the value of the param `s`.
 ```
 DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/simple; d=example.com; s=default;
@@ -924,4 +931,4 @@ What is your policy concerning SPF and DKIM? What abuse address do you have?
 Check your domain on DMARC:
 ```bash
 dig -t TXT _dmarc.example.com
-``` 
+```
