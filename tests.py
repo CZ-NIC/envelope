@@ -362,6 +362,21 @@ class TestSmime(TestAbstract):
                           'Content-Disposition: attachment; filename="smime.p7s"',
                           "MIIEtwYJKoZIhvcNAQcCoIIEqDCCBKQCAQExDzANBglghkgBZQMEAgMFADALBgkq",), 10)
 
+    def test_dual_pgp_smime_sign(self):
+        # XXX WIP
+        e = Envelope(MESSAGE)
+        smime_key = Path("tests/smime/key.pem").read_bytes()
+        e._cert = Path(self.smime_cert).read_bytes()
+        e = (e
+                         .smime(signature_experimental=smime_key)
+                         .gpg(GNUPG_HOME)
+                         .subject("my subject")
+                         .reply_to("test-reply@example.com")
+                         .signature() # Path("tests/smime/key.pem"), cert=Path(self.smime_cert))
+                         .send(False))
+        print(e)
+        pass
+
     def test_smime_key_cert_together(self):
         self.check_lines(Envelope(MESSAGE)
                          .smime()

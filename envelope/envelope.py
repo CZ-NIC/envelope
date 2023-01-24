@@ -52,7 +52,7 @@ Envelope("my message")
 
 Usage:
   * launch as an application, see ./envelope.py --help
-  * import as a module to your application, ex: `from envelope import Envelope` 
+  * import as a module to your application, ex: `from envelope import Envelope`
 """
 
 logger = logging.getLogger(__name__)
@@ -566,8 +566,9 @@ class Envelope:
         self._gpg = gnugp_home
         return self
 
-    def smime(self):
+    def smime(self, signature_experimental=None):
         self._gpg = False
+        self._smime_signature_experimental = signature_experimental
         return self
 
     def subject(self, subject=None, encrypted: Union[str, bool] = None) -> Union["Envelope", str]:
@@ -977,6 +978,10 @@ class Envelope:
                     email = self._compose_gpg_encrypted(data)
                 elif sign:  # gpg
                     email = self._compose_gpg_signed(email, data, micalg)
+                    if self._smime_signature_experimental:
+                        # #28
+                        d = self._encrypt_smime_now(email.as_bytes(), self._smime_signature_experimental, False)
+                        email = BytesParser().parsebytes(d.strip())  # smime always produces a Message object, not raw data
             elif encrypt or sign:  # smime
                 # smime does not need additional EmailMessage to be included in, just restore Subject that has been
                 # consumed in _encrypt_smime_now. It's interesting that I.E. "Reply-To" is not consumed there.
