@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 2.0.3
+- fix: loading headers not encoded with utf-8
+
 ## 2.0.2 (2022-11-25)
 - experimental [XARF](http://xarf.org/) reports reading
 - disguised addresses parsing
@@ -11,9 +14,9 @@
 
 ## 2.0.0 (2022-05-04)
 - CHANGED: `Envelope(sender=).sender()` alias REMOVED because to the unambiguous naming clash between the `From` and the `Sender` e-mail header. Use `Envelope().from_(...)` and `Envelope().header("Sender", ...)` instead. Pity that 'from' is a reserved keyword, "from_" looks bad.
-- CHANGED: `Envelope.default` instance REMOVED because explicit is better than implicit. For setting defaults use `Envelope().copy()` instead 
+- CHANGED: `Envelope.default` instance REMOVED because explicit is better than implicit. For setting defaults use `Envelope().copy()` instead
 - CHANGED: explicitly specifying encryption keys prevents encrypting for other recipients
-  - GPG encryption for arbitrary keys only possible #9 #14 
+  - GPG encryption for arbitrary keys only possible #9 #14
 - CHANGED: Optional parameter "email_or_list" renamed to "email_or_more" (methods `to` and friends)
   - When setting recipients, apart from list other iterables (tuple, generator, set, ...) may be used
 - fix: when signing key fails, do not sign with the default GPG private key
@@ -43,7 +46,7 @@
 - headers truly case-insensitive when loading
 - `.from_()` and `.sender()` truly return an `Address` even if not set (and then the Address is empty)
 - fix: the internal cache correctly regenerated
-- message is internally held in bytes -> helpful error message when charset fails 
+- message is internally held in bytes -> helpful error message when charset fails
 
 ## 1.4 (2021-01-23)
 - exposed Address
@@ -56,7 +59,7 @@
 
 ## 1.3.2 (2020-10-26)
 - fix charset for base64 encoded content
-- fix the default encoding while casting an attachment to string 
+- fix the default encoding while casting an attachment to string
 
 ## 1.3 (2020-10-05)
 - CHANGED:
@@ -90,7 +93,7 @@
 ## 1.0.0 (2020-05-28)
 - CHANGED:
     * Envelope.__init__ parameters re-ordered
-    * `from envelope import Envelope` is the only right way to import, `import envelope` no more supported (slightly longer, however better suits Python naming conventions)  
+    * `from envelope import Envelope` is the only right way to import, `import envelope` no more supported (slightly longer, however better suits Python naming conventions)
 - fix: --attach-key flag in CLI did not work
 - auto-import GPG key from file
 - auto-encrypt GPG possibility
@@ -98,10 +101,10 @@
 - "sender" works as an alias for "from_" if both are not used; otherwise standard "Sender" header is included
 - .date(date) method allows turn off automatic Date header adding
 - fix: object is modified whenever a parameter changes (ex: if user changes subject multiple times), not at send time
-- `.message` has new aliases: `.body` and `.text` to facilitate the programmer's workflow because when autocomplete 
+- `.message` has new aliases: `.body` and `.text` to facilitate the programmer's workflow because when autocomplete
 
 ## 0.9.9 (2020-02-10)
-- smime dependency is optional – thus package can be installed directly without having swig library 
+- smime dependency is optional – thus package can be installed directly without having swig library
 
 ## 0.9.8 (2020-01-27)
 - set signing to "auto" for signing if there is a key matching to the "from" header
@@ -121,7 +124,7 @@
 ## 0.9.5 (2019-12-12)
 - CHANGED:
     * `encrypt-file` changed to `encrypt-path` (to match the `encrypt_path` parameter of the `encrypt` method)
-    * parameter swap from `.encrypt(sign=None, key=True)` to `.encrypt(key=True, sign=None)` due to S/MIME that does not take the key from the GPG keyring but needs the certificate to be specified every time. 
+    * parameter swap from `.encrypt(sign=None, key=True)` to `.encrypt(key=True, sign=None)` due to S/MIME that does not take the key from the GPG keyring but needs the certificate to be specified every time.
 - S\MIME
     * signing (`M2Crypto` instead of `smime` package)
     * insert subject while encrypting
@@ -145,11 +148,11 @@
 - CLI: if nothing to do, assume parameters are a bone of an e-mail message to produce output
 - check GPG signing failed
 - fix GnuPG home
-- fix encrypted subject 
+- fix encrypted subject
 - SMTP supports INI file
 - `check` will print out DNS information of the sender's domain
 - CLI: metavar display names added
-- attach_key flag added 
+- attach_key flag added
 
 ## 0.9.1
 - signing, encrypting, sending

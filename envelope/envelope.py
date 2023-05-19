@@ -52,7 +52,7 @@ Envelope("my message")
 
 Usage:
   * launch as an application, see ./envelope.py --help
-  * import as a module to your application, ex: `from envelope import Envelope` 
+  * import as a module to your application, ex: `from envelope import Envelope`
 """
 
 logger = logging.getLogger(__name__)
@@ -680,7 +680,13 @@ class Envelope:
                 #   [(b'Nov\xc3\xa1k Honza Name longer than 75 chars <honza.novak@example.com>', 'unknown-8bit')]
                 # ex: "From: =?UTF-8?Q?Ji=c5=99=c3=ad?= <jiri@example.com>" -> multiple chunks
                 #   [(b'Ji\xc5\x99\xc3\xad', 'utf-8'), (b' <jiri@example.com>', None)]
-                val = "".join(assure_fetched(x[0], str) for x in decode_header(val))
+                chunks = []
+                for part, encoding in decode_header(val):
+                    if isinstance(part, bytes):
+                        chunks.append(part.decode(encoding if encoding not in ('unknown-8bit', None) else 'utf-8'))
+                    else:
+                        chunks.append(part)
+                val = "".join(chunks)
             return specific_interface[k](val)
 
         if replace:

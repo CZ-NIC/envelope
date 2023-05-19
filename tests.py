@@ -1691,11 +1691,16 @@ class TestLoad(TestBash):
         # val = str(policy.header_store_parse(k, val)[1])
         self.assertIn("Subject: Re: text", str(e))
 
-        # when longer than certain number of characters, the method Parser.parse header.Header.encode()
-        # returned chunks that were problematic to parse with policy.header_store_parse
+        # When longer than certain number of characters, the method Parser.parse header.Header.encode()
+        # returned chunks that were problematic to parse with policy.header_store_parse.
+        # This will be treated as 'unknown-8bit' header.
         address = Envelope.load("To: Novák Honza Name longer than 75 chars <honza.novak@example.com>").to()[0]
         self.assertEqual("honza.novak@example.com", address.address)
         self.assertEqual("Novák Honza Name longer than 75 chars", address.name)
+
+        # other than UTF-8 headers
+        iso_2 = "Subject: =?iso-8859-2?Q?=BE=E1dost_o_blokaci_dom=E9ny?="
+        self.assertEqual("žádost o blokaci domény", Envelope.load(iso_2).subject())
 
     def test_load_bash(self):
         self.assertIn("Hello world subject", self.bash())
