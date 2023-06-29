@@ -1008,7 +1008,17 @@ class Envelope:
             if self._gpg is not None:
                 gpg_on = bool(self._gpg)
             else:
-                gpg_on = True
+                try:  # check whether we have SMIME-loadable contents
+                    from M2Crypto import X509, EVP  # we save up to 30 - 120 ms to load it here
+                    if sign:
+                        EVP.load_key_string(sign)
+                        gpg_on = False
+                    elif encrypt:
+                        sk = X509.X509_Stack()
+                        [sk.push(X509.load_cert_string(e)) for e in assure_list(encrypt)]
+                        gpg_on = False
+                except (ImportError, TypeError, ValueError):
+                    gpg_on = True
 
             if gpg_on:
                 self._gnupg = gnupg.GPG(gnupghome=self._get_gnupg_home(), options=["--trust-model=always"],
@@ -1277,9 +1287,7 @@ class Envelope:
                 content_buffer = signed_buffer
         if encrypt:
             sk = X509.X509_Stack()
-            if type(encrypt) is not list:
-                encrypt = [encrypt]
-            [sk.push(X509.load_cert_string(e)) for e in encrypt]
+            [sk.push(X509.load_cert_string(e)) for e in assure_list(encrypt)]
             # XX certificates might be loaded from a directory by from, to, sender:
             # X509.load_cert_string(assure_fetched(e, bytes)).get_subject() ->
             # 'C=CZ, ST=State, L=City, O=Organisation, OU=Unit, CN=my-name/emailAddress=email@example.com'
