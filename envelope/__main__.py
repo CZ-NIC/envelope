@@ -136,7 +136,7 @@ def main():
                             metavar="SUBTYPE")
     group_send.add_argument('--smtp',
                             help="SMTP server. List `host, [port, [username, password,"
-                                 " [security, [timeout, [attempts, [delay]]]]]]` or dict.\n"
+                                 " [security, [timeout, [attempts, [delay, [local_hostname]]]]]]]` or dict.\n"
                                  "Ex: '--smtp {\"host\": \"localhost\", \"port\": 25}'."
                                  " Security may be explicitly set to 'starttls', 'tls'"
                                  " or automatically determined by port.",

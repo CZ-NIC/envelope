@@ -32,7 +32,7 @@ from .constants import ISSUE_LINK, smime_import_error, gnupg, CRLF, AUTO, PLAIN,
 from .message import _Message
 from .parser import Parser
 from .smtp_handler import SMTPHandler
-from .utils import AutoSubmittedHeader, is_gpg_importable_key, assure_list, assure_fetched, get_mimetype
+from .utils import AutoSubmittedHeader, Fetched, is_gpg_importable_key, assure_list, assure_fetched, get_mimetype
 
 __doc__ = """Quick layer over python-gnupg, M2Crypto, smtplib, magic and email handling packages.
 Their common use cases merged into a single function. Want to sign a text and tired of forgetting how to do it right?
@@ -705,7 +705,7 @@ class Envelope:
         return self
 
     def smtp(self, host: Any = "localhost", port=25, user=None, password=None, security=None, timeout=3, attempts=3,
-             delay=3):
+             delay=3, local_hostname=None):
         """
         Obtain SMTP server connection.
         Note that you may safely call this in a loop,
@@ -718,6 +718,7 @@ class Envelope:
         :param timeout: How many seconds should SMTP wait before timing out.
         :param attempts: How many times we try to send the message to an SMTP server.
         :param delay: How many seconds to sleep before re-trying a timed out connection.
+        :param local_hostname: FQDN of the local host in the HELO/EHLO command.
         :return:
         """
         # CLI interface returns always a list or dict, ex: host=["localhost"] or host=["ini file"] or host={}
@@ -753,7 +754,7 @@ class Envelope:
             self._smtp = SMTPHandler(host)
         else:
             self._smtp = SMTPHandler(host, port, user, password, security, timeout=timeout, attempts=attempts,
-                                     delay=delay)
+                                     delay=delay, local_hostname=local_hostname)
         return self
 
     def attach(self, attachment=None, mimetype=None, name=None, inline=None, *, path=None):
@@ -1001,7 +1002,7 @@ class Envelope:
 
         return email
 
-    def _determine_gpg(self, encrypt, sign):
+    def _determine_gpg(self, encrypt: Fetched | list[Fetched], sign: Fetched):
         """ determine if we are using gpg or smime"""
         gpg_on = None
         if encrypt or sign:
@@ -1047,8 +1048,7 @@ class Envelope:
                                 raise RuntimeError("No GPG sign key found")
                     elif is_gpg_importable_key(sign):
                         # sign is Path or key contents, import it and get its fingerprint
-                        result = self._gnupg.import_keys(assure_fetched(sign, bytes))
-                        sign = result.fingerprints[0]
+                        sign = self._gpg_import_or_fail(sign)[0]
 
                 if encrypt:
                     if encrypt == AUTO:
@@ -1064,12 +1064,24 @@ class Envelope:
                         decipherers = []
                         for item in assure_list(encrypt):
                             if is_gpg_importable_key(item):
-                                decipherers.extend(self._gnupg.import_keys(assure_fetched(item, bytes)).fingerprints)
+                                decipherers.extend(self._gpg_import_or_fail(item))
                             else:
                                 decipherers.append(item)
                         encrypt = decipherers
 
         return encrypt, sign, gpg_on
+
+    def _gpg_import_or_fail(self, key):
+        """
+        :param key: Any attainable contents
+        :raises ValueError: If import failed
+        :return: Fingerprints
+        """
+        if imported := self._gnupg.import_keys(assure_fetched(key, bytes)):
+            return imported.fingerprints
+        else:
+            raise ValueError(f"Could not import key starting: {key[:80]}...")
+
 
     def _get_gnupg_home(self, for_help=False):
         s = self._gpg if type(self._gpg) is str else None

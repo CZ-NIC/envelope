@@ -307,7 +307,7 @@ Envelope().attach(path="file.jpg")
     * **.date(date)** `str|False` Specify Date header (otherwise Date is added automatically). If False, the Date header will not be added automatically.
   * **smtp**: SMTP server
     * **--smtp**
-    * **.smtp(host="localhost", port=25, user=, password=, security=, timeout=3, attempts=3, delay=3)**
+    * **.smtp(host="localhost", port=25, user=, password=, security=, timeout=3, attempts=3, delay=3, local_hostname=None)**
     * **Envelope(smtp=)**
     * Parameters:
         * `host` May include hostname or any of the following input formats (ex: path to an INI file or a `dict`)
@@ -315,10 +315,11 @@ Envelope().attach(path="file.jpg")
         * `timeout` How many seconds should SMTP wait before timing out.
         * `attempts` How many times we try to send the message to an SMTP server.
         * `delay` How many seconds to sleep before re-trying a timed out connection.
+        * `local_hostname` FQDN of the local host in the HELO/EHLO command.
     * Input format may be in the following form:
         * `None` default localhost server used
-        * `smtplib.SMTP` object
-        * `list` or `tuple` having `host, [port, [username, password, [security, [timeout, [attempts, [delay]]]]]]` parameters
+        * standard [`smtplib.SMTP`](https://docs.python.org/3/library/smtplib.html) object
+        * `list` or `tuple` having `host, [port, [username, password, [security, [timeout, [attempts, [delay, [local_hostname]]]]]]]` parameters
             * ex: `envelope --smtp localhost 125 me@example.com` will set up host, port and username parameters
         * `dict` specifying {"host": ..., "port": ...}
             * ex: `envelope --smtp '{"host": "localhost"}'` will set up host parameter
@@ -330,7 +331,7 @@ Envelope().attach(path="file.jpg")
             ```
     * Do not fear to pass the `smtp` in a loop, we make just a single connection to the server. If timed out, we attempt to reconnect once.
     ```python3
-    smtp = localhost, 25
+    smtp = "localhost", 25
     for mail in mails:
         Envelope(...).smtp(smtp).send()
     ```

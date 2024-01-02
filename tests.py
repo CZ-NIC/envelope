@@ -1522,7 +1522,7 @@ class TestSupportive(TestAbstract):
 
         def key(name):
             return "{'host': '" + name + "', 'port': 25, 'user': None, 'password': None," \
-                                         " 'security': None, 'timeout': 3, 'attempts': 3, 'delay': 3}"
+                                         " 'security': None, 'timeout': 3, 'attempts': 3, 'delay': 3, 'local_hostname': None}"
 
         SMTPHandler._instances={key(name): DummySMTPConnection(name) for name in (f"dummy{i}" for i in range(4))}
 

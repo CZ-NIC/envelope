@@ -9,6 +9,7 @@ if TYPE_CHECKING:
     from .envelope import Envelope
 
 logger = logging.getLogger(__name__)
+Fetched = str | bytes | None
 
 
 class AutoSubmittedHeader:
@@ -76,7 +77,7 @@ def assure_list(v):
     return [v]
 
 
-def assure_fetched(message, retyped=None):
+def assure_fetched(message, retyped=None) -> Fetched:
     """ Accepts object, returns its string or bytes.
     If object is
         * str or bytes, we consider this is the file contents

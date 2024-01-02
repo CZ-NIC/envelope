@@ -2,6 +2,9 @@
 
 ## 2.0.3
 - fix: loading headers not encoded with utf-8
+- fix: better S/MIME detection #29
+- drop Python 3.9 support
+- SMTP HELO FQDN
 
 ## 2.0.2 (2022-11-25)
 - experimental [XARF](http://xarf.org/) reports reading

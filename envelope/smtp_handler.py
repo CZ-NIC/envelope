@@ -14,7 +14,7 @@ class SMTPHandler:
     _instances: Dict[str, SMTP] = {}
 
     def __init__(self, host="localhost", port=25, user=None, password=None, security=None, timeout=3, attempts=3,
-                 delay=3):
+                 delay=3, local_hostname=None):
         self.attempts = attempts
         # If sending timeouts, delay N seconds before another attempt.
         self.delay = delay
@@ -29,6 +29,7 @@ class SMTPHandler:
             self.password = password
             self.security = security
             self.timeout = timeout
+            self.local_hostname = local_hostname
         d = locals()
         del d["self"]
         self.key = repr(d)
@@ -43,10 +44,10 @@ class SMTPHandler:
 
             context = ssl.create_default_context()
             if self.security == "tls":
-                smtp = SMTP_SSL(self.host, self.port,
+                smtp = SMTP_SSL(self.host, self.port, self.local_hostname,
                                 timeout=self.timeout, context=context)
             else:
-                smtp = SMTP(self.host, self.port, timeout=self.timeout)
+                smtp = SMTP(self.host, self.port, self.local_hostname, timeout=self.timeout)
                 if self.security == "starttls":
                     smtp.starttls(context=context)
             if self.user:

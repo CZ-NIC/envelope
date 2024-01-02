@@ -5,7 +5,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: [3.7, 3.8, 3.9, "3.10", 3.11]
+        python-version: ["3.10", 3.11, 3.12]
     steps:
       - uses: actions/checkout@v2
       - name: Set up Python ${{ matrix.python-version }}
@@ -17,7 +17,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install M2Crypto
           pip install -e .
-      - name: Run tests      
+      - name: Run tests
         run: python3 tests.py
       # As we support both python-magic and file-magic, try them one by one.
       - name: Test python-magic
@@ -26,7 +26,7 @@ jobs:
         run: pip uninstall python-magic -y
       - name: Test libmagic missing
         id: should_fail
-        run: python3 tests.py TestMime.test_libmagic        
+        run: python3 tests.py TestMime.test_libmagic
         continue-on-error: true
       - name: Check on failures
         if: steps.should_fail.outcome != 'failure'
