@@ -3,7 +3,10 @@ from io import TextIOBase, BufferedIOBase
 from pathlib import Path
 from typing import TYPE_CHECKING, Iterable
 
-import magic
+try:
+    import magic
+except ImportError as e:
+    magic = e
 
 if TYPE_CHECKING:
     from .envelope import Envelope
@@ -48,7 +51,8 @@ def get_mimetype(data: bytes = None, path: Path = None):
     """ We support both python-magic and file-magic library, any of them can be on the system. #25
         Their funcionality is the same, their API differs.
     """
-    # XX change to match statement as of Python3.10
+    if isinstance(magic, ImportError):  # user has to install libmagic
+        raise magic
     if hasattr(magic.Magic, "from_file"):  # this is python-magic
         if data:
             return magic.Magic(mime=True).from_buffer(data)

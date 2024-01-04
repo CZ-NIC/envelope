@@ -80,7 +80,7 @@ Envelope.load(path="message.eml").attachments()
 * If planning to use S/MIME, you should ensure some prerequisites: `sudo apt install swig build-essential python3-dev libssl-dev && pip3 install M2Crypto`
 * If planning to send e-mails, prepare SMTP credentials or visit [Configure your SMTP](#configure-your-smtp) tutorial.
 * If your e-mails are to be received outside your local domain, visit [DMARC](#dmarc) section.
-* Package [python-magic](https://pypi.org/project/python-magic/) is used as a dependency. Due to a [well-known](https://github.com/ahupp/python-magic/blob/master/COMPAT.md) name clash with the [file-magic](https://pypi.org/project/file-magic/) package, in case you need to use the latter, don't worry to run `pip uninstall python-magic && pip install file-magic` after installing envelope which is fully compatible with both projects.
+* Package [python-magic](https://pypi.org/project/python-magic/) is used as a dependency. Due to a [well-known](https://github.com/ahupp/python-magic/blob/master/COMPAT.md) name clash with the [file-magic](https://pypi.org/project/file-magic/) package, in case you need to use the latter, don't worry to run `pip uninstall python-magic && pip install file-magic` after installing envelope which is fully compatible with both projects. Both use `libmagic` under the hood which is probably already installed. However, if it is not, [install](https://github.com/ahupp/python-magic?tab=readme-ov-file#installation) `sudo apt install libmagic1`.
 
 ## Bash completion
 1. Run: `apt install bash-completion jq`
@@ -365,7 +365,7 @@ Envelope().attach(path="file.jpg")
     ```
     * **mime**: Sets contents mime subtype: "**auto**" (default), "**html**" or "**plain**" for plain text.
         Maintype is always set to "text".
-        Set maintype to "text".  If a line is longer than 1000 characters, makes the message be transferred safely by bytes (otherwise these non-standard long lines might cause a transferring SMTP server to include line breaks and redundant spaces that might break up ex: DKIM signature).
+        If a line is longer than 1000 characters, makes the message be transferred safely by bytes (otherwise these non-standard long lines might cause a transferring SMTP server to include line breaks and redundant spaces that might break up ex: DKIM signature).
         In case of `Content-Type` header put to the message, **mime** section functionality **is skipped**.
         * **--mime SUBTYPE**
         * **.mime(subtype="auto", nl2br="auto")**

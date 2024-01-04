@@ -1,6 +1,9 @@
 # CHANGELOG
 
-## 2.0.3
+## 2.0.4
+- resilience against missing libmagic (useful on a contained environment)
+
+## 2.0.3 (2023-01-03)
 - fix: loading headers not encoded with utf-8
 - fix: better S/MIME detection #29
 - drop Python 3.9 support

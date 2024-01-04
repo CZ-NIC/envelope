@@ -21,7 +21,7 @@ long_description = p.read_text() if p.exists() else ""
 
 setup(
     name='envelope',
-    version='2.0.3',
+    version='2.0.4',
     packages=['envelope'],
     author='Edvard Rejthar',
     author_email='edvard.rejthar@nic.cz',
