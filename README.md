@@ -338,7 +338,7 @@ Envelope().attach(path="file.jpg")
   * **attachments**
     * **--attach**: Path to the attachment, followed by optional file name to be used and/or mime type. This parameter may be used multiple times.
     ```bash
-    envelope --attachment "/tmp/file.txt" "displayed-name.txt" "text/plain" --attachment "/tmp/another-file.txt"
+    envelope --attach "/tmp/file.txt" "displayed-name.txt" "text/plain" --attach "/tmp/another-file.txt"
     ```
     * **.attach(attachment=, mimetype=, name=, path=, inline=)**:
         ```python3
