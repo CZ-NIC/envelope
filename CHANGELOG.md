@@ -1,9 +1,12 @@
 # CHANGELOG
 
-## 2.0.4
+## 2.0.4 (2024-07-18)
 - resilience against missing libmagic (useful on a contained environment)
+- better SMTP retries #35
+- better typing #31
+- fix: attachment included while signing only (without sending)
 
-## 2.0.3 (2023-01-03)
+## 2.0.3 (2024-01-03)
 - fix: loading headers not encoded with utf-8
 - fix: better S/MIME detection #29
 - drop Python 3.9 support

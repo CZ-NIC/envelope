@@ -79,9 +79,9 @@ class SMTPHandler:
             except (timeout_exc, SMTPException) as e:
                 # this connection is gone, reconnect next time
                 del self._instances[self.key]
-                if isinstance(e, SMTPSenderRefused):
+                if isinstance(e, SMTPAuthenticationError):
                     logger.warning(
-                        f"SMTP sender refused, unable to reconnect. {e}")
+                        f"SMTP authentication error, will not re-try. {e}")
                     return False
                 elif isinstance(e, timeout_exc):
                     if self.delay:

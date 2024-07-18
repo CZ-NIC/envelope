@@ -24,7 +24,7 @@ from os import environ
 from pathlib import Path
 from quopri import decodestring
 from types import GeneratorType
-from typing import Union, List, Set, Optional, Any
+from typing import Literal, Union, List, Set, Optional, Any
 
 from .address import Address
 from .attachment import Attachment
@@ -584,7 +584,7 @@ class Envelope:
             self._subject_encrypted = encrypted
         return self
 
-    def mime(self, subtype=AUTO, nl2br=AUTO):
+    def mime(self, subtype=AUTO, nl2br: Literal["auto"] | bool=AUTO):
         """
         Ignored if `Content-Type` header put to the message.
         @type subtype: str Set contents mime subtype: "auto" (default), "html" or "plain" for plain text.
@@ -951,7 +951,7 @@ class Envelope:
 
         # if we plan to send later, convert text message to the email message object
         email: Optional[Union[str, EmailMessage, Message]] = None
-        if send is not None or html:  # `html` means the user wants a 'multipart/alternative' e-mail message
+        if send is not None or html or self._attachments:  # `html` or attachments means the user needs a 'multipart/...' e-mail message
             email = self._prepare_email(plain, html, encrypt and gpg_on, sign and gpg_on, sign)
             if not email:
                 return
