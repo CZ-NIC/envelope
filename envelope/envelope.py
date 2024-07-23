@@ -34,6 +34,8 @@ from .parser import Parser
 from .smtp_handler import SMTPHandler
 from .utils import AutoSubmittedHeader, Fetched, is_gpg_importable_key, assure_list, assure_fetched, get_mimetype
 
+
+
 __doc__ = """Quick layer over python-gnupg, M2Crypto, smtplib, magic and email handling packages.
 Their common use cases merged into a single function. Want to sign a text and tired of forgetting how to do it right?
 You do not need to know everything about GPG or S/MIME, you do not have to bother with importing keys.
@@ -1262,56 +1264,44 @@ class Envelope:
             # see the module's documentation for alternative uses import imp
             warnings.simplefilter("ignore", category=DeprecationWarning)
             try:
-                from M2Crypto import BIO, SMIME, X509, EVP  # we save up to 30 - 120 ms to load it here
+                # from M2Crypto import BIO, SMIME, X509, EVP  # we save up to 30 - 120 ms to load it here ; smazat
+                from cryptography.hazmat.primitives.serialization import load_pem_private_key, pkcs7, Encoding
+                from cryptography.hazmat.primitives.asymmetric import padding
+                from cryptography.hazmat.primitives import hashes, serialization
+                from cryptography.x509 import load_pem_x509_certificate
             except ImportError:
                 # noinspection PyPep8Naming
                 BIO = SMIME = X509 = EVP = None
                 raise ImportError(smime_import_error)
-        output_buffer = BIO.MemoryBuffer()
-        signed_buffer = BIO.MemoryBuffer()
-        content_buffer = BIO.MemoryBuffer(email)
-
-        # Instantiate an SMIME object.
-        smime = SMIME.SMIME()
 
         if sign:
+
             # Since s.load_key shall not accept file contents, we have to set the variables manually
             sign = assure_fetched(sign, bytes)
+
+
             # XX remove getpass conversion to bytes callback when https://gitlab.com/m2crypto/m2crypto/issues/260 is resolved
             cb = (lambda x: bytes(self._passphrase, 'ascii')) if self._passphrase \
                 else (lambda x: bytes(getpass(), 'ascii'))
             try:
-                smime.pkey = EVP.load_key_string(sign, callback=cb)
+ #
+                key = load_pem_private_key(sign, password=None)
+                cert = load_pem_x509_certificate(self._cert)
+                print(f'key: {type(key)}, sign: {type(sign)}')
+
             except TypeError:
                 raise TypeError("Invalid key")
-            if self._cert:
-                cert = self._cert
-            else:
-                cert = sign
-            smime.x509 = X509.load_cert_string(cert)
+
             if not encrypt:
-                p7 = smime.sign(content_buffer, SMIME.PKCS7_DETACHED, 'sha512')
-                content_buffer = BIO.MemoryBuffer(email)  # we have to recreate it because it was sucked out
-                smime.write(output_buffer, p7, content_buffer)
-            else:
-                p7 = smime.sign(content_buffer)
-                smime.write(signed_buffer, p7)
-                content_buffer = signed_buffer
-        if encrypt:
-            sk = X509.X509_Stack()
-            [sk.push(X509.load_cert_string(e)) for e in assure_list(encrypt)]
-            # XX certificates might be loaded from a directory by from, to, sender:
-            # X509.load_cert_string(assure_fetched(e, bytes)).get_subject() ->
-            # 'C=CZ, ST=State, L=City, O=Organisation, OU=Unit, CN=my-name/emailAddress=email@example.com'
-            # X509.load_cert_string can take 7 µs, so the directory should be cached somewhere.
-            smime.set_x509_stack(sk)
-            smime.set_cipher(SMIME.Cipher('des_ede3_cbc'))  # Set cipher: 3-key triple-DES in CBC mode.
+                output = pkcs7.PKCS7SignatureBuilder().set_data(
+                    email
+                ).add_signer(
+                    cert, key, hashes.SHA512(), rsa_padding=padding.PKCS1v15() 
+                ).sign(
+                    Encoding.SMIME, [pkcs7.PKCS7Options.DetachedSignature]
+                )
 
-            # Encrypt the buffer.
-            p7 = smime.encrypt(content_buffer)
-            smime.write(output_buffer, p7)
-
-        return output_buffer.read()
+        return output
 
     def _compose_gpg_signed(self, email, text, micalg=None):
         msg_payload = email
