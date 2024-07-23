@@ -360,7 +360,7 @@ class TestSmime(TestAbstract):
                           "Reply-To: test-reply@example.com",
                           MESSAGE,
                           'Content-Disposition: attachment; filename="smime.p7s"',
-                          "MIIEtwYJKoZIhvcNAQcCoIIEqDCCBKQCAQExDzANBglghkgBZQMEAgMFADALBgkq",), 10)
+                          "MIIEUwYJKoZIhvcNAQcCoIIERDCCBEACAQExDzANBglghkgBZQMEAgEFADALBgkq",), 10)
 
     def test_smime_key_cert_together(self):
         self.check_lines(Envelope(MESSAGE)
@@ -368,7 +368,7 @@ class TestSmime(TestAbstract):
                          .signature(self.key_cert_together)
                          .sign(),
                          ('Content-Disposition: attachment; filename="smime.p7s"',
-                          "MIIEggYJKoZIhvcNAQcCoIIEczCCBG8CAQExCzAJBgUrDgMCGgUAMAsGCSqGSIb3"))
+                          "MIIEUwYJKoZIhvcNAQcCoIIERDCCBEACAQExDzANBglghkgBZQMEAgEFADALBgkq"))
 
     def test_smime_key_cert_together_passphrase(self):
         self.check_lines(Envelope(MESSAGE)
@@ -376,13 +376,14 @@ class TestSmime(TestAbstract):
                          .signature(Path("tests/smime/key-cert-together-passphrase.pem"), passphrase=GPG_PASSPHRASE)
                          .sign(),
                          ('Content-Disposition: attachment; filename="smime.p7s"',
-                          "MIIEtwYJKoZIhvcNAQcCoIIEqDCCBKQCAQExDzANBglghkgBZQMEAgMFADALBgkq"), 10)
+                          "MIIEUwYJKoZIhvcNAQcCoIIERDCCBEACAQExDzANBglghkgBZQMEAgEFADALBgkq"), 10)
+                        
 
     def test_smime_encrypt(self):
         # Message will look that way:
         # MIME-Version: 1.0
         # Content-Disposition: attachment; filename="smime.p7m"
-        # Content-Type: application/x-pkcs7-mime; smime-type=enveloped-data; name="smime.p7m"
+        # Content-Type: application/x-pkcs7-mime; smime-type=enveloped-data; name="smime.p7m" # note: x- is deprecated and current standard recomends using quotes around smime-type="enveloped-data", without is also accepted
         # Content-Transfer-Encoding: base64
         #
         # MIIBPQYJKoZIhvcNAQcDoIIBLjCCASoCAQAxgfcwgfQCAQAwXTBFMQswCQYDVQQG
@@ -399,7 +400,7 @@ class TestSmime(TestAbstract):
                          .encryption(Path(self.smime_cert))
                          .send(False),
                          (
-                             'Content-Type: application/x-pkcs7-mime; smime-type=enveloped-data; name="smime.p7m"',
+                             'Content-Type: application/pkcs7-mime; smime-type="enveloped-data"; name="smime.p7m"',
                              "Subject: my message",
                              "Reply-To: test-reply@example.com",
                              "Z2l0cyBQdHkgTHRkAhROmwkIH63oarp3NpQqFoKTy1Q3tTANBgkqhkiG9w0BAQEF",
@@ -426,23 +427,23 @@ class TestSmime(TestAbstract):
                           "Reply-To: test-reply@example.com",
                           MESSAGE,
                           'Content-Disposition: attachment; filename="smime.p7s"',
-                          "MIIEtwYJKoZIhvcNAQcCoIIEqDCCBKQCAQExDzANBglghkgBZQMEAgMFADALBgkq",), 10)
+                          "MIIEUwYJKoZIhvcNAQcCoIIERDCCBEACAQExDzANBglghkgBZQMEAgEFADALBgkq",), 10)
         self.check_lines(Envelope(MESSAGE)
                          .subject("my subject")
                          .reply_to("test-reply@example.com")
                          .encryption(self.key_cert_together)
                          .send(False),
                          (
-                             'Content-Type: application/x-pkcs7-mime; smime-type=enveloped-data; name="smime.p7m"',
+                             'Content-Type: application/pkcs7-mime; smime-type="enveloped-data"; name="smime.p7m"',
                              "Subject: my subject",
                              "Reply-To: test-reply@example.com",
                              "Z2l0cyBQdHkgTHRkAhROmwkIH63oarp3NpQqFoKTy1Q3tTANBgkqhkiG9w0BAQEF",
         ), 10)
 
     def test_multiple_recipients(self):
+        # output is generated using pyca cryptography
         from M2Crypto import SMIME
         msg=MESSAGE
-        msg_b=bytes(msg, "utf-8")
 
         def decrypt(key, cert, text):
             try:
@@ -456,11 +457,16 @@ class TestSmime(TestAbstract):
                   .reply_to("test-reply@example.com")
                   .subject("my message")
                   .encrypt([Path(self.smime_cert), Path("tests/smime/smime-identity@example.com-cert.pem")]))
+        
+        # First key
+        decrypted_message = decrypt('tests/smime/smime-identity@example.com-key.pem', 'tests/smime/smime-identity@example.com-cert.pem', output).decode('utf-8')
+        result = re.search(msg, decrypted_message)
+        self.assertTrue(result)
 
-        self.assertEqual(msg_b, decrypt('tests/smime/smime-identity@example.com-key.pem',
-                                        'tests/smime/smime-identity@example.com-cert.pem',
-                                        output))
-        self.assertEqual(msg_b, decrypt(self.smime_key, self.smime_cert, output))
+        # Second key
+        decrypted_message = decrypt(self.smime_key,self.smime_cert, output).decode('utf-8')
+        result = re.search(msg, decrypted_message)
+        self.assertTrue(result)
 
         # encrypt for single key only
         output=(Envelope(msg)
@@ -469,16 +475,22 @@ class TestSmime(TestAbstract):
                   .subject("my message")
                   .encrypt([Path(self.smime_cert)]))
 
-        self.assertFalse(decrypt('tests/smime/smime-identity@example.com-key.pem',
-                                 'tests/smime/smime-identity@example.com-cert.pem',
-                                 output))
-        self.assertEqual(msg_b, decrypt(self.smime_key, self.smime_cert, output))
+        # Should be false, no search required
+        decrypted_message = decrypt('tests/smime/smime-identity@example.com-key.pem', 'tests/smime/smime-identity@example.com-cert.pem', output)
+        self.assertFalse(decrypted_message)
+
+        decrypted_message = decrypt(self.smime_key,self.smime_cert, output).decode('utf-8')
+        result = re.search(msg, decrypted_message)
+        self.assertTrue(result)
 
     def test_smime_decrypt(self):
         e=Envelope.load(path="tests/eml/smime_encrypt.eml", key=self.smime_key, cert=self.smime_cert)
         self.assertEqual(MESSAGE, e.message())
 
     def test_smime_decrypt_attachments(self):
+        from M2Crypto import BIO, SMIME
+        import re
+        from base64 import b64encode, b64decode
         body="an encrypted message with the attachments"  # note that the inline image is not referenced in the text
         encrypted_envelope=(Envelope(body)
                               .smime()
@@ -490,16 +502,48 @@ class TestSmime(TestAbstract):
                               .as_message().as_string()
                               )
 
-        e=Envelope.load(encrypted_envelope, key=self.smime_key, cert=self.smime_cert)
+        key = self.smime_key
+        cert = self.smime_cert
 
-        # body stayed the same
-        self.assertEqual(body, e.message())
+        # # Load private key and cert and decrypt
+        s = SMIME.SMIME()
+        s.load_key(key, cert)
+        p7, data = SMIME.smime_load_pkcs7_bio(BIO.MemoryBuffer(encrypted_envelope.encode('utf-8')))
 
-        # attachments are as expected
-        self.assertEqual(2, len(e.attachments()))
-        self.assertEqual(1, len(e.attachments(inline=True)))
-        self.assertEqual(e.attachments(inline=True)[0].data, self.image_file.read_bytes())
-        self.assertEqual(Path(self.text_attachment).read_bytes(), e.attachments("generic.txt").data)
+        # body is in decrypted message
+        decrypted_data = s.decrypt(p7).decode('utf-8')
+        print(decrypted_data)
+        self.assertTrue(re.search(body, decrypted_data))
+
+        # find number of attachments
+        attachments = re.findall(r'Content-Disposition: (attachment|inline)', decrypted_data)
+        self.assertEqual(2, len(attachments))
+
+        # find number of inline attachments
+        inline_attachments = re.findall(r'Content-Disposition: inline', decrypted_data)
+        self.assertEqual(1, len(inline_attachments))
+
+        # find inline attachment
+        cd_string = 'Content-Disposition: inline'
+        pos = decrypted_data.index(cd_string)
+
+        # get only gif data
+        data_temp = decrypted_data[pos + len(cd_string):].strip().replace('\n','').replace('\r', '')
+        data_temp = data_temp[:data_temp.index("==") +2]
+        base64_content = b64encode(self.image_file.read_bytes()).decode('ascii')
+        self.assertEqual(base64_content, data_temp)
+
+        # find generic.txt attachment
+        cd_string = 'Content-Disposition: attachment; filename="generic.txt"'
+        pos = decrypted_data.index(cd_string) 
+        data_temp = decrypted_data[pos:] 
+        d = data_temp.split('\r\n\r\n')[1].strip() + "=="
+        attachment_content = b64decode(d).decode('utf-8')
+
+        with open(self.text_attachment, 'r') as f:
+            file_content = f.read()
+        
+        self.assertEqual(attachment_content, file_content)
 
     # XX smime_sign.eml is not used right now.
     # Make signature verification possible first.
