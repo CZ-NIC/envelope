@@ -1284,7 +1284,7 @@ class Envelope:
             cb = (lambda x: bytes(self._passphrase, 'ascii')) if self._passphrase \
                 else (lambda x: bytes(getpass(), 'ascii'))
             try:
- #
+
                 key = load_pem_private_key(sign, password=None)
                 cert = load_pem_x509_certificate(self._cert)
                 print(f'key: {type(key)}, sign: {type(sign)}')
@@ -1300,6 +1300,17 @@ class Envelope:
                 ).sign(
                     Encoding.SMIME, [pkcs7.PKCS7Options.DetachedSignature]
                 )
+            else:
+                output = pkcs7.PKCS7SignatureBuilder().set_data(
+                    email
+                ).add_signer(
+                    cert, key, hashes.SHA512(), rsa_padding=padding.PKCS1v15() 
+                ).sign(
+                    Encoding.SMIME, []
+                )
+
+        if encrypt:
+            print('Encrypt')
 
         return output
 
