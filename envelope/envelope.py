@@ -9,7 +9,7 @@ import sys
 from tempfile import NamedTemporaryFile
 from unittest import mock
 import warnings
-from base64 import b64decode
+from base64 import b64decode, b64encode
 from configparser import ConfigParser
 from copy import deepcopy
 from email import message_from_bytes
@@ -20,7 +20,7 @@ from email.parser import BytesParser
 from email.utils import make_msgid, formatdate, getaddresses
 from getpass import getpass
 from itertools import chain
-from os import environ
+from os import environ, urandom
 from pathlib import Path
 from quopri import decodestring
 from types import GeneratorType
@@ -1279,6 +1279,7 @@ class Envelope:
             # Since s.load_key shall not accept file contents, we have to set the variables manually
             sign = assure_fetched(sign, bytes)
 
+            # from M2Crypto import BIO, SMIME, X509, EVP
 
             # XX remove getpass conversion to bytes callback when https://gitlab.com/m2crypto/m2crypto/issues/260 is resolved
             cb = (lambda x: bytes(self._passphrase, 'ascii')) if self._passphrase \
@@ -1287,30 +1288,72 @@ class Envelope:
 
                 key = load_pem_private_key(sign, password=None)
                 cert = load_pem_x509_certificate(self._cert)
-                print(f'key: {type(key)}, sign: {type(sign)}')
+                # print(f'key: {type(key)}, sign: {type(sign)}')
 
             except TypeError:
                 raise TypeError("Invalid key")
 
+            # Attached / detached signature option, keep empty for attached
+            pkcs7Options = []
+
             if not encrypt:
-                output = pkcs7.PKCS7SignatureBuilder().set_data(
-                    email
-                ).add_signer(
-                    cert, key, hashes.SHA512(), rsa_padding=padding.PKCS1v15() 
-                ).sign(
-                    Encoding.SMIME, [pkcs7.PKCS7Options.DetachedSignature]
-                )
-            else:
-                output = pkcs7.PKCS7SignatureBuilder().set_data(
-                    email
-                ).add_signer(
-                    cert, key, hashes.SHA512(), rsa_padding=padding.PKCS1v15() 
-                ).sign(
-                    Encoding.SMIME, []
-                )
+                pkcs7Options.append(pkcs7.PKCS7Options.DetachedSignature)
+
+            output = pkcs7.PKCS7SignatureBuilder().set_data(
+                email
+            ).add_signer(
+                cert, key, hashes.SHA512(), rsa_padding=padding.PKCS1v15() 
+            ).sign(
+                Encoding.SMIME, pkcs7Options
+            )
 
         if encrypt:
+
+            from cryptography.hazmat.backends import default_backend
+
             print('Encrypt')
+
+            # load public key from x509 certificates
+            recipient_cert = load_pem_x509_certificate(encrypt[0], default_backend())
+            public_key = recipient_cert.public_key()
+
+            # actual encryption happens here
+            ciphertext = public_key.encrypt(
+                str(self._message).encode(),
+                padding.OAEP(
+                    mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                    algorithm=hashes.SHA256(),
+                    label=None
+                )
+            )
+
+            # convert bytes to base64 to ensure safe transfer using email
+            encrypted_body = b64encode(ciphertext)
+
+            output = pkcs7.PKCS7SignatureBuilder().set_data(
+                encrypted_body
+            ).add_signer(
+                cert, key, hashes.SHA512(), rsa_padding=padding.PKCS1v15() 
+            ).sign(
+                Encoding.SMIME, pkcs7Options
+            )
+
+            # [sk.push(X509.load_cert_string(e)) for e in assure_list(encrypt)]
+            # print()
+            # for s in sk:
+            #     print(s)
+            # print()
+
+            # XX certificates might be loaded from a directory by from, to, sender:
+            # X509.load_cert_string(assure_fetched(e, bytes)).get_subject() ->
+            # 'C=CZ, ST=State, L=City, O=Organisation, OU=Unit, CN=my-name/emailAddress=email@example.com'
+            # X509.load_cert_string can take 7 µs, so the directory should be cached somewhere.
+
+            # # Encrypt the buffer.
+            # p7 = smime.encrypt(content_buffer)
+            # smime.write(output_buffer, p7)
+
+
 
         return output
 
