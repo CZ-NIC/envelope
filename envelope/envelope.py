@@ -1311,8 +1311,6 @@ class Envelope:
 
             from cryptography.hazmat.backends import default_backend
 
-            print('Encrypt')
-
             # load public key from x509 certificates
             recipient_cert = load_pem_x509_certificate(encrypt[0], default_backend())
             public_key = recipient_cert.public_key()
@@ -1328,16 +1326,26 @@ class Envelope:
             )
 
             # convert bytes to base64 to ensure safe transfer using email
-            encrypted_body = b64encode(ciphertext)
 
-            output = pkcs7.PKCS7SignatureBuilder().set_data(
-                encrypted_body
-            ).add_signer(
-                cert, key, hashes.SHA512(), rsa_padding=padding.PKCS1v15() 
-            ).sign(
-                Encoding.SMIME, pkcs7Options
-            )
+            if sign:
 
+                output = pkcs7.PKCS7SignatureBuilder().set_data(
+                    b64encode(ciphertext)
+                ).add_signer(
+                    cert, key, hashes.SHA512(), rsa_padding=padding.PKCS1v15() 
+                ).sign(
+                    Encoding.SMIME, pkcs7Options
+                )
+            else:
+                email_headers = """\
+                                MIME-Version: 1.0
+                                Content-Type: application/pkcs7-mime; smime-type=enveloped-data; name="smime.p7m"
+                                Content-Transfer-Encoding: base64
+                                Content-Disposition: attachment; filename="smime.p7m"
+                                """
+                output = email_headers + "\r\n" + b64encode(ciphertext).decode('ascii')    
+                output = output.encode('utf-8')
+            
             # [sk.push(X509.load_cert_string(e)) for e in assure_list(encrypt)]
             # print()
             # for s in sk:
