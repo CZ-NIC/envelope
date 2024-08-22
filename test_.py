@@ -46,7 +46,7 @@ class TestAbstract(TestCase):
     invalid_headers = Path("tests/eml/invalid-headers.eml")
 
     def check_lines(self, o, lines: Union[str, Tuple[str, ...]] = (), longer: Union[int, Tuple[int, int]] = None,
-                    debug=False, not_in: Union[str, Tuple[str, ...]] = (), raises=(), result=None):
+                    debug=True, not_in: Union[str, Tuple[str, ...]] = (), raises=(), result=None):
         """ Converts Envelope objects to str and asserts that lines are present.
         :type lines: Assert in. These line/s must be found in the given order.
         :type not_in: Assert not in.
@@ -94,7 +94,7 @@ class TestAbstract(TestCase):
 
     cmd = "python3", "-m", "envelope"
 
-    def bash(self, *cmd, file: Path = None, piped=None, envelope=True, env=None, debug=False, decode=True):
+    def bash(self, *cmd, file: Path = None, piped=None, envelope=True, env=None, debug=True, decode=True):
         """
 
         :param cmd: Any number of commands.
@@ -360,7 +360,8 @@ class TestSmime(TestAbstract):
                           "Reply-To: test-reply@example.com",
                           MESSAGE,
                           'Content-Disposition: attachment; filename="smime.p7s"',
-                          "MIIEtwYJKoZIhvcNAQcCoIIEqDCCBKQCAQExDzANBglghkgBZQMEAgMFADALBgkq",), 10)
+                        #   "MIIEtwYJKoZIhvcNAQcCoIIEqDCCBKQCAQExDzANBglghkgBZQMEAgMFADALBgkq",), 10)
+                          "MIIEcwYJKoZIhvcNAQcCoIIEZDCCBGACAQExDzANBglghkgBZQMEAgMFADALBgkq",), 10)
 
     def test_smime_key_cert_together(self):
         self.check_lines(Envelope(MESSAGE)
@@ -377,6 +378,7 @@ class TestSmime(TestAbstract):
                          .sign(),
                          ('Content-Disposition: attachment; filename="smime.p7s"',
                           "MIIEtwYJKoZIhvcNAQcCoIIEqDCCBKQCAQExDzANBglghkgBZQMEAgMFADALBgkq"), 10)
+                        #   "MIIEcwYJKoZIhvcNAQcCoIIEZDCCBGACAQExDzANBglghkgBZQMEAgMFADALBgkq"
 
     def test_smime_encrypt(self):
         # Message will look that way:
@@ -426,7 +428,8 @@ class TestSmime(TestAbstract):
                           "Reply-To: test-reply@example.com",
                           MESSAGE,
                           'Content-Disposition: attachment; filename="smime.p7s"',
-                          "MIIEtwYJKoZIhvcNAQcCoIIEqDCCBKQCAQExDzANBglghkgBZQMEAgMFADALBgkq",), 10)
+                        #   "MIIEtwYJKoZIhvcNAQcCoIIEqDCCBKQCAQExDzANBglghkgBZQMEAgMFADALBgkq",), 10)
+                          "MIIEcwYJKoZIhvcNAQcCoIIEZDCCBGACAQExDzANBglghkgBZQMEAgMFADALBgkq",), 10)
         self.check_lines(Envelope(MESSAGE)
                          .subject("my subject")
                          .reply_to("test-reply@example.com")

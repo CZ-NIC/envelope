@@ -1269,6 +1269,7 @@ class Envelope:
                 from cryptography.hazmat.primitives.asymmetric import padding
                 from cryptography.hazmat.primitives import hashes, serialization
                 from cryptography.x509 import load_pem_x509_certificate
+                from cryptography.exceptions import UnsupportedAlgorithm
             except ImportError:
                 # noinspection PyPep8Naming
                 BIO = SMIME = X509 = EVP = None
@@ -1284,14 +1285,25 @@ class Envelope:
             # XX remove getpass conversion to bytes callback when https://gitlab.com/m2crypto/m2crypto/issues/260 is resolved
             cb = (lambda x: bytes(self._passphrase, 'ascii')) if self._passphrase \
                 else (lambda x: bytes(getpass(), 'ascii'))
+
+            # passphrase has to be bytes
+            if (self._passphrase is not None):
+                self._passphrase = self._passphrase.encode('utf-8')    
+
             try:
 
-                key = load_pem_private_key(sign, password=None)
-                cert = load_pem_x509_certificate(self._cert)
-                # print(f'key: {type(key)}, sign: {type(sign)}')
+                key = load_pem_private_key(sign, password=self._passphrase)
+                if self._cert:
+                    cert = load_pem_x509_certificate(self._cert)
+                else:
+                    cert = load_pem_x509_certificate(sign)
 
-            except TypeError:
-                raise TypeError("Invalid key")
+            except ValueError as e:
+                raise ValueError(f"Error loading the private key: {str(e)}")
+            except TypeError as e:
+                raise TypeError(f"Type error when loading the private key: {str(e)}")
+            except UnsupportedAlgorithm as e:
+                raise UnsupportedAlgorithm(f"Unsupported algorithm in the private key: {str(e)}")
 
             # Attached / detached signature option, keep empty for attached
             pkcs7Options = []
@@ -1338,11 +1350,11 @@ class Envelope:
                 )
             else:
                 email_headers = """\
-                                MIME-Version: 1.0
-                                Content-Type: application/pkcs7-mime; smime-type=enveloped-data; name="smime.p7m"
-                                Content-Transfer-Encoding: base64
-                                Content-Disposition: attachment; filename="smime.p7m"
-                                """
+MIME-Version: 1.0
+Content-Type: application/x-pkcs7-mime; smime-type=enveloped-data; name="smime.p7m"
+Content-Transfer-Encoding: base64
+Content-Disposition: attachment; filename="smime.p7m"
+"""
                 output = email_headers + "\r\n" + b64encode(ciphertext).decode('ascii')    
                 output = output.encode('utf-8')
             
