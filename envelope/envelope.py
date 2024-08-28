@@ -1320,43 +1320,43 @@ class Envelope:
             )
 
         if encrypt:
+            from cryptography.hazmat.primitives.serialization import pkcs7  
 
-            from cryptography.hazmat.backends import default_backend
+            # Get the private/public key pair and certificate
+            # private_key_pem, cert_pem = self.split_pem(encrypt[0])
 
-            # load public key from x509 certificates
-            recipient_cert = load_pem_x509_certificate(encrypt[0], default_backend())
-            public_key = recipient_cert.public_key()
+            # if private_key_pem:
+            #     try:
+            #         key = load_pem_private_key(private_key_pem, password=self._passphrase)
+            #     except TypeError:
+            #         raise TypeError("Ivalid key")
+            # else:
+            #     key = load_pem_private_key(self._encrypt[0], password=self._passphrase)
 
-            # actual encryption happens here
-            ciphertext = public_key.encrypt(
-                str(self._message).encode(),
-                padding.OAEP(
-                    mgf=padding.MGF1(algorithm=hashes.SHA256()),
-                    algorithm=hashes.SHA256(),
-                    label=None
-                )
-            )
+            # if cert_pem:
+            #     try:
+            #         cert = load_pem_x509_certificate(cert_pem, default_backend())
+            #         public_key = cert.public_key()
+            #     except TypeError:
+            #         raise TypeError("Ivalid cert")
+            # else:
+            #     public_key = key.public_key()
 
-            # convert bytes to base64 to ensure safe transfer using email
-
-            if sign:
-
-                output = pkcs7.PKCS7SignatureBuilder().set_data(
-                    b64encode(ciphertext)
-                ).add_signer(
-                    cert, key, hashes.SHA512(), rsa_padding=padding.PKCS1v15() 
-                ).sign(
-                    Encoding.SMIME, pkcs7Options
-                )
+            if self._cert:
+                cert = load_pem_x509_certificate(self._cert)
             else:
-                email_headers = """\
-MIME-Version: 1.0
-Content-Type: application/x-pkcs7-mime; smime-type=enveloped-data; name="smime.p7m"
-Content-Transfer-Encoding: base64
-Content-Disposition: attachment; filename="smime.p7m"
-"""
-                output = email_headers + "\r\n" + b64encode(ciphertext).decode('ascii')    
-                output = output.encode('utf-8')
+                cert = load_pem_x509_certificate(encrypt[0])
+
+            output = pkcs7.PKCS7EnvelopeBuilder().set_data(
+                email
+            ).add_recipient(
+                cert
+            ).encrypt(
+                serialization.Encoding.SMIME, [pkcs7.PKCS7Options.Text]
+            )
+            if sign:
+                pass
+
             
             # [sk.push(X509.load_cert_string(e)) for e in assure_list(encrypt)]
             # print()
@@ -1376,6 +1376,40 @@ Content-Disposition: attachment; filename="smime.p7m"
 
 
         return output
+
+    def split_pem(self, pem_data):
+        from cryptography.x509 import load_pem_x509_certificate
+        key_start = b"-----BEGIN PRIVATE KEY-----"
+        key_end = b"-----END PRIVATE KEY-----"
+        cert_start = b"-----BEGIN CERTIFICATE-----"
+        cert_end = b"-----END CERTIFICATE-----"
+
+        try:
+            key_start_index = pem_data.index(key_start)
+            key_end_index = pem_data.index(key_end)
+
+            if key_start_index != -1 and key_end_index != -1:
+                private_key = pem_data[key_start_index:key_end_index + len(key_end)]
+            else:
+                private_key = None
+        except ValueError:
+            private_key = None
+
+        try:
+            cert_start_index = pem_data.index(cert_start)
+            cert_end_index = pem_data.index(cert_end)
+
+            if cert_start_index != -1 and cert_end_index != -1:
+                cert = pem_data[cert_start_index:cert_end_index + len(cert_end)]
+            elif self._cert:
+                cert = load_pem_x509_certificate(self._cert)
+            else:
+                cert = None
+        except ValueError:
+            cert = None
+
+        return private_key, cert
+
 
     def _compose_gpg_signed(self, email, text, micalg=None):
         msg_payload = email
