@@ -1280,8 +1280,6 @@ class Envelope:
             # Since s.load_key shall not accept file contents, we have to set the variables manually
             sign = assure_fetched(sign, bytes)
 
-            # from M2Crypto import BIO, SMIME, X509, EVP
-
             # XX remove getpass conversion to bytes callback when https://gitlab.com/m2crypto/m2crypto/issues/260 is resolved
             cb = (lambda x: bytes(self._passphrase, 'ascii')) if self._passphrase \
                 else (lambda x: bytes(getpass(), 'ascii'))
@@ -1289,21 +1287,32 @@ class Envelope:
             # passphrase has to be bytes
             if (self._passphrase is not None):
                 self._passphrase = self._passphrase.encode('utf-8')    
+            
+            key = None
 
             try:
-
                 key = load_pem_private_key(sign, password=self._passphrase)
-                if self._cert:
-                    cert = load_pem_x509_certificate(self._cert)
-                else:
-                    cert = load_pem_x509_certificate(sign)
 
             except ValueError as e:
-                raise ValueError(f"Error loading the private key: {str(e)}")
+                # raise ValueError(f"Error loading the private key: {str(e)}")
+                print(ValueError(f"Error loading the private key: {str(e)}"))
             except TypeError as e:
-                raise TypeError(f"Type error when loading the private key: {str(e)}")
+                # raise TypeError(f"Type error when loading the private key: {str(e)}")
+                print(TypeError(f"Type error when loading the private key: {str(e)}"))
             except UnsupportedAlgorithm as e:
-                raise UnsupportedAlgorithm(f"Unsupported algorithm in the private key: {str(e)}")
+                # raise UnsupportedAlgorithm(f"Unsupported algorithm in the private key: {str(e)}")
+                print(UnsupportedAlgorithm(f"Unsupported algorithm in the private key: {str(e)}"))
+
+            if key is None:
+                try:
+                    key = load_pem_x509_certificate(sign)
+                except Exception as e:
+                    print(e)
+
+            if self._cert:
+                cert = load_pem_x509_certificate(self._cert)
+            else:
+                cert = load_pem_x509_certificate(sign)
 
             # Attached / detached signature option, keep empty for attached
             pkcs7Options = []
