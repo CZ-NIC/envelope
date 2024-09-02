@@ -1266,7 +1266,7 @@ class Envelope:
             try:
                 # from M2Crypto import BIO, SMIME, X509, EVP  # we save up to 30 - 120 ms to load it here ; smazat
                 from cryptography.hazmat.primitives.serialization import load_pem_private_key, pkcs7, Encoding
-                from cryptography.hazmat.primitives.asymmetric import padding
+                from cryptography.hazmat.primitives.asymmetric import padding, rsa
                 from cryptography.hazmat.primitives import hashes, serialization
                 from cryptography.x509 import load_pem_x509_certificate
                 from cryptography.exceptions import UnsupportedAlgorithm
@@ -1275,149 +1275,242 @@ class Envelope:
                 BIO = SMIME = X509 = EVP = None
                 raise ImportError(smime_import_error)
 
-        if sign:
+        
+        # passphrase has to be bytes
+        if (self._passphrase is not None):
+            self._passphrase = self._passphrase.encode('utf-8')    
 
-            # Since s.load_key shall not accept file contents, we have to set the variables manually
+        if sign is not None:
             sign = assure_fetched(sign, bytes)
 
-            # XX remove getpass conversion to bytes callback when https://gitlab.com/m2crypto/m2crypto/issues/260 is resolved
-            cb = (lambda x: bytes(self._passphrase, 'ascii')) if self._passphrase \
-                else (lambda x: bytes(getpass(), 'ascii'))
+        if sign and not encrypt:
 
-            # passphrase has to be bytes
-            if (self._passphrase is not None):
-                self._passphrase = self._passphrase.encode('utf-8')    
-            
-            key = None
+            # get sender's cert
+            # cert and private key can be one file
+
+            # if certfile is not provided, sign has to have both private key and certificate
+            # cert is not in sign (--sign_path file), it is cert.pem
+            if self._cert:
+                cert = self._cert
+            else:
+                # certificate is in sign (--sign_path file), it is key-cert-together.pem
+                cert = sign
 
             try:
-                key = load_pem_private_key(sign, password=self._passphrase)
-
+                cert = load_pem_x509_certificate(cert)
             except ValueError as e:
-                # raise ValueError(f"Error loading the private key: {str(e)}")
-                print(ValueError(f"Error loading the private key: {str(e)}"))
-            except TypeError as e:
-                # raise TypeError(f"Type error when loading the private key: {str(e)}")
-                print(TypeError(f"Type error when loading the private key: {str(e)}"))
-            except UnsupportedAlgorithm as e:
-                # raise UnsupportedAlgorithm(f"Unsupported algorithm in the private key: {str(e)}")
-                print(UnsupportedAlgorithm(f"Unsupported algorithm in the private key: {str(e)}"))
+                print(f"Certificate not found: {e}")
 
-            if key is None:
-                try:
-                    key = load_pem_x509_certificate(sign)
-                except Exception as e:
-                    print(e)
+            # get senders private key for signing
+            try:
+                # sign file has certificate
+                key = load_pem_private_key(sign, password=self._passphrase)
+            except ValueError as e:
+                print(f"Error loading private key: {e}")
+            except TypeError as t:
+                print(f"Password not needed")
 
-            if self._cert:
-                cert = load_pem_x509_certificate(self._cert)
-            else:
-                cert = load_pem_x509_certificate(sign)
+            options = [pkcs7.PKCS7Options.DetachedSignature]
 
-            # Attached / detached signature option, keep empty for attached
-            pkcs7Options = []
-
-            if not encrypt:
-                pkcs7Options.append(pkcs7.PKCS7Options.DetachedSignature)
-
-            output = pkcs7.PKCS7SignatureBuilder().set_data(
+            signed_email = pkcs7.PKCS7SignatureBuilder().set_data(
                 email
             ).add_signer(
-                cert, key, hashes.SHA512(), rsa_padding=padding.PKCS1v15() 
+                cert, key, hashes.SHA256()
             ).sign(
-                Encoding.SMIME, pkcs7Options
+                serialization.Encoding.SMIME, options
             )
 
-        if encrypt:
-            from cryptography.hazmat.primitives.serialization import pkcs7  
+            return signed_email
 
-            # Get the private/public key pair and certificate
-            # private_key_pem, cert_pem = self.split_pem(encrypt[0])
 
-            # if private_key_pem:
-            #     try:
-            #         key = load_pem_private_key(private_key_pem, password=self._passphrase)
-            #     except TypeError:
-            #         raise TypeError("Ivalid key")
-            # else:
-            #     key = load_pem_private_key(self._encrypt[0], password=self._passphrase)
+        if sign and encrypt:
+            # TODO: check if sign is object or only true, find the private key somewhere else
 
-            # if cert_pem:
-            #     try:
-            #         cert = load_pem_x509_certificate(cert_pem, default_backend())
-            #         public_key = cert.public_key()
-            #     except TypeError:
-            #         raise TypeError("Ivalid cert")
-            # else:
-            #     public_key = key.public_key()
+
+            print("Sign and encrypt")
 
             if self._cert:
-                cert = load_pem_x509_certificate(self._cert)
+                sender_cert = self._cert
             else:
-                cert = load_pem_x509_certificate(encrypt[0])
+                # certificate is in sign (--sign_path file), it is key-cert-together.pem
+                sender_cert = sign
 
-            output = pkcs7.PKCS7EnvelopeBuilder().set_data(
+            try:
+                sender_cert = load_pem_x509_certificate(sender_cert)
+            except ValueError as e:
+                print(f"Certificate not found: {e}")
+
+            # get senders private key for signing
+            try:
+                # sign file has certificate
+                sender_key = load_pem_private_key(sign, password=self._passphrase)
+            except ValueError as e:
+                print(f"Error loading private key: {e}")
+            except TypeError as t:
+                # TODO: do something more usefull
+                print(f"Password not needed")
+
+            # sign the message first
+            signature_builder = pkcs7.PKCS7SignatureBuilder().set_data(email)
+            signature_builder = signature_builder.add_signer(sender_cert, sender_key, hash_algorithm=hashes.SHA256())
+            signed_email = signature_builder.sign(serialization.Encoding.SMIME, [pkcs7.PKCS7Options.DetachedSignature])
+
+            # get recipent's certificate for encryption
+            if self._cert:
+                pubkey = self._cert
+            else:
+                pubkey = encrypt[0]
+
+            try:
+                pubkey = load_pem_x509_certificate(pubkey)
+            except ValueError as e:
+                raise ValueError("failed to load certificate from file")
+
+            # encrypt signed email with recipient's cert
+            envelope_builder = pkcs7.PKCS7EnvelopeBuilder().set_data(signed_email)
+            envelope_builder = envelope_builder.add_recipient(pubkey)
+
+            options = [pkcs7.PKCS7Options.Text]
+            encrypted_email = envelope_builder.encrypt(serialization.Encoding.SMIME, options)
+            return encrypted_email
+
+
+        if not sign and encrypt:
+            # get recipients public key for encrypting
+            # the public key is part of x509 certificate of the recipient
+
+            print("Only encrypt")
+
+            if self._cert:
+                pubkey = self._cert
+            else:
+                pubkey = encrypt[0]
+
+            try:
+                pubkey = load_pem_x509_certificate(pubkey)
+            except ValueError as e:
+                raise ValueError("failed to load certificate from file")
+
+            options = [pkcs7.PKCS7Options.Text]
+            encrypted_email = pkcs7.PKCS7EnvelopeBuilder().set_data(
                 email
             ).add_recipient(
-                cert
+                pubkey
             ).encrypt(
-                serialization.Encoding.SMIME, [pkcs7.PKCS7Options.Text]
+                serialization.Encoding.SMIME, options
             )
-            if sign:
-                pass
+
+            return encrypted_email
+
+
+        # if sign:
+
+        #     # Since s.load_key shall not accept file contents, we have to set the variables manually
+        #     sign = assure_fetched(sign, bytes)
+
+        #     # XX remove getpass conversion to bytes callback when https://gitlab.com/m2crypto/m2crypto/issues/260 is resolved
+        #     cb = (lambda x: bytes(self._passphrase, 'ascii')) if self._passphrase \
+        #         else (lambda x: bytes(getpass(), 'ascii'))
+
+        #     # passphrase has to be bytes
+        #     if (self._passphrase is not None):
+        #         self._passphrase = self._passphrase.encode('utf-8')    
+            
+        #     key = None
+
+        #     try:
+        #         key = load_pem_private_key(sign, password=self._passphrase)
+
+        #     except ValueError as e:
+        #         # raise ValueError(f"Error loading the private key: {str(e)}")
+        #         print(ValueError(f"Error loading the private key: {str(e)}"))
+        #     except TypeError as e:
+        #         # raise TypeError(f"Type error when loading the private key: {str(e)}")
+        #         print(TypeError(f"Type error when loading the private key: {str(e)}"))
+        #     except UnsupportedAlgorithm as e:
+        #         # raise UnsupportedAlgorithm(f"Unsupported algorithm in the private key: {str(e)}")
+        #         print(UnsupportedAlgorithm(f"Unsupported algorithm in the private key: {str(e)}"))
+
+        #     if key is None:
+        #         try:
+        #             key = load_pem_x509_certificate(sign)
+        #         except Exception as e:
+        #             print(e)
+
+        #     if self._cert:
+        #         cert = load_pem_x509_certificate(self._cert)
+        #     else:
+        #         cert = load_pem_x509_certificate(sign)
+
+        #     # Attached / detached signature option, keep empty for attached
+        #     pkcs7Options = []
+
+        #     if not encrypt:
+        #         pkcs7Options.append(pkcs7.PKCS7Options.DetachedSignature)
+
+        #     output = pkcs7.PKCS7SignatureBuilder().set_data(
+        #         email
+        #     ).add_signer(
+        #         cert, key, hashes.SHA512(), rsa_padding=padding.PKCS1v15() 
+        #     ).sign(
+        #         Encoding.SMIME, pkcs7Options
+        #     )
+
+        # if encrypt:
+        #     from cryptography.hazmat.primitives.serialization import pkcs7  
+
+        #     # Get the private/public key pair and certificate
+        #     # private_key_pem, cert_pem = self.split_pem(encrypt[0])
+
+        #     # if private_key_pem:
+        #     #     try:
+        #     #         key = load_pem_private_key(private_key_pem, password=self._passphrase)
+        #     #     except TypeError:
+        #     #         raise TypeError("Ivalid key")
+        #     # else:
+        #     #     key = load_pem_private_key(self._encrypt[0], password=self._passphrase)
+
+        #     # if cert_pem:
+        #     #     try:
+        #     #         cert = load_pem_x509_certificate(cert_pem, default_backend())
+        #     #         public_key = cert.public_key()
+        #     #     except TypeError:
+        #     #         raise TypeError("Ivalid cert")
+        #     # else:
+        #     #     public_key = key.public_key()
+
+        #     if self._cert:
+        #         cert = load_pem_x509_certificate(self._cert)
+        #     else:
+        #         cert = load_pem_x509_certificate(encrypt[0])
+
+        #     output = pkcs7.PKCS7EnvelopeBuilder().set_data(
+        #         email
+        #     ).add_recipient(
+        #         cert
+        #     ).encrypt(
+        #         serialization.Encoding.SMIME, [pkcs7.PKCS7Options.Text]
+        #     )
+        #     if sign:
+        #         pass
 
             
-            # [sk.push(X509.load_cert_string(e)) for e in assure_list(encrypt)]
-            # print()
-            # for s in sk:
-            #     print(s)
-            # print()
+        #     # [sk.push(X509.load_cert_string(e)) for e in assure_list(encrypt)]
+        #     # print()
+        #     # for s in sk:
+        #     #     print(s)
+        #     # print()
 
-            # XX certificates might be loaded from a directory by from, to, sender:
-            # X509.load_cert_string(assure_fetched(e, bytes)).get_subject() ->
-            # 'C=CZ, ST=State, L=City, O=Organisation, OU=Unit, CN=my-name/emailAddress=email@example.com'
-            # X509.load_cert_string can take 7 µs, so the directory should be cached somewhere.
+        #     # XX certificates might be loaded from a directory by from, to, sender:
+        #     # X509.load_cert_string(assure_fetched(e, bytes)).get_subject() ->
+        #     # 'C=CZ, ST=State, L=City, O=Organisation, OU=Unit, CN=my-name/emailAddress=email@example.com'
+        #     # X509.load_cert_string can take 7 µs, so the directory should be cached somewhere.
 
-            # # Encrypt the buffer.
-            # p7 = smime.encrypt(content_buffer)
-            # smime.write(output_buffer, p7)
+        #     # # Encrypt the buffer.
+        #     # p7 = smime.encrypt(content_buffer)
+        #     # smime.write(output_buffer, p7)
 
-
-
-        return output
-
-    def split_pem(self, pem_data):
-        from cryptography.x509 import load_pem_x509_certificate
-        key_start = b"-----BEGIN PRIVATE KEY-----"
-        key_end = b"-----END PRIVATE KEY-----"
-        cert_start = b"-----BEGIN CERTIFICATE-----"
-        cert_end = b"-----END CERTIFICATE-----"
-
-        try:
-            key_start_index = pem_data.index(key_start)
-            key_end_index = pem_data.index(key_end)
-
-            if key_start_index != -1 and key_end_index != -1:
-                private_key = pem_data[key_start_index:key_end_index + len(key_end)]
-            else:
-                private_key = None
-        except ValueError:
-            private_key = None
-
-        try:
-            cert_start_index = pem_data.index(cert_start)
-            cert_end_index = pem_data.index(cert_end)
-
-            if cert_start_index != -1 and cert_end_index != -1:
-                cert = pem_data[cert_start_index:cert_end_index + len(cert_end)]
-            elif self._cert:
-                cert = load_pem_x509_certificate(self._cert)
-            else:
-                cert = None
-        except ValueError:
-            cert = None
-
-        return private_key, cert
+        # return output
 
 
     def _compose_gpg_signed(self, email, text, micalg=None):

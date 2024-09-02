@@ -360,8 +360,8 @@ class TestSmime(TestAbstract):
                           "Reply-To: test-reply@example.com",
                           MESSAGE,
                           'Content-Disposition: attachment; filename="smime.p7s"',
-                        #   "MIIEtwYJKoZIhvcNAQcCoIIEqDCCBKQCAQExDzANBglghkgBZQMEAgMFADALBgkq",), 10)
-                          "MIIEcwYJKoZIhvcNAQcCoIIEZDCCBGACAQExDzANBglghkgBZQMEAgMFADALBgkq",), 10)
+                          "MIIEtwYJKoZIhvcNAQcCoIIEqDCCBKQCAQExDzANBglghkgBZQMEAgMFADALBgkq",), 10)
+                        #   "MIIEcwYJKoZIhvcNAQcCoIIEZDCCBGACAQExDzANBglghkgBZQMEAgMFADALBgkq",), 10)
 
     def test_smime_key_cert_together(self):
         self.check_lines(Envelope(MESSAGE)
