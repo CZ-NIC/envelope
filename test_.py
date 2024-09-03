@@ -360,8 +360,8 @@ class TestSmime(TestAbstract):
                           "Reply-To: test-reply@example.com",
                           MESSAGE,
                           'Content-Disposition: attachment; filename="smime.p7s"',
-                          "MIIEtwYJKoZIhvcNAQcCoIIEqDCCBKQCAQExDzANBglghkgBZQMEAgMFADALBgkq",), 10)
-                        #   "MIIEcwYJKoZIhvcNAQcCoIIEZDCCBGACAQExDzANBglghkgBZQMEAgMFADALBgkq",), 10)
+                        #   "MIIEtwYJKoZIhvcNAQcCoIIEqDCCBKQCAQExDzANBglghkgBZQMEAgMFADALBgkq",), 10) # original
+                          "MIIEUwYJKoZIhvcNAQcCoIIERDCCBEACAQExDzANBglghkgBZQMEAgEFADALBgkq",), 10)
 
     def test_smime_key_cert_together(self):
         self.check_lines(Envelope(MESSAGE)
@@ -369,7 +369,8 @@ class TestSmime(TestAbstract):
                          .signature(self.key_cert_together)
                          .sign(),
                          ('Content-Disposition: attachment; filename="smime.p7s"',
-                          "MIIEggYJKoZIhvcNAQcCoIIEczCCBG8CAQExCzAJBgUrDgMCGgUAMAsGCSqGSIb3"))
+                        #   "MIIEggYJKoZIhvcNAQcCoIIEczCCBG8CAQExCzAJBgUrDgMCGgUAMAsGCSqGSIb3")) # original
+                          "MIIEUwYJKoZIhvcNAQcCoIIERDCCBEACAQExDzANBglghkgBZQMEAgEFADALBgkq"))
 
     def test_smime_key_cert_together_passphrase(self):
         self.check_lines(Envelope(MESSAGE)
@@ -377,8 +378,9 @@ class TestSmime(TestAbstract):
                          .signature(Path("tests/smime/key-cert-together-passphrase.pem"), passphrase=GPG_PASSPHRASE)
                          .sign(),
                          ('Content-Disposition: attachment; filename="smime.p7s"',
-                          "MIIEtwYJKoZIhvcNAQcCoIIEqDCCBKQCAQExDzANBglghkgBZQMEAgMFADALBgkq"), 10)
-                        #   "MIIEcwYJKoZIhvcNAQcCoIIEZDCCBGACAQExDzANBglghkgBZQMEAgMFADALBgkq"), 10)
+                        #   "MIIEtwYJKoZIhvcNAQcCoIIEqDCCBKQCAQExDzANBglghkgBZQMEAgMFADALBgkq"), 10) # original
+                          "MIIEUwYJKoZIhvcNAQcCoIIERDCCBEACAQExDzANBglghkgBZQMEAgEFADALBgkq"), 10)
+                        
 
     def test_smime_encrypt(self):
         # Message will look that way:
@@ -428,8 +430,8 @@ class TestSmime(TestAbstract):
                           "Reply-To: test-reply@example.com",
                           MESSAGE,
                           'Content-Disposition: attachment; filename="smime.p7s"',
-                        #   "MIIEtwYJKoZIhvcNAQcCoIIEqDCCBKQCAQExDzANBglghkgBZQMEAgMFADALBgkq",), 10)
-                          "MIIEcwYJKoZIhvcNAQcCoIIEZDCCBGACAQExDzANBglghkgBZQMEAgMFADALBgkq",), 10)
+                        #   "MIIEcwYJKoZIhvcNAQcCoIIEZDCCBGACAQExDzANBglghkgBZQMEAgMFADALBgkq",), 10) # orifinal
+                          "MIIEUwYJKoZIhvcNAQcCoIIERDCCBEACAQExDzANBglghkgBZQMEAgEFADALBgkq",), 10)
         self.check_lines(Envelope(MESSAGE)
                          .subject("my subject")
                          .reply_to("test-reply@example.com")
