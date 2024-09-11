@@ -1376,6 +1376,29 @@ class Envelope:
             encrypted_email = encrypted_email.add_recipient(recip)
 
         encrypted_email = encrypted_email.encrypt(serialization.Encoding.SMIME, options)
+
+        # from cryptography.hazmat.primitives.serialization import load_pem_private_key
+        # from cryptography.hazmat.primitives import hashes
+        # from cryptography.hazmat.primitives.asymmetric import padding
+
+        # with open('tests/smime/key-cert-together.pem', 'rb') as keycert_file:
+        #     content = keycert_file.read()
+        #     c = load_pem_x509_certificate(content)
+        #     k = load_pem_private_key(content, password=self._passphrase)
+
+        # plaintext = k.decrypt(
+        #     encrypted_email,
+        #     padding=padding.OAEP(
+        #         mgf=padding.MGF1(
+        #             algorithm=hashes.SHA256()
+        #         ),
+        #         algorithm=hashes.SHA256(),
+        #         label=None
+        #     )
+        # )
+        # print(plaintext)
+
+
         return encrypted_email
 
 
