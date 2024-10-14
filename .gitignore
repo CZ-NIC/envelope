@@ -1,1 +1,4 @@
+dist
+envelope.egg-info
+__pycache__
 tests/gpg_ring/random_seed

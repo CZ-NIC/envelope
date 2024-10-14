@@ -21,7 +21,7 @@ long_description = p.read_text() if p.exists() else ""
 
 setup(
     name='envelope',
-    version='2.0.5',
+    version='2.0.6',
     packages=['envelope'],
     author='Edvard Rejthar',
     author_email='edvard.rejthar@nic.cz',
@@ -32,7 +32,8 @@ setup(
     long_description_content_type="text/markdown",
     install_requires=install_requires,
     extras_require={
-        "smime": "M2Crypto"  # need to have: `sudo apt install swig`
+        "smime": "M2Crypto",  # need to have: `sudo apt install swig`
+        "cryptography": "cryptography>=43" # need to have `pip install cryptography`
     },
     entry_points={
         'console_scripts': [
