@@ -18,10 +18,10 @@ jobs:
           pip install M2Crypto
           pip install -e .
       - name: Run tests
-        run: python3 tests.py
+        run: python3 test_.py
       # As we support both python-magic and file-magic, try them one by one.
       - name: Test python-magic
-        run: python3 tests.py TestMime.test_libmagic
+        run: python3 test_.py TestMime.test_libmagic
       - name: Uninstall python-magic
         run: pip uninstall python-magic -y
       - name: Test libmagic missing
@@ -34,4 +34,4 @@ jobs:
       - name: Install file-magic
         run: pip install file-magic
       - name: Test file-magic
-        run: python3 tests.py TestMime.test_libmagic
+        run: python3 test_.py TestMime.test_libmagic

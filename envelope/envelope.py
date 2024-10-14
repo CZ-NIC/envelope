@@ -9,7 +9,7 @@ import sys
 from tempfile import NamedTemporaryFile
 from unittest import mock
 import warnings
-from base64 import b64decode
+from base64 import b64decode, b64encode
 from configparser import ConfigParser
 from copy import deepcopy
 from email import message_from_bytes
@@ -20,7 +20,7 @@ from email.parser import BytesParser
 from email.utils import make_msgid, formatdate, getaddresses
 from getpass import getpass
 from itertools import chain
-from os import environ
+from os import environ, urandom
 from pathlib import Path
 from quopri import decodestring
 from types import GeneratorType
@@ -33,6 +33,8 @@ from .message import _Message
 from .parser import Parser
 from .smtp_handler import SMTPHandler
 from .utils import AutoSubmittedHeader, Fetched, is_gpg_importable_key, assure_list, assure_fetched, get_mimetype
+
+
 
 __doc__ = """Quick layer over python-gnupg, M2Crypto, smtplib, magic and email handling packages.
 Their common use cases merged into a single function. Want to sign a text and tired of forgetting how to do it right?
@@ -1252,66 +1254,157 @@ class Envelope:
         """
         return set(x.address for x in self._to + self._cc + self._bcc + [x for x in [self._from] if x])
 
+    def smime_sign_only(self, email, sign):
+        from cryptography.hazmat.primitives.serialization import load_pem_private_key, pkcs7
+        from cryptography.x509 import load_pem_x509_certificate
+        from cryptography.hazmat.primitives import hashes, serialization
+        # get sender's cert
+        # cert and private key can be one file
+
+        # if certfile is not provided, sign has to have both private key and certificate
+        # cert is not in sign (--sign_path file), it is cert.pem
+        if self._cert:
+            cert = self._cert
+        else:
+            # certificate is in sign (--sign_path file), it is key-cert-together.pem
+            cert = sign
+
+        try:
+            cert = load_pem_x509_certificate(cert)
+        except ValueError as e:
+            raise ValueError(f"Certificate not found: {e}")
+
+        # get senders private key for signing
+        try:
+            # sign file has certificate
+            key = load_pem_private_key(sign, password=self._passphrase)
+        except ValueError as e:
+            raise ValueError(f"Error loading private key: {e}")
+        except TypeError as t:
+            raise TypeError(f"Wrong passphrase or passphrase is not needed")
+        except UnboundLocalError as u:
+            return False
+
+        options = [pkcs7.PKCS7Options.DetachedSignature]
+
+        signed_email = pkcs7.PKCS7SignatureBuilder().set_data(
+            email
+        ).add_signer(
+            cert, key, hashes.SHA256()
+        ).sign(
+            serialization.Encoding.SMIME, options
+        )
+
+        return signed_email
+
+    
+    def smime_sign_encrypt(self, email, sign, encrypt):
+        from cryptography.hazmat.primitives.serialization import load_pem_private_key, pkcs7
+        from cryptography.x509 import load_pem_x509_certificate
+        from cryptography.hazmat.primitives import hashes, serialization
+
+        if self._cert:
+            sender_cert = self._cert
+        else:
+            # certificate is in sign (--sign_path file), it is key-cert-together.pem
+            sender_cert = sign
+
+        try:
+            sender_cert = load_pem_x509_certificate(sender_cert)
+        except ValueError as e:
+            print(f"Certificate not found: {e}")
+
+        # get senders private key for signing
+        try:
+            # sign file has certificate
+            sender_key = load_pem_private_key(sign, password=self._passphrase)
+        except ValueError as e:
+            print(f"Error loading private key: {e}")
+        except TypeError as t:
+            # TODO: do something more usefull
+            print(f"Password not needed")
+
+        # sign the message first
+        signature_builder = pkcs7.PKCS7SignatureBuilder().set_data(email)
+        signature_builder = signature_builder.add_signer(sender_cert, sender_key, hash_algorithm=hashes.SHA256())
+        signed_email = signature_builder.sign(serialization.Encoding.SMIME, [pkcs7.PKCS7Options.DetachedSignature])
+
+        # get recipent's certificate for encryption
+        if self._cert:
+            pubkey = self._cert
+        else:
+            pubkey = encrypt
+
+        try:
+            pubkey = load_pem_x509_certificate(pubkey)
+        except ValueError as e:
+            raise ValueError("failed to load certificate from file")
+
+        # encrypt signed email with recipient's cert
+        envelope_builder = pkcs7.PKCS7EnvelopeBuilder().set_data(signed_email)
+        envelope_builder = envelope_builder.add_recipient(pubkey)
+
+        options = [pkcs7.PKCS7Options.Text]
+        encrypted_email = envelope_builder.encrypt(serialization.Encoding.SMIME, options)
+        return encrypted_email
+
+    def smime_encrypt_only(self, email, encrypt):
+
+        from cryptography.hazmat.primitives.serialization import pkcs7
+        from cryptography.x509 import load_pem_x509_certificate
+        from cryptography.hazmat.primitives import serialization
+
+
+        if self._cert:
+            certificates = [self._cert]
+        else:
+            certificates = encrypt
+
+        recipient_certs = []
+        for cert in certificates:
+            try:
+                c = load_pem_x509_certificate(cert)
+            except ValueError as e:
+                raise ValueError("failed to load certificate from file")
+
+            recipient_certs.append(c)
+
+        options = [pkcs7.PKCS7Options.Text]
+        encrypted_email = pkcs7.PKCS7EnvelopeBuilder().set_data(email)
+
+        for recip in recipient_certs:
+            encrypted_email = encrypted_email.add_recipient(recip)
+
+        encrypted_email = encrypted_email.encrypt(serialization.Encoding.SMIME, options)
+
+        return encrypted_email
+
+
     def _encrypt_smime_now(self, email, sign, encrypt: Union[None, bool, bytes, List[bytes]]):
         """
 
         :type encrypt: Can be None, False, bytes or list[bytes]
         """
-        with warnings.catch_warnings():
-            # m2crypto.py:13: DeprecationWarning: the imp module is deprecated in favour of importlib;
-            # see the module's documentation for alternative uses import imp
-            warnings.simplefilter("ignore", category=DeprecationWarning)
-            try:
-                from M2Crypto import BIO, SMIME, X509, EVP  # we save up to 30 - 120 ms to load it here
-            except ImportError:
-                # noinspection PyPep8Naming
-                BIO = SMIME = X509 = EVP = None
-                raise ImportError(smime_import_error)
-        output_buffer = BIO.MemoryBuffer()
-        signed_buffer = BIO.MemoryBuffer()
-        content_buffer = BIO.MemoryBuffer(email)
 
-        # Instantiate an SMIME object.
-        smime = SMIME.SMIME()
+        # passphrase has to be bytes
+        if (self._passphrase is not None):
+            self._passphrase = self._passphrase.encode('utf-8')    
 
-        if sign:
-            # Since s.load_key shall not accept file contents, we have to set the variables manually
+        if sign is not None and type(sign) != bool:
             sign = assure_fetched(sign, bytes)
-            # XX remove getpass conversion to bytes callback when https://gitlab.com/m2crypto/m2crypto/issues/260 is resolved
-            cb = (lambda x: bytes(self._passphrase, 'ascii')) if self._passphrase \
-                else (lambda x: bytes(getpass(), 'ascii'))
-            try:
-                smime.pkey = EVP.load_key_string(sign, callback=cb)
-            except TypeError:
-                raise TypeError("Invalid key")
-            if self._cert:
-                cert = self._cert
-            else:
-                cert = sign
-            smime.x509 = X509.load_cert_string(cert)
-            if not encrypt:
-                p7 = smime.sign(content_buffer, SMIME.PKCS7_DETACHED, 'sha512')
-                content_buffer = BIO.MemoryBuffer(email)  # we have to recreate it because it was sucked out
-                smime.write(output_buffer, p7, content_buffer)
-            else:
-                p7 = smime.sign(content_buffer)
-                smime.write(signed_buffer, p7)
-                content_buffer = signed_buffer
-        if encrypt:
-            sk = X509.X509_Stack()
-            [sk.push(X509.load_cert_string(e)) for e in assure_list(encrypt)]
-            # XX certificates might be loaded from a directory by from, to, sender:
-            # X509.load_cert_string(assure_fetched(e, bytes)).get_subject() ->
-            # 'C=CZ, ST=State, L=City, O=Organisation, OU=Unit, CN=my-name/emailAddress=email@example.com'
-            # X509.load_cert_string can take 7 µs, so the directory should be cached somewhere.
-            smime.set_x509_stack(sk)
-            smime.set_cipher(SMIME.Cipher('des_ede3_cbc'))  # Set cipher: 3-key triple-DES in CBC mode.
 
-            # Encrypt the buffer.
-            p7 = smime.encrypt(content_buffer)
-            smime.write(output_buffer, p7)
+        if sign and not encrypt:
+            output = self.smime_sign_only(email, sign)
 
-        return output_buffer.read()
+        elif sign and encrypt:
+            output = self.smime_sign_encrypt(email, sign, encrypt[0])
+
+        elif not sign and encrypt:
+            output = self.smime_encrypt_only(email, encrypt)
+
+        return output
+
+
 
     def _compose_gpg_signed(self, email, text, micalg=None):
         msg_payload = email
