@@ -1335,6 +1335,17 @@ class Envelope:
         else:
             pubkey = encrypt
 
+        certificates = encrypt
+
+        recipient_certs = []
+        for cert in certificates:
+            try:
+                c = load_pem_x509_certificate(cert)
+            except ValueError as e:
+                raise ValueError("failed to load certificate from file")
+
+            recipient_certs.append(c)
+        
         try:
             pubkey = load_pem_x509_certificate(pubkey)
         except ValueError as e:
@@ -1343,6 +1354,10 @@ class Envelope:
         # encrypt signed email with recipient's cert
         envelope_builder = pkcs7.PKCS7EnvelopeBuilder().set_data(signed_email)
         envelope_builder = envelope_builder.add_recipient(pubkey)
+
+        for recip in recipient_certs:
+            envelope_builder = envelope_builder.add_recipient(recip)
+
 
         options = [pkcs7.PKCS7Options.Text]
         encrypted_email = envelope_builder.encrypt(serialization.Encoding.SMIME, options)
@@ -1397,7 +1412,7 @@ class Envelope:
             output = self.smime_sign_only(email, sign)
 
         elif sign and encrypt:
-            output = self.smime_sign_encrypt(email, sign, encrypt[0])
+            output = self.smime_sign_encrypt(email, sign, encrypt)
 
         elif not sign and encrypt:
             output = self.smime_encrypt_only(email, encrypt)
