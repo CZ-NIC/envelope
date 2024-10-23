@@ -1359,7 +1359,7 @@ class Envelope:
             envelope_builder = envelope_builder.add_recipient(recip)
 
 
-        options = [pkcs7.PKCS7Options.Text]
+        options = [pkcs7.PKCS7Options.Binary]
         encrypted_email = envelope_builder.encrypt(serialization.Encoding.SMIME, options)
         return encrypted_email
 
