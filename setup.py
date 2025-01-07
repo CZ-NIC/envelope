@@ -32,8 +32,7 @@ setup(
     long_description_content_type="text/markdown",
     install_requires=install_requires,
     extras_require={
-        "smime": ["M2Crypto",  # need to have: `sudo apt install swig`
-                  "cryptography>=43"]
+        "smime": ["cryptography>=43"]
     },
     entry_points={
         'console_scripts': [

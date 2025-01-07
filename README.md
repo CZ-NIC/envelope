@@ -1,6 +1,6 @@
 # Envelope
 
-[![Build Status](https://github.com/CZ-NIC/envelope/actions/workflows/run-unittest.yml/badge.svg)](https://github.com/CZ-NIC/envelope/actions) [![Downloads](https://pepy.tech/badge/envelope)](https://pepy.tech/project/envelope)
+[![Build Status](https://github.com/CZ-NIC/envelope/actions/workflows/run-unittest.yml/badge.svg)](https://github.com/CZ-NIC/envelope/actions) [![Downloads](https://static.pepy.tech/badge/envelope)](https://pepy.tech/project/envelope)
 
 Quick layer over [python-gnupg](https://bitbucket.org/vinay.sajip/python-gnupg/src), [M2Crypto](https://m2crypto.readthedocs.io/), [smtplib](https://docs.python.org/3/library/smtplib.html), [magic](https://pypi.org/project/python-magic/) and [email](https://docs.python.org/3/library/email.html?highlight=email#module-email) handling packages. Their common use cases merged into a single function. Want to sign a text and tired of forgetting how to do it right? You do not need to know everything about GPG or S/MIME, you do not have to bother with importing keys. Do not hassle with reconnecting to an SMTP server. Do not study various headers meanings to let your users unsubscribe via a URL.
 You insert a message, attachments and inline images and receive signed and/or encrypted output to the file or to your recipients' e-mail.
@@ -77,7 +77,7 @@ Envelope.load(path="message.eml").attachments()
     ```
     * Or just download the project and launch `python3 -m envelope`
 * If planning to sign/encrypt with GPG, assure you have it on the system with `sudo apt install gpg` and possibly see [Configure your GPG](#configure-your-gpg) tutorial.
-* If planning to use S/MIME, you should ensure some prerequisites: `sudo apt install swig build-essential python3-dev libssl-dev && pip3 install M2Crypto`
+* If planning to use S/MIME, you might be required to ensure some [prerequisites](https://cryptography.io/en/latest/installation/), ex: `sudo apt install build-essential libssl-dev libffi-dev python3-dev cargo pkg-config`
 * If planning to send e-mails, prepare SMTP credentials or visit [Configure your SMTP](#configure-your-smtp) tutorial.
 * If your e-mails are to be received outside your local domain, visit [DMARC](#dmarc) section.
 * Package [python-magic](https://pypi.org/project/python-magic/) is used as a dependency. Due to a [well-known](https://github.com/ahupp/python-magic/blob/master/COMPAT.md) name clash with the [file-magic](https://pypi.org/project/file-magic/) package, in case you need to use the latter, don't worry to run `pip uninstall python-magic && pip install file-magic` after installing envelope which is fully compatible with both projects. Both use `libmagic` under the hood which is probably already installed. However, if it is not, [install](https://github.com/ahupp/python-magic?tab=readme-ov-file#installation) `sudo apt install libmagic1`.
