@@ -8,8 +8,7 @@ import subprocess
 import sys
 from tempfile import NamedTemporaryFile
 from unittest import mock
-import warnings
-from base64 import b64decode, b64encode
+from base64 import b64decode
 from configparser import ConfigParser
 from copy import deepcopy
 from email import message_from_bytes
@@ -17,24 +16,21 @@ from email.header import decode_header
 from email.generator import Generator
 from email.message import EmailMessage, Message
 from email.parser import BytesParser
-from email.utils import make_msgid, formatdate, getaddresses
-from getpass import getpass
+from email.utils import make_msgid, formatdate
 from itertools import chain
-from os import environ, urandom
+from os import environ
 from pathlib import Path
 from quopri import decodestring
 from types import GeneratorType
-from typing import Literal, Union, List, Set, Optional, Any
+from typing import Literal, Union, Optional, Any
 
-from .address import Address
+from .address import Address, _getaddresses
 from .attachment import Attachment
 from .constants import ISSUE_LINK, smime_import_error, gnupg, CRLF, AUTO, PLAIN, HTML, SIMULATION, SAFE_LOCALE
 from .message import _Message
 from .parser import Parser
 from .smtp_handler import SMTPHandler
 from .utils import AutoSubmittedHeader, Fetched, is_gpg_importable_key, assure_list, assure_fetched, get_mimetype
-
-
 
 __doc__ = """Quick layer over python-gnupg, M2Crypto, smtplib, magic and email handling packages.
 Their common use cases merged into a single function. Want to sign a text and tired of forgetting how to do it right?
@@ -320,14 +316,14 @@ class Envelope:
         # that explicitly states we have no from header
         self._from: Union[Address, False, None] = None  # e-mail From header
         self._from_addr: Optional[Address] = None  # SMTP envelope MAIL FROM address
-        self._to: List[Address] = []
-        self._cc: List[Address] = []
-        self._bcc: List[Address] = []
-        self._reply_to: List[Address] = []
+        self._to: list[Address] = []
+        self._cc: list[Address] = []
+        self._bcc: list[Address] = []
+        self._reply_to: list[Address] = []
         self._subject: Union[str, None] = None
         self._subject_encrypted: Union[str, bool] = True
         self._smtp = None
-        self._attachments: List[Attachment] = []
+        self._attachments: list[Attachment] = []
         self._mime = AUTO
         self._nl2br = AUTO
         self._headers = EmailMessage()  # object for storing headers the most standard way possible
@@ -336,7 +332,7 @@ class Envelope:
         # variables defined while processing
         self._status: bool = False  # whether we successfully encrypted/signed/send
         self._processed: bool = False  # prevent the user from mistakenly call .sign().send() instead of .signature().send()
-        self._result: List[Union[str, EmailMessage, Message]] = []  # text output for str() conversion
+        self._result: list[Union[str, EmailMessage, Message]] = []  # text output for str() conversion
         self._result_cache: Optional[str] = None
         self._result_cache_hash: Optional[int] = None
         self._smtp = SMTPHandler()
@@ -405,9 +401,14 @@ class Envelope:
             registry.clear()
         addresses = [x for x in addresses if x]  # filter out possible "" or False
         if addresses:
-            registry += (a for a in Address.parse(addresses) if a not in registry)
+            # Split addresses by both commas and semicolons
+            split_addresses = []
+            for address in addresses:
+                split_addresses.extend(address.replace(';', ',').split(','))
+            split_addresses = [x.strip() for x in split_addresses if x.strip()]  # remove empty and whitespace-only strings
+            registry += (a for a in Address.parse(split_addresses) if a not in registry)
 
-    def to(self, email_or_more=None) -> Union["Envelope", List[Address]]:
+    def to(self, email_or_more=None) -> Union["Envelope", list[Address]]:
         """ Multiple addresses may be given in a string, delimited by comma (or semicolon).
          (The same is valid for `to`, `cc`, `bcc` and `reply-to`.)
 
@@ -420,19 +421,19 @@ class Envelope:
         self._parse_addresses(self._to, email_or_more)
         return self
 
-    def cc(self, email_or_more=None) -> Union["Envelope", List[Address]]:
+    def cc(self, email_or_more=None) -> Union["Envelope", list[Address]]:
         if email_or_more is None:
             return self._cc
         self._parse_addresses(self._cc, email_or_more)
         return self
 
-    def bcc(self, email_or_more=None) -> Union["Envelope", List[Address]]:
+    def bcc(self, email_or_more=None) -> Union["Envelope", list[Address]]:
         if email_or_more is None:
             return self._bcc
         self._parse_addresses(self._bcc, email_or_more)
         return self
 
-    def reply_to(self, email_or_more=None) -> Union["Envelope", List[Address]]:
+    def reply_to(self, email_or_more=None) -> Union["Envelope", list[Address]]:
         if email_or_more is None:
             return self._reply_to
         self._parse_addresses(self._reply_to, email_or_more)
@@ -586,7 +587,7 @@ class Envelope:
             self._subject_encrypted = encrypted
         return self
 
-    def mime(self, subtype=AUTO, nl2br: Literal["auto"] | bool=AUTO):
+    def mime(self, subtype=AUTO, nl2br: Literal["auto"] | bool = AUTO):
         """
         Ignored if `Content-Type` header put to the message.
         @type subtype: str Set contents mime subtype: "auto" (default), "html" or "plain" for plain text.
@@ -1084,7 +1085,6 @@ class Envelope:
         else:
             raise ValueError(f"Could not import key starting: {key[:80]}...")
 
-
     def _get_gnupg_home(self, for_help=False):
         s = self._gpg if type(self._gpg) is str else None
         if for_help:
@@ -1127,11 +1127,12 @@ class Envelope:
             email["Message-ID"] = make_msgid()
 
         if send and send != SIMULATION:
+            recipients = list(map(str, set(self._to + self._cc + self._bcc)))
             with mock.patch.object(Generator, '_handle_multipart_signed', Generator._handle_multipart):
                 # https://github.com/python/cpython/issues/99533 and #19
                 failures = self._smtp.send_message(email,
                                                    from_addr=self._from_addr,
-                                                   to_addrs=list(map(str, set(self._to + self._cc + self._bcc))))
+                                                   to_addrs=recipients)
             if failures:
                 logger.warning(f"Unable to send to all recipients: {repr(failures)}.")
             elif failures is False:
@@ -1234,7 +1235,7 @@ class Envelope:
             return False
 
     def _gpg_list_keys(self, secret=False):
-        return ((key, address) for key in self._gnupg.list_keys(secret) for _, address in getaddresses(key["uids"]))
+        return ((key, address) for key in self._gnupg.list_keys(secret) for _, address in _getaddresses(key["uids"]))
 
     def _gpg_verify(self, signature: bytes, data: bytes):
         """ Allows verifying detached GPG signature.
@@ -1248,16 +1249,19 @@ class Envelope:
             fp.seek(0)
             return bool(self._gnupg.verify_data(fp.name, data))
 
-    def _get_decipherers(self) -> Set[str]:
+    def _get_decipherers(self) -> set[str]:
         """
         :return: Set of e-mail addresses
         """
         return set(x.address for x in self._to + self._cc + self._bcc + [x for x in [self._from] if x])
 
     def smime_sign_only(self, email, sign):
-        from cryptography.hazmat.primitives.serialization import load_pem_private_key, pkcs7
-        from cryptography.x509 import load_pem_x509_certificate
-        from cryptography.hazmat.primitives import hashes, serialization
+        try:
+            from cryptography.hazmat.primitives.serialization import load_pem_private_key, pkcs7
+            from cryptography.x509 import load_pem_x509_certificate
+            from cryptography.hazmat.primitives import hashes, serialization
+        except ImportError:
+            raise ImportError(smime_import_error)
         # get sender's cert
         # cert and private key can be one file
 
@@ -1296,12 +1300,14 @@ class Envelope:
         )
 
         return signed_email
-
     
     def smime_sign_encrypt(self, email, sign, encrypt):
-        from cryptography.hazmat.primitives.serialization import load_pem_private_key, pkcs7
-        from cryptography.x509 import load_pem_x509_certificate
-        from cryptography.hazmat.primitives import hashes, serialization
+        try:
+            from cryptography.hazmat.primitives.serialization import load_pem_private_key, pkcs7
+            from cryptography.x509 import load_pem_x509_certificate
+            from cryptography.hazmat.primitives import hashes, serialization
+        except ImportError:
+            raise ImportError(smime_import_error)
 
         if self._cert:
             sender_cert = self._cert
@@ -1312,7 +1318,7 @@ class Envelope:
         try:
             sender_cert = load_pem_x509_certificate(sender_cert)
         except ValueError as e:
-            print(f"Certificate not found: {e}")
+            logger.warning(f"Certificate not found: {e}")
 
         # get senders private key for signing
         try:
@@ -1335,6 +1341,17 @@ class Envelope:
         else:
             pubkey = encrypt
 
+        certificates = encrypt
+
+        recipient_certs = []
+        for cert in certificates:
+            try:
+                c = load_pem_x509_certificate(cert)
+            except ValueError as e:
+                raise ValueError("failed to load certificate from file")
+
+            recipient_certs.append(c)
+
         try:
             pubkey = load_pem_x509_certificate(pubkey)
         except ValueError as e:
@@ -1344,15 +1361,21 @@ class Envelope:
         envelope_builder = pkcs7.PKCS7EnvelopeBuilder().set_data(signed_email)
         envelope_builder = envelope_builder.add_recipient(pubkey)
 
+        for recip in recipient_certs:
+            envelope_builder = envelope_builder.add_recipient(recip)
+
         options = [pkcs7.PKCS7Options.Text]
         encrypted_email = envelope_builder.encrypt(serialization.Encoding.SMIME, options)
         return encrypted_email
 
     def smime_encrypt_only(self, email, encrypt):
 
-        from cryptography.hazmat.primitives.serialization import pkcs7
-        from cryptography.x509 import load_pem_x509_certificate
-        from cryptography.hazmat.primitives import serialization
+        try:
+            from cryptography.hazmat.primitives.serialization import pkcs7
+            from cryptography.x509 import load_pem_x509_certificate
+            from cryptography.hazmat.primitives import serialization
+        except ImportError:
+            raise ImportError(smime_import_error)
 
 
         if self._cert:
@@ -1369,7 +1392,7 @@ class Envelope:
 
             recipient_certs.append(c)
 
-        options = [pkcs7.PKCS7Options.Text]
+        options = [pkcs7.PKCS7Options.Binary]
         encrypted_email = pkcs7.PKCS7EnvelopeBuilder().set_data(email)
 
         for recip in recipient_certs:
@@ -1379,8 +1402,7 @@ class Envelope:
 
         return encrypted_email
 
-
-    def _encrypt_smime_now(self, email, sign, encrypt: Union[None, bool, bytes, List[bytes]]):
+    def _encrypt_smime_now(self, email, sign, encrypt: Union[None, bool, bytes, list[bytes]]):
         """
 
         :type encrypt: Can be None, False, bytes or list[bytes]
@@ -1388,7 +1410,7 @@ class Envelope:
 
         # passphrase has to be bytes
         if (self._passphrase is not None):
-            self._passphrase = self._passphrase.encode('utf-8')    
+            self._passphrase = self._passphrase.encode('utf-8')
 
         if sign is not None and type(sign) != bool:
             sign = assure_fetched(sign, bytes)
@@ -1397,14 +1419,12 @@ class Envelope:
             output = self.smime_sign_only(email, sign)
 
         elif sign and encrypt:
-            output = self.smime_sign_encrypt(email, sign, encrypt[0])
+            output = self.smime_sign_encrypt(email, sign, encrypt)
 
         elif not sign and encrypt:
             output = self.smime_encrypt_only(email, encrypt)
 
         return output
-
-
 
     def _compose_gpg_signed(self, email, text, micalg=None):
         msg_payload = email
@@ -1583,7 +1603,7 @@ class Envelope:
                 email["Subject"] = self._subject
         return email
 
-    def recipients(self, *, clear=False) -> Union[Set[Address], 'Envelope']:
+    def recipients(self, *, clear=False) -> Union[set[Address], 'Envelope']:
         """ Return set of all recipients – To, Cc, Bcc
             :param: clear If true, all To, Cc and Bcc recipients are removed and the object is returned.
 
@@ -1615,7 +1635,7 @@ class Envelope:
         raise NotImplemented("Current multipart/report has not been impemented."
                              f"Please post current message as a new issue at {ISSUE_LINK}")
 
-    def attachments(self, name=None, inline=None) -> Union[Attachment, List[Attachment], bool]:
+    def attachments(self, name=None, inline=None) -> Union[Attachment, list[Attachment], bool]:
         """ Access the attachments.
             XX make available from CLI too
                 --attachments(-inline)(-enclosed) [name]

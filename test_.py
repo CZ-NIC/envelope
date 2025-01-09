@@ -1,4 +1,3 @@
-from email.utils import getaddresses, parseaddr
 import logging
 import re
 import sys
@@ -14,7 +13,7 @@ from typing import Tuple, Union
 from unittest import main, TestCase, mock
 
 from envelope import Envelope
-from envelope.address import Address
+from envelope.address import Address, _getaddresses, _parseaddr
 from envelope.constants import AUTO, PLAIN, HTML
 from envelope.parser import Parser
 from envelope.smtp_handler import SMTPHandler
@@ -74,7 +73,8 @@ class TestAbstract(TestCase):
             try:
                 index = output_tmp.index(search)
             except ValueError:
-                message = f"is in the wrong order (above the line '{last_search}' )" if search in output else "not found"
+                message = f"is in the wrong order (above the line '{last_search}' )" \
+                      if search in output else "not found"
                 self.fail(f"Line '{search}' {message} in the output:\n{o}")
             output_tmp = output_tmp[index + 1:]
             last_search = search
@@ -377,7 +377,6 @@ class TestSmime(TestAbstract):
                          .sign(),
                          ('Content-Disposition: attachment; filename="smime.p7s"',
                           "MIIEUwYJKoZIhvcNAQcCoIIERDCCBEACAQExDzANBglghkgBZQMEAgEFADALBgkq"), 10)
-                        
 
     def test_smime_encrypt(self):
         # Message will look that way:
@@ -414,8 +413,8 @@ class TestSmime(TestAbstract):
                          .encryption(key=Path("tests/gpg_keys/envelope-example-identity-2@example.com.key")),
                          result=True)
         self.check_lines(Envelope(MESSAGE).from_(IDENTITY_2).to(IDENTITY_2)
-                        .signature(key=Path("tests/gpg_keys/envelope-example-identity-2@example.com.key"), passphrase=GPG_PASSPHRASE),
-                        result=True)
+                         .signature(key=Path("tests/gpg_keys/envelope-example-identity-2@example.com.key"), passphrase=GPG_PASSPHRASE),
+                         result=True)
 
         # Implicit S/MIME
         self.check_lines(Envelope(MESSAGE)
@@ -443,7 +442,7 @@ class TestSmime(TestAbstract):
     def test_multiple_recipients(self):
         # output is generated using pyca cryptography
         from M2Crypto import SMIME
-        msg=MESSAGE
+        msg = MESSAGE
 
         def decrypt(key, cert, text):
             try:
@@ -452,24 +451,25 @@ class TestSmime(TestAbstract):
                 return False
 
         # encrypt for both keys
-        output=(Envelope(msg)
+        output = (Envelope(msg)
                   .smime()
                   .reply_to("test-reply@example.com")
                   .subject("my message")
                   .encrypt([Path(self.smime_cert), Path("tests/smime/smime-identity@example.com-cert.pem")]))
-        
+
         # First key
-        decrypted_message = decrypt('tests/smime/smime-identity@example.com-key.pem', 'tests/smime/smime-identity@example.com-cert.pem', output).decode('utf-8')
+        decrypted_message = decrypt('tests/smime/smime-identity@example.com-key.pem',
+                                    'tests/smime/smime-identity@example.com-cert.pem', output).decode('utf-8')
         result = re.search(msg, decrypted_message)
         self.assertTrue(result)
 
         # Second key
-        decrypted_message = decrypt(self.smime_key,self.smime_cert, output).decode('utf-8')
+        decrypted_message = decrypt(self.smime_key, self.smime_cert, output).decode('utf-8')
         result = re.search(msg, decrypted_message)
         self.assertTrue(result)
 
         # encrypt for single key only
-        output=(Envelope(msg)
+        output = (Envelope(msg)
                   .smime()
                   .reply_to("test-reply@example.com")
                   .subject("my message")
@@ -479,20 +479,20 @@ class TestSmime(TestAbstract):
         decrypted_message = decrypt('tests/smime/smime-identity@example.com-key.pem', 'tests/smime/smime-identity@example.com-cert.pem', output)
         self.assertFalse(decrypted_message)
 
-        decrypted_message = decrypt(self.smime_key,self.smime_cert, output).decode('utf-8')
+        decrypted_message = decrypt(self.smime_key, self.smime_cert, output).decode('utf-8')
         result = re.search(msg, decrypted_message)
         self.assertTrue(result)
 
     def test_smime_decrypt(self):
-        e=Envelope.load(path="tests/eml/smime_encrypt.eml", key=self.smime_key, cert=self.smime_cert)
+        e = Envelope.load(path="tests/eml/smime_encrypt.eml", key=self.smime_key, cert=self.smime_cert)
         self.assertEqual(MESSAGE, e.message())
 
     def test_smime_decrypt_attachments(self):
         from M2Crypto import BIO, SMIME
         import re
         from base64 import b64encode, b64decode
-        body="an encrypted message with the attachments"  # note that the inline image is not referenced in the text
-        encrypted_envelope=(Envelope(body)
+        body = "an encrypted message with the attachments"  # note that the inline image is not referenced in the text
+        encrypted_envelope = (Envelope(body)
                               .smime()
                               .reply_to("test-reply@example.com")
                               .subject("my message")
@@ -528,21 +528,21 @@ class TestSmime(TestAbstract):
         pos = decrypted_data.index(cd_string)
 
         # get only gif data
-        data_temp = decrypted_data[pos + len(cd_string):].strip().replace('\n','').replace('\r', '')
-        data_temp = data_temp[:data_temp.index("==") +2]
+        data_temp = decrypted_data[pos + len(cd_string):].strip().replace('\n', '').replace('\r', '')
+        data_temp = data_temp[:data_temp.index("==") + 2]
         base64_content = b64encode(self.image_file.read_bytes()).decode('ascii')
         self.assertEqual(base64_content, data_temp)
 
         # find generic.txt attachment
         cd_string = 'Content-Disposition: attachment; filename="generic.txt"'
-        pos = decrypted_data.index(cd_string) 
-        data_temp = decrypted_data[pos:] 
-        d = data_temp.split('\r\n\r\n')[1].strip() + "=="
+        pos = decrypted_data.index(cd_string)
+        data_temp = decrypted_data[pos:]
+        d = data_temp.split('\n\n')[1].strip() + "=="
         attachment_content = b64decode(d).decode('utf-8')
 
         with open(self.text_attachment, 'r') as f:
             file_content = f.read()
-        
+
         self.assertEqual(attachment_content, file_content)
 
     # XX smime_sign.eml is not used right now.
@@ -553,7 +553,7 @@ class TestSmime(TestAbstract):
 
     def test_smime_key_cert_together(self):
         # XX verify signature
-        e=Envelope.load(path="tests/eml/smime_key_cert_together.eml", key=self.key_cert_together)
+        e = Envelope.load(path="tests/eml/smime_key_cert_together.eml", key=self.key_cert_together)
         self.assertEqual(MESSAGE, e.message())
 
 
@@ -600,14 +600,14 @@ class TestGPG(TestAbstract):
                           '-----END PGP SIGNATURE-----',), 10)
 
         # mail from "envelope-example-identity-not-stated-in-ring@example.com" should not be signed
-        output=str(Envelope(MESSAGE)
+        output = str(Envelope(MESSAGE)
                      .gpg(GNUPG_HOME)
                      .from_("envelope-example-identity-not-stated-in-ring@example.com")
                      .sign("auto")).splitlines()
         self.assertNotIn('-----BEGIN PGP SIGNATURE-----', output)
 
         # force-signing without specifying a key nor sending address should produce a message signed with a first-found key
-        output=str(Envelope(MESSAGE)
+        output = str(Envelope(MESSAGE)
                      .gpg(GNUPG_HOME)
                      .sign(True)).splitlines()
         self.assertIn('-----BEGIN PGP SIGNATURE-----', output)
@@ -629,7 +629,7 @@ class TestGPG(TestAbstract):
         # =rK+/
         # -----END PGP MESSAGE-----
 
-        message=(Envelope(MESSAGE)
+        message = (Envelope(MESSAGE)
                    .gpg(GNUPG_HOME)
                    .from_(IDENTITY_1)
                    .to(IDENTITY_2)
@@ -669,7 +669,7 @@ class TestGPG(TestAbstract):
         #
         # --===============1001129828818615570==--
 
-        e=str(Envelope(MESSAGE)
+        e = str(Envelope(MESSAGE)
                 .to(IDENTITY_2)
                 .gpg(GNUPG_HOME)
                 .from_(IDENTITY_1)
@@ -696,23 +696,23 @@ class TestGPG(TestAbstract):
 
     def test_arbitrary_encrypt(self):
         """ Keys to be encrypted with explicitly chosen  """
-        temp=[TemporaryDirectory() for _ in range(4)]  # must exist in the scope to preserve the dirs
-        rings=[t.name for t in temp]
-        message=MESSAGE
-        key1_raw=Path("tests/gpg_keys/envelope-example-identity@example.com.bytes.key").read_bytes()
-        key1_armored=Path("tests/gpg_keys/envelope-example-identity@example.com.key").read_text()
-        _importer=Envelope("just importer")
+        temp = [TemporaryDirectory() for _ in range(4)]  # must exist in the scope to preserve the dirs
+        rings = [t.name for t in temp]
+        message = MESSAGE
+        key1_raw = Path("tests/gpg_keys/envelope-example-identity@example.com.bytes.key").read_bytes()
+        key1_armored = Path("tests/gpg_keys/envelope-example-identity@example.com.key").read_text()
+        _importer = Envelope("just importer")
 
         # helper methods
         def decrypt(s, ring, equal=True):
-            m=self.assertEqual if equal else self.assertNotEqual
+            m = self.assertEqual if equal else self.assertNotEqual
             m(message, Envelope.load(s, gnupg_home=rings[ring]).message())
 
         def importer(ring, key, passphrase=None):
             _importer.gpg(rings[ring]).sign(Path("tests/gpg_keys/" + key), passphrase=passphrase)
 
         # Message encrypted for envelope-example-identity@example.com only, not for the sender
-        e1=str(Envelope(message)
+        e1 = str(Envelope(message)
                  .to(IDENTITY_1)
                  .gpg(GNUPG_HOME)
                  .from_(IDENTITY_2)
@@ -730,7 +730,7 @@ class TestGPG(TestAbstract):
         decrypt(e1, 0)
 
         # message encrypted for multiple recipients
-        e2=str(Envelope(message)
+        e2 = str(Envelope(message)
                  .to(IDENTITY_1)
                  .gpg(GNUPG_HOME)
                  .from_(IDENTITY_3)
@@ -744,7 +744,7 @@ class TestGPG(TestAbstract):
         decrypt(e2, 2)
 
         # message not encrypted for a recipient but for a sender only (for some unknown reason)
-        e3=str(Envelope(message)
+        e3 = str(Envelope(message)
                  .to(IDENTITY_2)
                  .gpg(GNUPG_HOME)
                  .from_(IDENTITY_1)
@@ -755,7 +755,7 @@ class TestGPG(TestAbstract):
         decrypt(e3, 2)  # ring 2 has "envelope-example-identity@example.com"
 
         # message encrypted for combination of fingerprints and e-mails
-        e3=str(Envelope(message)
+        e3 = str(Envelope(message)
                  .to("envelope-example-identity-3@example.com, envelope-example-identity@example.com")
                  .gpg(GNUPG_HOME)
                  .from_(IDENTITY_2)
@@ -784,14 +784,14 @@ class TestGPG(TestAbstract):
 
         # import raw unarmored key in a list ("envelope-example-identity@example.com" into ring 1)
         # (note that we pass a set to the .encryption to test if it takes other iterables than a list)
-        e4=Envelope(message).encryption({IDENTITY_2, key1_raw}).to(IDENTITY_3).from_(IDENTITY_2).gpg(
+        e4 = Envelope(message).encryption({IDENTITY_2, key1_raw}).to(IDENTITY_3).from_(IDENTITY_2).gpg(
             rings[1]).as_message()
         decrypt(e4, 1)
         decrypt(e4, 2)
 
         # multiple encryption keys in bash
         def bash(ring, from_, to, encrypt, valid=True):
-            contains=PGP_MESSAGE if valid else "Signing/encrypting failed."
+            contains = PGP_MESSAGE if valid else "Signing/encrypting failed."
             self.assertIn(contains, self.bash("--from", from_, "--to", *to, "--encrypt", *encrypt, piped=message,
                                               env={"GNUPGHOME": rings[ring]}))
 
@@ -806,13 +806,13 @@ class TestGPG(TestAbstract):
         bash(3, IDENTITY_2, (IDENTITY_1,), ("--no-from",))  # --no-sender supress the need for ID=2
 
     def test_arbitrary_encrypt_with_signing(self):
-        model=(Envelope(MESSAGE)
+        model = (Envelope(MESSAGE)
                  .to(f"{IDENTITY_3}, {IDENTITY_1}")
                  .from_(IDENTITY_2)
                  .gpg(GNUPG_HOME))
 
         def logged(signature, encryption, warning=False):
-            e=(model.copy().signature(signature).encryption(encryption))
+            e = (model.copy().signature(signature).encryption(encryption))
             if warning:
                 with self.assertLogs('envelope', level='WARNING') as cm:
                     self.assertEqual("", str(e))
@@ -887,7 +887,7 @@ class TestGPG(TestAbstract):
                          ("-----BEGIN PGP SIGNATURE-----",), 10)
 
     def test_auto_import(self):
-        temp=TemporaryDirectory()
+        temp = TemporaryDirectory()
 
         # no signature - empty ring
         self.check_lines(Envelope(MESSAGE)
@@ -960,52 +960,52 @@ class TestGPG(TestAbstract):
     def test_signed_gpg(self):
         # XX we should test signature verification with e._gpg_verify(),
         # however .load does not load application/pgp-signature content at the moment
-        e=Envelope.load(path="tests/eml/test_signed_gpg.eml")
+        e = Envelope.load(path="tests/eml/test_signed_gpg.eml")
         self.assertEqual(MESSAGE, e.message())
 
     def test_encrypted_gpg(self):
-        e=Envelope.load(path="tests/eml/test_encrypted_gpg.eml")
+        e = Envelope.load(path="tests/eml/test_encrypted_gpg.eml")
         self.assertEqual("dumb encrypted message", e.message())
 
     def test_encrypted_signed_gpg(self):
-        e=Envelope.load(path="tests/eml/test_encrypted_signed_gpg.eml")
+        e = Envelope.load(path="tests/eml/test_encrypted_signed_gpg.eml")
         self.assertEqual("dumb encrypted and signed message", e.message())
 
     def test_encrypted_gpg_subject(self):
-        body="just a body text"
-        subject="This is an encrypted subject"
-        encrypted_subject="Encrypted message"
-        ref=(Envelope(body)
+        body = "just a body text"
+        subject = "This is an encrypted subject"
+        encrypted_subject = "Encrypted message"
+        ref = (Envelope(body)
                .gpg(GNUPG_HOME)
                .to(IDENTITY_2)
                .from_(IDENTITY_1)
                .encryption())
-        encrypted_eml=ref.subject(subject).as_message().as_string()
+        encrypted_eml = ref.subject(subject).as_message().as_string()
 
         # subject has been encrypted
         self.assertIn("Subject: " + encrypted_subject, encrypted_eml)
         self.assertNotIn(subject, encrypted_eml)
 
         # subject has been decrypted
-        e=Envelope.load(encrypted_eml)
+        e = Envelope.load(encrypted_eml)
         self.assertEqual(body, e.message())
         self.assertEqual(subject, e.subject())
 
         # further meddling with the encrypt parameter
         def check_decryption(reference, other_subject=encrypted_subject):
-            encrypted=reference.as_message().as_string()
+            encrypted = reference.as_message().as_string()
             self.assertIn(other_subject, encrypted)
             self.assertNotIn(subject, encrypted)
 
-            decrypted=Envelope.load(encrypted).as_message().as_string()
+            decrypted = Envelope.load(encrypted).as_message().as_string()
             self.assertIn(subject, decrypted)
             self.assertNotIn(other_subject, decrypted)
 
-        front_text="Front text"
+        front_text = "Front text"
         check_decryption(ref.subject(subject, encrypted=True))  # the default behaviour
         check_decryption(ref.subject(subject, front_text), front_text)  # choose another placeholder text
 
-        always_visible=ref.subject(subject, encrypted=False).as_message().as_string()  # do not encrypt the subject
+        always_visible = ref.subject(subject, encrypted=False).as_message().as_string()  # do not encrypt the subject
         self.assertIn(subject, always_visible)
         self.assertIn(subject, Envelope.load(always_visible).as_message().as_string())
 
@@ -1029,7 +1029,7 @@ class TestGPG(TestAbstract):
         However, if the user uses Envelope.as_message(), its gets the underlying Message without the correction with GPG void.
         See #19 and https://github.com/python/cpython/issues/99533
         """
-        e=(Envelope(MESSAGE)
+        e = (Envelope(MESSAGE)
              .to(IDENTITY_2)
              .gpg(GNUPG_HOME)
              .from_(IDENTITY_1)
@@ -1037,14 +1037,14 @@ class TestGPG(TestAbstract):
              .attach("some data", name="A"*35))
 
         def verify_inline_message(txt: str):
-            boundary=re.search(r'boundary="(.*)"', txt).group(1)
-            reg=fr'{boundary}.*{boundary}\n(.*)\n--{boundary}.*(-----BEGIN PGP SIGNATURE-----.*-----END PGP SIGNATURE-----)'
-            m=re.search(reg, txt, re.DOTALL)
+            boundary = re.search(r'boundary="(.*)"', txt).group(1)
+            reg = fr'{boundary}.*{boundary}\n(.*)\n--{boundary}.*(-----BEGIN PGP SIGNATURE-----.*-----END PGP SIGNATURE-----)'
+            m = re.search(reg, txt, re.DOTALL)
             return e._gpg_verify(m[2].encode(), m[1].encode())
 
         # accessing via standard email package with get_payload called on different parts keeps signature
-        sig=e.as_message().get_payload()[1].get_payload().encode()
-        data=e.as_message().get_payload()[0].as_bytes()
+        sig = e.as_message().get_payload()[1].get_payload().encode()
+        data = e.as_message().get_payload()[0].as_bytes()
         self.assertTrue(e._gpg_verify(sig, data))
 
         # accessing via standard email package on the whole message does not keep signature
@@ -1065,23 +1065,23 @@ class TestGPG(TestAbstract):
 
 
 class TestMime(TestAbstract):
-    plain="""First
+    plain = """First
 Second
 Third
     """
 
-    html="""First<br>
+    html = """First<br>
 Second
 Third
     """
 
-    html_without_line_break="""<b>First</b>
+    html_without_line_break = """<b>First</b>
 Second
 Third
     """
 
-    mime_plain='Content-Type: text/plain; charset="utf-8"'
-    mime_html='Content-Type: text/html; charset="utf-8"'
+    mime_plain = 'Content-Type: text/plain; charset="utf-8"'
+    mime_html = 'Content-Type: text/html; charset="utf-8"'
 
     def test_plain(self):
         pl=self.mime_plain
@@ -1090,14 +1090,14 @@ Third
         self.check_lines(Envelope().message(self.html).mime("plain"), pl)
 
     def test_html(self):
-        m=self.mime_html
+        m = self.mime_html
         self.check_lines(Envelope().message(self.plain).mime("html", "auto"), m)
         self.check_lines(Envelope().message(self.html), m)
         self.check_lines(Envelope().message(self.html_without_line_break), m)
 
     def test_nl2br(self):
-        nobr="Second"
-        br="Second<br>"
+        nobr = "Second"
+        br = "Second<br>"
         self.check_lines(Envelope().message(self.html),
                          nobr)  # there already is a <br> tag so nl2br "auto" should not convert it
         self.check_lines(Envelope().message(self.html).mime(nl2br=True), br)
@@ -1108,11 +1108,11 @@ Third
         self.check_lines(Envelope().message(self.html_without_line_break).mime(nl2br=False), nobr)
 
     def test_alternative(self):
-        boundary="=====envelope-test===="
+        boundary = "=====envelope-test===="
 
         # alternative="auto" can become both "html" and "plain"
-        e1=Envelope().message("He<b>llo</b>").message("Hello", alternative="plain", boundary=boundary).date(False)
-        e2=Envelope().message("He<b>llo</b>", alternative="html").message("Hello", boundary=boundary).date(False)
+        e1 = Envelope().message("He<b>llo</b>").message("Hello", alternative="plain", boundary=boundary).date(False)
+        e2 = Envelope().message("He<b>llo</b>", alternative="html").message("Hello", boundary=boundary).date(False)
         self.assertEqual(e1, e2)
 
         # HTML variant is always the last even if defined before plain variant
@@ -1122,7 +1122,7 @@ Third
                               "He<b>llo</b>"))
 
     def test_only_2_alternatives_allowed(self):
-        e1=Envelope().message("He<b>llo</b>").message("Hello", alternative="plain")
+        e1 = Envelope().message("He<b>llo</b>").message("Hello", alternative="plain")
         # we can replace alternative
         e1.copy().message("Test").message("Test", alternative="plain")
 
@@ -1136,7 +1136,7 @@ Third
         self.assertEqual("image/gif", get_mimetype(path=self.image_file))
 
         # test get_mimetype in the action while dealing attachments
-        e=(Envelope()
+        e = (Envelope()
              .attach("hello", "text/plain")
              .attach(b"hello bytes")
              .attach(Path("tests/gpg_ring/trustdb.gpg"))
@@ -1150,8 +1150,8 @@ Third
 
 class TestRecipients(TestAbstract):
     def test_from(self):
-        id1="identity-1@example.com"
-        id2="identity-2@example.com"
+        id1 = "identity-1@example.com"
+        id2 = "identity-2@example.com"
         self.check_lines(Envelope(MESSAGE).header("sender", id1),
                          f"sender: {id1}", not_in=f"From: {id1}")
         self.check_lines(Envelope(MESSAGE, headers=[("sender", id1)]),
@@ -1172,23 +1172,23 @@ class TestRecipients(TestAbstract):
                          (f"From: {id1}", f"Sender: {id2}"))
 
     def test_from_addr(self):
-        mail1="envelope-from@example.com"
-        mail2="header-from@example.com"
-        e=Envelope(MESSAGE).from_addr(mail1).from_(mail2)
+        mail1 = "envelope-from@example.com"
+        mail2 = "header-from@example.com"
+        e = Envelope(MESSAGE).from_addr(mail1).from_(mail2)
         self.assertEqual(mail1, e.from_addr())
         self.assertEqual(mail2, e.from_())
         self.assertIn("Have not been sent from " + mail1, str(e.send(False)))
-        e=Envelope(MESSAGE).from_(mail2)
+        e = Envelope(MESSAGE).from_(mail2)
         self.assertIn("Have not been sent from " + mail2, str(e.send(False)))
-        e=Envelope(MESSAGE, from_addr=mail1).from_(mail2)
+        e = Envelope(MESSAGE, from_addr=mail1).from_(mail2)
         self.assertIn("Have not been sent from " + mail1, str(e.send(False)))
         self.assertIn("Have not been sent from " + mail1, self.bash("--from-addr", mail1, "--send", "0", file=self.eml))
 
     def test_addresses(self):
-        e=Envelope.load(path=self.eml)
+        e = Envelope.load(path=self.eml)
         self.assertEqual(1, len(e.to()))
         contact=e.to()[0]
-        full="Person <person@example.com>"
+        full = "Person <person@example.com>"
         self.assertEqual(full, contact)
         self.assertEqual("person@example.com", contact)
         self.assertEqual("person@example.com", contact.address)
@@ -1207,7 +1207,7 @@ class TestRecipients(TestAbstract):
         self.assertNotEqual("PERSON", contact.user)
 
         # Address is correctly typed, empty properties returns string
-        empty=Address()
+        empty = Address()
         self.assertEqual(Address(""), empty)
         self.assertEqual("", str(empty.user))
         self.assertEqual("", str(empty.host))
@@ -1241,13 +1241,13 @@ class TestRecipients(TestAbstract):
         # If any of these tests fails, it's a good message the underlying Python libraries are better
         # and we may stop remedying.
         # https://github.com/python/cpython/issues/40889#issuecomment-1094001067
-        disguise_addr="first@example.cz <second@example.com>"
-        same="person@example.com <person@example.com>"
-        self.assertEqual(('', 'first@example.cz'), parseaddr(disguise_addr))
+        disguise_addr = "first@example.cz <second@example.com>"
+        same = "person@example.com <person@example.com>"
+        self.assertEqual(('', 'first@example.cz'), _parseaddr(disguise_addr))
         self.assertEqual([('', 'first@example.cz'), ('', 'second@example.com')],
-                         getaddresses([disguise_addr]))
+                         _getaddresses([disguise_addr]))
         self.assertEqual([('', 'person@example.com'), ('', 'person@example.com')],
-                         getaddresses([same]))
+                         _getaddresses([same]))
 
         # For the same input, Envelope receives better results.
         self.assertEqual(Address(name='first@example.cz', address='second@example.com'), Address(disguise_addr))
@@ -1260,7 +1260,7 @@ class TestRecipients(TestAbstract):
         self.assertEqual(Address(address='person@example.com'), Address.parse(same, single=True))
 
         # Try various disguised addresses
-        examples=["person@example.com <person@example.com>",  # the same
+        examples = ["person@example.com <person@example.com>",  # the same
                     "person@example.com <person@example2.com>",  # differs, the name hiding the address
                     "pers'one'@'ample.com <a@example.com>",  # single address
                     "pers'one'@'ample.com, <a@example.com>",  # two addresses
@@ -1283,7 +1283,7 @@ class TestRecipients(TestAbstract):
                               ("User (nested comment)", "foo@bar.com"),
                               ("ug--AT--ly3--AT--example.com", "another3@example.com")]
 
-        expected_getaddresses=[
+        expected_getaddresses = [
             [("", "person@example.com")],
             [("person--AT--example.com", "person@example2.com")],
             [("pers'one'--AT--'ample.com", "a@example.com")],
@@ -1305,11 +1305,11 @@ class TestRecipients(TestAbstract):
              ("ugly--AT--example.com", "another@example.com")]]
 
         for e, r in zip(expected_parseaddr, (Address(e) for e in examples)):
-            name, addr=e
+            name, addr = e
             self.assertEqual(Address(name=name, address=addr), r)
 
         for e, r in zip(expected_getaddresses, (Address.parse(e) for e in examples)):
-            expected=[Address(name=name, address=addr) for name, addr in e]
+            expected = [Address(name=name, address=addr) for name, addr in e]
             self.assertEqual(expected, r)
 
         # As we want to be slightly better than the standard library
@@ -1320,8 +1320,8 @@ class TestRecipients(TestAbstract):
 
         def check(addresses, models):
             """ Parsing addresses is exactly the same as in the standard email.utils library. """
-            compared=[Address(name=v[0], address=v[1]) for v in models if v[0] or v[1]]
-            parsed=Address.parse(addresses)
+            compared = [Address(name=v[0], address=v[1]) for v in models if v[0] or v[1]]
+            parsed = Address.parse(addresses)
             self.assertEqual([(a.name, a.address) for a in parsed],
                              [(a.name, a.address) for a in compared])
         check(['aperson@dom.ain (Al Person)',
@@ -1344,7 +1344,7 @@ class TestRecipients(TestAbstract):
         check(['Al Person <aperson@dom.ain>'], [('Al Person', 'aperson@dom.ain')])
 
     def test_removing_contact(self):
-        contact="Person2 <person2@example.com>"
+        contact = "Person2 <person2@example.com>"
 
         def e():
             return Envelope.load(path=self.eml).cc(contact)
@@ -1384,7 +1384,7 @@ class TestRecipients(TestAbstract):
 
     def test_empty_contact(self):
         """ Be sure to receive an address even if the header misses. """
-        e1=Envelope.load("Empty message")
+        e1 = Envelope.load("Empty message")
         self.assertTrue(isinstance(e1.from_(), Address))
         self.assertTrue(isinstance(e1.to(), list))
         self.assertTrue(isinstance(e1.cc(), list))
@@ -1395,7 +1395,7 @@ class TestRecipients(TestAbstract):
 
         self.assertEqual("", e1.from_().address)
 
-        e2=Envelope.load("From: test@example.com\n\nEmpty message")
+        e2 = Envelope.load("From: test@example.com\n\nEmpty message")
         self.assertTrue(isinstance(e2.from_(), Address))
         self.assertTrue(e2.from_())
         self.assertTrue(e2.header("from"))
@@ -1403,12 +1403,12 @@ class TestRecipients(TestAbstract):
         self.assertFalse(e2.header("sender"))
         self.assertEqual("", e2.from_().name)
 
-        e3=Envelope.load("From: Person <test@example.com>\n\nEmpty message")
+        e3 = Envelope.load("From: Person <test@example.com>\n\nEmpty message")
         self.assertTrue(e3.from_())
         self.assertEqual("Person", e3.from_().name)
         self.assertTrue(e3.from_().is_valid())
 
-        e4=Envelope.load("From: Invalid\n\nEmpty message")
+        e4 = Envelope.load("From: Invalid\n\nEmpty message")
         self.assertTrue(e4.from_())
         self.assertEqual("Invalid", e4.from_().address)
         self.assertEqual("", e4.from_().name)
@@ -1416,9 +1416,9 @@ class TestRecipients(TestAbstract):
 
     def test_multiple_recipients_format(self):
         """ You can use iterables like tuple, list, generator, set, frozenset for specifying multiple values """
-        one=[IDENTITY_1]
-        two=[IDENTITY_1, IDENTITY_2]
-        three=[IDENTITY_1, IDENTITY_2, IDENTITY_3]
+        one = [IDENTITY_1]
+        two = [IDENTITY_1, IDENTITY_2]
+        three = [IDENTITY_1, IDENTITY_2, IDENTITY_3]
 
         # try single value, tuple and list
         self.assertEqual(one, Envelope(MESSAGE).to(IDENTITY_1).to())
@@ -1440,9 +1440,9 @@ class TestRecipients(TestAbstract):
 
 class TestSubject(TestAbstract):
     def test_cache_recreation(self):
-        s1="Test"
-        s2="Another"
-        e=Envelope(MESSAGE).subject(s1)
+        s1 = "Test"
+        s2 = "Another"
+        e = Envelope(MESSAGE).subject(s1)
         self.check_lines(e, f"Subject: {s1}")
 
         e.subject(s2)
@@ -1452,7 +1452,7 @@ class TestSubject(TestAbstract):
 class TestHeaders(TestAbstract):
     def test_generic_header_manipulation(self):
         # Add a custom header and delete it
-        e=Envelope(MESSAGE).subject("my subject").header("custom", "1")
+        e = Envelope(MESSAGE).subject("my subject").header("custom", "1")
         self.assertEqual(e.header("custom"), "1")
         self.assertIs(e.header("custom", replace=True), e)
 
@@ -1474,11 +1474,11 @@ class TestHeaders(TestAbstract):
             Ex: It is useful to have Cc as a special header since it can hold the list of receivers.
         """
         # Add a specific header like and delete it
-        s="my subject"
-        id1="person@example.com"
-        id2="person2@example.com"
-        id3="person3@example.com"
-        e=Envelope(MESSAGE) \
+        s = "my subject"
+        id1 = "person@example.com"
+        id2 = "person2@example.com"
+        id3 = "person3@example.com"
+        e = Envelope(MESSAGE) \
             .subject(s) \
             .header("custom", "1") \
             .cc(id1)  # set headers via their specific methods
@@ -1502,7 +1502,7 @@ class TestHeaders(TestAbstract):
         self.assertNotIn(f"Date: ", str(Envelope(MESSAGE).date(False)))
 
     def test_email_addresses(self):
-        e=(Envelope()
+        e =(Envelope()
              .cc("person1@example.com")
              .to("person2@example.com")  # add as string
              .to(["person3@example.com", "person4@example.com"])  # add as list
@@ -1532,19 +1532,18 @@ class TestHeaders(TestAbstract):
         e=(Envelope().to('person1@example.com, person2@example.com'))
         self.assertTrue(e.check(check_mx=False, check_smtp=False))
 
-
 class TestSupportive(TestAbstract):
     def test_copy(self):
-        factory=Envelope().cc("original@example.com").copy
-        e1=factory().to("independent-1@example.com")
-        e2=factory().to("independent-2@example.com").cc("additional@example.com")
+        factory = Envelope().cc("original@example.com").copy
+        e1 = factory().to("independent-1@example.com")
+        e2 = factory().to("independent-2@example.com").cc("additional@example.com")
 
         self.assertEqual(e1.recipients(), {'independent-1@example.com', 'original@example.com'})
         self.assertEqual(e2.recipients(),
                          {'independent-2@example.com', 'original@example.com', 'additional@example.com'})
 
     def test_message(self):
-        e=Envelope("hello").as_message()
+        e = Envelope("hello").as_message()
         self.assertEqual(type(e), EmailMessage)
         self.assertEqual(e.get_payload(), "hello\n")
 
@@ -1570,8 +1569,8 @@ class TestSupportive(TestAbstract):
 
         SMTPHandler._instances={key(name): DummySMTPConnection(name) for name in (f"dummy{i}" for i in range(4))}
 
-        e1=Envelope().smtp("dummy1").smtp("dummy2")  # this object uses dummy2 only
-        e2=Envelope().smtp("dummy3")  # this object uses dummy3
+        e1 = Envelope().smtp("dummy1").smtp("dummy2")  # this object uses dummy2 only
+        e2 = Envelope().smtp("dummy3")  # this object uses dummy3
 
         stdout=StringIO()
         with redirect_stdout(stdout):
@@ -1591,13 +1590,13 @@ class TestBash(TestAbstract):
     def test_attachment(self):
         preview_text=f"Attachment generic.txt (text/plain): Small sample text at..."
         self.assertIn(preview_text, self.bash("--attach", self.text_attachment, "--preview"))
-        o=self.bash("--attach", self.text_attachment, "--send", "0")
+        o = self.bash("--attach", self.text_attachment, "--send", "0")
         self.assertNotIn(preview_text, o)
         self.assertIn('Content-Disposition: attachment; filename="generic.txt"', o)
 
     def test_subject(self):
-        subject1="Hello world"
-        subject2="Good bye sun"
+        subject1 = "Hello world"
+        subject2 = "Good bye sun"
         default_placeholder="Encrypted message"  # default text used by the library
 
         def get_encrypted(subject, subject_encrypted):
@@ -1609,22 +1608,22 @@ class TestBash(TestAbstract):
                             "--subject", subject,
                             "--subject-encrypted", subject_encrypted, piped="text")
             # remove text "Have not been sent ... Encrypted subject: ..." prepended by ._send_now
-            ref=ref[ref.index("\n\n") + 2:]
+            ref = ref[ref.index("\n\n") + 2:]
             return ref, Envelope.load(ref).as_message().as_string()
 
-        encrypted, decrypted=get_encrypted(subject1, subject2)
+        encrypted, decrypted = get_encrypted(subject1, subject2)
         self.assertIn(f"Subject: {subject2}", encrypted)
         self.assertNotIn(subject1, encrypted)
         self.assertIn(f"Subject: {subject1}", decrypted)
         self.assertNotIn(subject2, decrypted)
 
         for x in ("False", "FALSE", "0", "oFF"):
-            encrypted, decrypted=get_encrypted(subject1, x)
+            encrypted, decrypted = get_encrypted(subject1, x)
             self.assertIn(f"Subject: {subject1}", encrypted)
             self.assertIn(f"Subject: {subject1}", decrypted)
 
         for x in ("True", "TRUE", "1", "oN"):
-            encrypted, decrypted=get_encrypted(subject1, x)
+            encrypted, decrypted = get_encrypted(subject1, x)
             self.assertIn(f"Subject: {default_placeholder}", encrypted)
             self.assertIn(f"Subject: {subject1}", decrypted)
 
@@ -1632,7 +1631,7 @@ class TestBash(TestAbstract):
 class TestAttachment(TestAbstract):
 
     def test_casting(self):
-        e=Envelope() \
+        e = Envelope() \
             .attach("hello", "text/plain") \
             .attach(b"hello bytes")
 
@@ -1647,48 +1646,48 @@ class TestAttachment(TestAbstract):
         self.assertEqual("hello bytes", str(e.attachments()[1]))
 
     def test_different_order(self):
-        path=Path(self.text_attachment)
-        e=Envelope() \
+        path = Path(self.text_attachment)
+        e = Envelope() \
             .attach(path, "text/csv", "foo") \
             .attach(mimetype="text/csv", name="foo", path=self.text_attachment) \
             .attach(path, "foo", "text/csv") \
             .attach([(path, "text/csv", "foo",)]) \
             .attach(((path, "text/csv", "foo",),))
-        model=repr(e.attachments()[0])
+        model =repr(e.attachments()[0])
         # a tuple with a single attachment (and its details)
-        e2=Envelope(attachments=(path, "text/csv", "foo"))
+        e2 = Envelope(attachments=(path, "text/csv", "foo"))
         # a list that contains multiple attachments
-        e3=Envelope(attachments=[(path, "text/csv", "foo"), (path, "text/csv", "foo")])
+        e3 = Envelope(attachments=[(path, "text/csv", "foo"), (path, "text/csv", "foo")])
         [self.assertEqual(model, repr(a)) for a in e.attachments() + e2.attachments() + e3.attachments()]
 
     def test_inline(self):
         def e():
             return Envelope().subject("Inline image message")
 
-        image=self.image_file
-        image_path=image.absolute()
-        name=image.name
+        image = self.image_file
+        image_path = image.absolute()
+        name = image.name
 
         # Specified the only HTML alternative, no plain text
-        e1=e().message(f"Hi <img src='cid:{name}'/>", alternative=HTML).attach(image, inline=True)
-        single_alternative=("Content-Type: multipart/related;",
+        e1 = e().message(f"Hi <img src='cid:{name}'/>", alternative=HTML).attach(image, inline=True)
+        single_alternative = ("Content-Type: multipart/related;",
                               "Subject: Inline image message",
                               'Content-Type: text/html; charset="utf-8"')
-        img_msg="Content-Disposition: inline", "R0lGODlhAwADAKEDAAIJAvz9/v///wAAACH+EUNyZWF0ZWQgd2l0aCBHSU1QACwAAAAAAwADAAAC"
-        image_gif="Hi <img src='cid:image.gif'/>", "Content-Type: image/gif", "Content-ID: <image.gif>", *img_msg
-        multiple_alternatives=('Content-Type: text/plain; charset="utf-8"',
+        img_msg = "Content-Disposition: inline", "R0lGODlhAwADAKEDAAIJAvz9/v///wAAACH+EUNyZWF0ZWQgd2l0aCBHSU1QACwAAAAAAwADAAAC"
+        image_gif = "Hi <img src='cid:image.gif'/>", "Content-Type: image/gif", "Content-ID: <image.gif>", *img_msg
+        multiple_alternatives = ('Content-Type: text/plain; charset="utf-8"',
                                  "Plain alternative",
                                  "Content-Type: multipart/related;",
                                  'Content-Type: text/html; charset="utf-8"')
-        compare_lines=*single_alternative, *image_gif
+        compare_lines = *single_alternative, *image_gif
         self.check_lines(e1, compare_lines)
 
         # Not specifying the only HTML alternative
-        e2=e().message(f"Hi <img src='cid:{name}'/>").attach(path=image_path, inline=True)
+        e2 = e().message(f"Hi <img src='cid:{name}'/>").attach(path=image_path, inline=True)
         self.check_lines(e2, compare_lines)
 
         # Two message alternatives, the plain is specified
-        e3=e().message(f"Hi <img src='cid:{name}'/>").message("Plain alternative", alternative=PLAIN,
+        e3 = e().message(f"Hi <img src='cid:{name}'/>").message("Plain alternative", alternative=PLAIN,
                                                                 boundary="bound") \
             .attach(image, inline=True)
         self.check_lines(e3, (
@@ -1699,7 +1698,7 @@ class TestAttachment(TestAbstract):
             *image_gif))
 
         # Two message alternatives, the HTML is specified
-        e4=e().message(f"Hi <img src='cid:{name}'/>", alternative=HTML).message("Plain alternative") \
+        e4 = e().message(f"Hi <img src='cid:{name}'/>", alternative=HTML).message("Plain alternative") \
             .attach(path=image.absolute(), inline=True)
         self.check_lines(e4, ("Content-Type: multipart/alternative;",
                               "Subject: Inline image message",
@@ -1707,8 +1706,8 @@ class TestAttachment(TestAbstract):
                               *image_gif))
 
         # Setting a name of an inline image
-        custom_cid="custom-name.jpg"
-        e5=e().message(f"Hi <img src='cid:{custom_cid}'/>").attach(path=image_path, inline=custom_cid)
+        custom_cid = "custom-name.jpg"
+        e5 = e().message(f"Hi <img src='cid:{custom_cid}'/>").attach(path=image_path, inline=custom_cid)
         self.check_lines(e5,
                          (*single_alternative,
                           "Hi <img src='cid:custom-name.jpg'/>",
@@ -1717,8 +1716,8 @@ class TestAttachment(TestAbstract):
                           *img_msg))
 
         # Getting a name from the file name when contents is given
-        custom_filename="filename.gif"
-        e6=e().message(f"Hi <img src='cid:{custom_filename}'/>") \
+        custom_filename = "filename.gif"
+        e6 = e().message(f"Hi <img src='cid:{custom_filename}'/>") \
             .attach(image.read_bytes(), name=custom_filename, inline=True)
         self.check_lines(e6,
                          (*single_alternative,
@@ -1729,8 +1728,8 @@ class TestAttachment(TestAbstract):
 
         # Getting a name from the file name when contents is given
         # Setting a name of an inline image
-        custom_filename="filename.jpg"
-        e7=e().message(f"Hi <img src='cid:{custom_cid}'/>") \
+        custom_filename = "filename.jpg"
+        e7 = e().message(f"Hi <img src='cid:{custom_cid}'/>") \
             .attach(image.read_bytes(), name=custom_filename, inline=custom_cid)
         self.check_lines(e7,
                          (*single_alternative,
@@ -1741,13 +1740,13 @@ class TestAttachment(TestAbstract):
 
 
 class TestLoad(TestBash):
-    inline_image="tests/eml/inline_image.eml"
+    inline_image = "tests/eml/inline_image.eml"
 
     def test_load(self):
         self.assertEqual(Envelope.load("Subject: testing message").subject(), "testing message")
 
     def test_load_file(self):
-        e=Envelope.load(self.eml.read_text())
+        e = Envelope.load(self.eml.read_text())
         self.assertEqual(e.subject(), "Hello world subject")
 
         # multiple headers returned as list and in the same order
@@ -1755,7 +1754,7 @@ class TestLoad(TestBash):
         self.assertEqual(e.header("Received")[1][:26], "from receiver2.example.com")
 
     def test_encoded_headers(self):
-        e=Envelope.load(path=str(self.utf_header))
+        e = Envelope.load(path=str(self.utf_header))
         self.assertEqual(e.subject(), "Re: text")
         self.assertEqual("Jiří <jiri@example.com>", e.from_())
 
@@ -1772,12 +1771,12 @@ class TestLoad(TestBash):
         # When longer than certain number of characters, the method Parser.parse header.Header.encode()
         # returned chunks that were problematic to parse with policy.header_store_parse.
         # This will be treated as 'unknown-8bit' header.
-        address=Envelope.load("To: Novák Honza Name longer than 75 chars <honza.novak@example.com>").to()[0]
+        address = Envelope.load("To: Novák Honza Name longer than 75 chars <honza.novak@example.com>").to()[0]
         self.assertEqual("honza.novak@example.com", address.address)
         self.assertEqual("Novák Honza Name longer than 75 chars", address.name)
 
         # other than UTF-8 headers
-        iso_2="Subject: =?iso-8859-2?Q?=BE=E1dost_o_blokaci_dom=E9ny?="
+        iso_2 = "Subject: =?iso-8859-2?Q?=BE=E1dost_o_blokaci_dom=E9ny?="
         self.assertEqual("žádost o blokaci domény", Envelope.load(iso_2).subject())
 
     def test_load_bash(self):
@@ -1792,7 +1791,7 @@ class TestLoad(TestBash):
             self.bash("--subject", file=self.quopri))
 
     def test_alternative_and_related(self):
-        e=Envelope.load(path=self.inline_image)
+        e = Envelope.load(path=self.inline_image)
         self.assertEqual("Hi <img src='cid:image.gif'/>", e.message())
         self.assertEqual("Inline image message", e.subject())
         self.assertEqual("Plain alternative", e.message(alternative=PLAIN))
@@ -1822,7 +1821,7 @@ class TestLoad(TestBash):
         # with self.assertLogs('envelope', level='WARNING') as cm:
         #     e = Envelope.load(self.group_recipient)
         # self.assertEqual(cm.output, [msg])
-        e=Envelope.load(self.group_recipient)
+        e = Envelope.load(self.group_recipient)
 
         self.assertEqual([], e.to())
         self.assertEqual("From Alice Smith", e.subject())
@@ -1830,19 +1829,19 @@ class TestLoad(TestBash):
         self.assertEqual({"hi", "hi2"}, Envelope.load("To: group: hi; group b: hi2;").recipients())
 
     def test_invalid_characters(self):
-        msg="WARNING:envelope.parser:Replacing some invalid characters in text/plain:" \
+        msg = "WARNING:envelope.parser:Replacing some invalid characters in text/plain:" \
               " 'utf-8' codec can't decode byte 0xe1 in position 1: invalid continuation byte"
         with self.assertLogs('envelope', level='WARNING') as cm:
-            e=Envelope.load(self.invalid_characters)
+            e = Envelope.load(self.invalid_characters)
         self.assertEqual(cm.output, [msg])
 
-        text='V�\x17Een� z�kazn�ku!\n Va\x161e z�silka bude'
+        text = 'V�\x17Een� z�kazn�ku!\n Va\x161e z�silka bude'
         self.assertEqual(text, e.message(alternative="plain")[:len(text)])
-        html='<HTML><head><meta http-equiv="Content-Type" content="text/html; charset=utf-8"/></head><BODY><P>Vážený'
+        html = '<HTML><head><meta http-equiv="Content-Type" content="text/html; charset=utf-8"/></head><BODY><P>Vážený'
         self.assertEqual(html, e.message()[:len(html)])
 
         # test subject decoded from base64
-        subject="Vaše zásilka ceká na dorucení"
+        subject = "Vaše zásilka ceká na dorucení"
         self.assertEqual(subject, e.subject())
 
         # test header internationalized
@@ -1852,12 +1851,12 @@ class TestLoad(TestBash):
 
     def test_invalid_headers(self):
         """ Following file has some invalid headers whose parsing would normally fail. """
-        msg=['WARNING:envelope.envelope:Header List-Unsubscribe could not be successfully '
+        msg = ['WARNING:envelope.envelope:Header List-Unsubscribe could not be successfully '
                "loaded with <mailto:RB��R@innovabrokers.com.co>: 'Header' object is not subscriptable",
                'WARNING:envelope.parser:Replacing some invalid characters in text/html: '
                'unknown encoding: "utf-8message-id: <123456@example.com>']
         with self.assertLogs('envelope', level='WARNING') as cm:
-            e=Envelope.load(self.invalid_headers)
+            e = Envelope.load(self.invalid_headers)
         if (3, 6) == (sys.version_info.major, sys.version_info.minor):  # XX drop with Python3.6 support
             self.assertIn("support indexing", cm.output[0])
         else:
@@ -1868,11 +1867,11 @@ class TestLoad(TestBash):
 
 
 class TestTransfer(TestBash):
-    long_text="J'interdis aux marchands de vanter trop leurs marchandises." \
+    long_text = "J'interdis aux marchands de vanter trop leurs marchandises." \
                 " Car ils se font vite pédagogues et t'enseignent comme but ce qui n'est par essence qu'un moyen," \
                 " et te trompant ainsi sur la route à suivre les voilà bientôt qui te dégradent," \
                 " car si leur musique est vulgaire ils te fabriquent pour te la vendre une âme vulgaire."
-    quoted="J'interdis aux marchands de vanter trop leurs marchandises. Car ils se font v=" \
+    quoted = "J'interdis aux marchands de vanter trop leurs marchandises. Car ils se font v=" \
              "\nite p=C3=A9dagogues et t'enseignent comme but ce qui n'est par essence qu'un =" \
              "\nmoyen, et te trompant ainsi sur la route =C3=A0 suivre les voil=C3=A0 bient=" \
              "\n=C3=B4t qui te d=C3=A9gradent, car si leur musique est vulgaire ils te fabriq=" \
@@ -1881,7 +1880,7 @@ class TestTransfer(TestBash):
     def _quoted_message(self, e: Envelope):
         self.assertEqual(self.long_text, e.message())
         self.assertIn(self.long_text, e.preview())  # when using preview, we receive original text
-        output=str(e.send(False))  # but when sending, quoted text is got instead
+        output = str(e.send(False))  # but when sending, quoted text is got instead
         self.assertNotIn(self.long_text, output)
         self.assertIn(self.quoted, output)
 
@@ -1900,22 +1899,22 @@ class TestTransfer(TestBash):
         self.assertEqual(self.long_text, self.bash("--message", file=self.quopri))
 
     def test_base64(self):
-        hello="aGVsbG8gd29ybGQ="
+        hello = "aGVsbG8gd29ybGQ="
         self.assertEqual(Envelope.load(f"\n{hello}").message(), hello)
         self.assertEqual(Envelope.load(f"Content-Transfer-Encoding: base64\n\n{hello}").message(), "hello world")
 
     def test_implanted_transfer(self):
-        e=(Envelope().header("Content-Transfer-Encoding", "quoted-printable").message(self.quoted))
+        e = (Envelope().header("Content-Transfer-Encoding", "quoted-printable").message(self.quoted))
         self.assertEqual(self.long_text, e.message())
 
         # we replace Content-Transfer-Encoding and change the message
-        original="hello world"
-        hello="aGVsbG8gd29ybGQ="
-        e=(Envelope().header("Content-Transfer-Encoding", "base64").message(hello))
+        original = "hello world"
+        hello = "aGVsbG8gd29ybGQ="
+        e = (Envelope().header("Content-Transfer-Encoding", "base64").message(hello))
         self.assertEqual(original, e.message())
 
         # the user specified Content-Transfer-Encoding but left the message unencoded
-        e2=(Envelope().header("Content-Transfer-Encoding", "base64").message(original))
+        e2 = (Envelope().header("Content-Transfer-Encoding", "base64").message(original))
         self.assertEqual(original, e2.message())
 
 
@@ -1931,32 +1930,32 @@ class TestSMTP(TestAbstract):
 
 
 class TestReport(TestAbstract):
-    xarf=Path("tests/eml/multipart-report-xarf.eml")
+    xarf = Path("tests/eml/multipart-report-xarf.eml")
 
     def test_loading_xarf(self):
         # no report in an empty object
         self.assertFalse(Envelope()._report())
 
         # expected XARF report
-        e=Envelope.load(self.xarf)
-        report=e._report()
+        e = Envelope.load(self.xarf)
+        report = e._report()
         self.assertSubset(report["ReporterInfo"], {"ReporterOrg": 'Example'})
         self.assertSubset(report["Report"], {'SourceIp': '192.0.2.1'})
 
     def test_unsupported_message(self):
         # only `Content-Type: message/feedback-report` is implemented within `multipart/report``
-        t=self.xarf.read_text().replace("Content-Type: message/feedback-report",
+        t = self.xarf.read_text().replace("Content-Type: message/feedback-report",
                                           "Content-Type: message/UNSUPPORTED")
-        msg="WARNING:envelope.envelope:Message might not have been loaded correctly. " \
+        msg = "WARNING:envelope.envelope:Message might not have been loaded correctly. " \
             "Parsing multipart/report / message/unsupported not implemented."
         with self.assertLogs('envelope', level='WARNING') as cm:
             Envelope.load(t)
         self.assertEqual(cm.output, [msg])
 
         # `Content-Type: message` is not implemented within `multipart/mixed`
-        msg="WARNING:envelope.envelope:Message might not have been loaded correctly. "\
+        msg = "WARNING:envelope.envelope:Message might not have been loaded correctly. "\
             "Parsing multipart/mixed / message/feedback-report failed or not implemented."
-        t=self.xarf.read_text().replace("Content-Type: multipart/report",
+        t = self.xarf.read_text().replace("Content-Type: multipart/report",
                                           "Content-Type: multipart/mixed")
         with self.assertLogs('envelope', level='WARNING') as cm:
             Envelope.load(t)
