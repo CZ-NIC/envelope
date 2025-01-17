@@ -1255,13 +1255,17 @@ class Envelope:
         """
         return set(x.address for x in self._to + self._cc + self._bcc + [x for x in [self._from] if x])
 
-    def smime_sign_only(self, email, sign):
+    def _import_cryptoraphy_modules(self):
         try:
             from cryptography.hazmat.primitives.serialization import load_pem_private_key, pkcs7
             from cryptography.x509 import load_pem_x509_certificate
             from cryptography.hazmat.primitives import hashes, serialization
+            return load_pem_private_key, pkcs7, load_pem_x509_certificate, hashes, serialization
         except ImportError:
             raise ImportError(smime_import_error)
+        
+    def smime_sign_only(self, email, sign):
+        load_pem_private_key, pkcs7, load_pem_x509_certificate, hashes, serialization = self._import_cryptoraphy_modules()
         # get sender's cert
         # cert and private key can be one file
 
@@ -1302,12 +1306,7 @@ class Envelope:
         return signed_email
     
     def smime_sign_encrypt(self, email, sign, encrypt):
-        try:
-            from cryptography.hazmat.primitives.serialization import load_pem_private_key, pkcs7
-            from cryptography.x509 import load_pem_x509_certificate
-            from cryptography.hazmat.primitives import hashes, serialization
-        except ImportError:
-            raise ImportError(smime_import_error)
+        load_pem_private_key, pkcs7, load_pem_x509_certificate, hashes, serialization = self._import_cryptoraphy_modules()
 
         if self._cert:
             sender_cert = self._cert
@@ -1370,13 +1369,7 @@ class Envelope:
 
     def smime_encrypt_only(self, email, encrypt):
 
-        try:
-            from cryptography.hazmat.primitives.serialization import pkcs7
-            from cryptography.x509 import load_pem_x509_certificate
-            from cryptography.hazmat.primitives import serialization
-        except ImportError:
-            raise ImportError(smime_import_error)
-
+        _, pkcs7, load_pem_x509_certificate, _, serialization = self._import_cryptoraphy_modules()
 
         if self._cert:
             certificates = [self._cert]
