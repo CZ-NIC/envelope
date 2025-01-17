@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 2.1.0 (2025-01-17)
+- reworked s/mime cryptography
+
 ## 2.0.4 (2024-07-18)
 - resilience against missing libmagic (useful on a contained environment)
 - better SMTP retries #35

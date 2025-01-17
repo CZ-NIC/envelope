@@ -1,0 +1,26 @@
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry]
+name = "envelope"
+version = "2.1.0"
+description = "Insert a message and attachments and send e-mail / sign / encrypt contents by a single line."
+authors = ["Edvard Rejthar <edvard.rejthar@nic.cz>"]
+license = "GNU GPLv3"
+homepage = "https://github.com/CZ-NIC/envelope"
+readme = "README.md"
+classifiers = ["Programming Language :: Python :: 3"]
+
+[tool.poetry.dependencies]
+python = ">=3.10"
+jsonpickle = "*"
+python-magic = "*"
+python-gnupg = ">=0.5"
+py3-validate-email = "*"
+
+[tool.poetry.project.optional-dependencies]
+smime = ["cryptography>=43"]
+
+[tool.poetry.scripts]
+envelope = "envelope.__main__:main"
