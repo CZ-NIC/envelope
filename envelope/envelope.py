@@ -412,9 +412,9 @@ class Envelope:
         """ Multiple addresses may be given in a string, delimited by comma (or semicolon).
          (The same is valid for `to`, `cc`, `bcc` and `reply-to`.)
 
-            :param email_or_more: str|Tuple[str]|List[str]|Generator[str]|Set[str]|Frozenset[str]
+            :param email_or_more: str|Tuple[str]|list[str]|Generator[str]|Set[str]|Frozenset[str]
              Set e-mail address/es. If None, we are reading.
-            return: Envelope if `email_or_more` set or List[Address] if not set
+            return: Envelope if `email_or_more` set or list[Address] if not set
         """
         if email_or_more is None:
             return self._to
@@ -1136,6 +1136,7 @@ class Envelope:
             if failures:
                 logger.warning(f"Unable to send to all recipients: {repr(failures)}.")
             elif failures is False:
+                # TODO add here and test, logger.warning(f"Sending {recipients}, Message-ID: {email["Message-ID"]}")
                 return False
         else:
             if send != SIMULATION:
@@ -1304,7 +1305,7 @@ class Envelope:
         )
 
         return signed_email
-    
+
     def smime_sign_encrypt(self, email, sign, encrypt):
         load_pem_private_key, pkcs7, load_pem_x509_certificate, hashes, serialization = self._import_cryptoraphy_modules()
 
@@ -1363,7 +1364,7 @@ class Envelope:
         for recip in recipient_certs:
             envelope_builder = envelope_builder.add_recipient(recip)
 
-        options = [pkcs7.PKCS7Options.Text]
+        options = [pkcs7.PKCS7Options.Binary]
         encrypted_email = envelope_builder.encrypt(serialization.Encoding.SMIME, options)
         return encrypted_email
 

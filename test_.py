@@ -13,7 +13,7 @@ from typing import Tuple, Union
 from unittest import main, TestCase, mock
 
 from envelope import Envelope
-from envelope.address import Address, _getaddresses, _parseaddr
+from envelope.address import Address, _parseaddr, _getaddresses
 from envelope.constants import AUTO, PLAIN, HTML
 from envelope.parser import Parser
 from envelope.smtp_handler import SMTPHandler
@@ -74,7 +74,7 @@ class TestAbstract(TestCase):
                 index = output_tmp.index(search)
             except ValueError:
                 message = f"is in the wrong order (above the line '{last_search}' )" \
-                      if search in output else "not found"
+                    if search in output else "not found"
                 self.fail(f"Line '{search}' {message} in the output:\n{o}")
             output_tmp = output_tmp[index + 1:]
             last_search = search
@@ -476,7 +476,8 @@ class TestSmime(TestAbstract):
                   .encrypt([Path(self.smime_cert)]))
 
         # Should be false, no search required
-        decrypted_message = decrypt('tests/smime/smime-identity@example.com-key.pem', 'tests/smime/smime-identity@example.com-cert.pem', output)
+        decrypted_message = decrypt('tests/smime/smime-identity@example.com-key.pem',
+                                    'tests/smime/smime-identity@example.com-cert.pem', output)
         self.assertFalse(decrypted_message)
 
         decrypted_message = decrypt(self.smime_key, self.smime_cert, output).decode('utf-8')
@@ -685,8 +686,8 @@ class TestGPG(TestAbstract):
                           "To: envelope-example-identity-2@example.com",
                           ), 10, not_in='Subject: dumb subject')
 
-        lines=e.splitlines()
-        message="\n".join(lines[lines.index(PGP_MESSAGE):])
+        lines = e.splitlines()
+        message = "\n".join(lines[lines.index(PGP_MESSAGE):])
         self.check_lines(self.bash("gpg", "--decrypt", piped=message, envelope=False),
                          ('Content-Type: multipart/mixed; protected-headers="v1";',
                           'Subject: dumb subject',
@@ -1038,7 +1039,7 @@ class TestGPG(TestAbstract):
 
         def verify_inline_message(txt: str):
             boundary = re.search(r'boundary="(.*)"', txt).group(1)
-            reg = fr'{boundary}.*{boundary}\n(.*)\n--{boundary}.*(-----BEGIN PGP SIGNATURE-----.*-----END PGP SIGNATURE-----)'
+            reg = (fr'{boundary}.*{boundary}\n(.*)\n--{boundary}.*(-----BEGIN PGP SIGNATURE-----.*-----END PGP SIGNATURE-----)')
             m = re.search(reg, txt, re.DOTALL)
             return e._gpg_verify(m[2].encode(), m[1].encode())
 
@@ -1084,7 +1085,7 @@ Third
     mime_html = 'Content-Type: text/html; charset="utf-8"'
 
     def test_plain(self):
-        pl=self.mime_plain
+        pl = self.mime_plain
         self.check_lines(Envelope().message(self.plain).mime("plain", "auto"), pl)
         self.check_lines(Envelope().message(self.plain), pl)
         self.check_lines(Envelope().message(self.html).mime("plain"), pl)
@@ -1187,7 +1188,7 @@ class TestRecipients(TestAbstract):
     def test_addresses(self):
         e = Envelope.load(path=self.eml)
         self.assertEqual(1, len(e.to()))
-        contact=e.to()[0]
+        contact = e.to()[0]
         full = "Person <person@example.com>"
         self.assertEqual(full, contact)
         self.assertEqual("person@example.com", contact)
@@ -1221,7 +1222,7 @@ class TestRecipients(TestAbstract):
         self.assertEqual(f"{full}, {full}", ", ".join((contact, contact)))
 
         # casefold method
-        c=contact.casefold()
+        c = contact.casefold()
         self.assertEqual(contact, c)
         self.assertIsNot(contact, c)
         self.assertEqual(c.name, "person")
@@ -1277,7 +1278,7 @@ class TestRecipients(TestAbstract):
                     # three of them are disguised
                     'ug@ly3@example.com <another3@example.com> ,ugly2@example.com <another2@example.com> , ugly@example.com <another@example.com>']
 
-        expected_parseaddr=[("", "person@example.com"),
+        expected_parseaddr = [("", "person@example.com"),
                               ("person--AT--example.com", "person@example2.com"),
                               ("pers'one'--AT--'ample.com", "a@example.com"),
                               ("", "pers'one'@'ample.com"),
@@ -1368,7 +1369,7 @@ class TestRecipients(TestAbstract):
         self.assertEqual([contact], e().to("").cc())
 
         # Works from bash too
-        header_row=f"To: Person <person@example.com>"
+        header_row = f"To: Person <person@example.com>"
         self.assertIn(header_row, self.bash(file=self.eml))
         self.assertNotIn(header_row, self.bash("--to", "", file=self.eml))
         self.assertNotIn(f"To: {contact}", self.bash("--to", "", "contact", file=self.eml))
@@ -1506,7 +1507,7 @@ class TestHeaders(TestAbstract):
         self.assertNotIn(f"Date: ", str(Envelope(MESSAGE).date(False)))
 
     def test_email_addresses(self):
-        e =(Envelope()
+        e = (Envelope()
              .cc("person1@example.com")
              .to("person2@example.com")  # add as string
              .to(["person3@example.com", "person4@example.com"])  # add as list
@@ -1537,7 +1538,7 @@ class TestHeaders(TestAbstract):
         self.assertEqual(3, len(e.to()))
         self.assertFalse(e.check(check_mx=False, check_smtp=False))
 
-        e=(Envelope().to('person1@example.com, person2@example.com'))
+        e = (Envelope().to('person1@example.com, person2@example.com'))
         self.assertTrue(e.check(check_mx=False, check_smtp=False))
 
 class TestSupportive(TestAbstract):
@@ -1566,7 +1567,7 @@ class TestSupportive(TestAbstract):
 
         class DummySMTPConnection:
             def __init__(self, name):
-                self.name=name
+                self.name = name
 
             def quit(self):
                 print(self.name)
@@ -1575,12 +1576,12 @@ class TestSupportive(TestAbstract):
             return "{'host': '" + name + "', 'port': 25, 'user': None, 'password': None," \
                                          " 'security': None, 'timeout': 3, 'attempts': 3, 'delay': 3, 'local_hostname': None}"
 
-        SMTPHandler._instances={key(name): DummySMTPConnection(name) for name in (f"dummy{i}" for i in range(4))}
+        SMTPHandler._instances = {key(name): DummySMTPConnection(name) for name in (f"dummy{i}" for i in range(4))}
 
         e1 = Envelope().smtp("dummy1").smtp("dummy2")  # this object uses dummy2 only
         e2 = Envelope().smtp("dummy3")  # this object uses dummy3
 
-        stdout=StringIO()
+        stdout = StringIO()
         with redirect_stdout(stdout):
             e2.smtp_quit()
             Envelope.smtp_quit()
@@ -1596,7 +1597,7 @@ class TestBash(TestAbstract):
         self.assertNotIn("person@example.com", self.bash("--bcc", "person@example.com", "--send", "off"))
 
     def test_attachment(self):
-        preview_text=f"Attachment generic.txt (text/plain): Small sample text at..."
+        preview_text = f"Attachment generic.txt (text/plain): Small sample text at..."
         self.assertIn(preview_text, self.bash("--attach", self.text_attachment, "--preview"))
         o = self.bash("--attach", self.text_attachment, "--send", "0")
         self.assertNotIn(preview_text, o)
@@ -1605,10 +1606,10 @@ class TestBash(TestAbstract):
     def test_subject(self):
         subject1 = "Hello world"
         subject2 = "Good bye sun"
-        default_placeholder="Encrypted message"  # default text used by the library
+        default_placeholder = "Encrypted message"  # default text used by the library
 
         def get_encrypted(subject, subject_encrypted):
-            ref=self.bash("--attach", self.text_attachment, "--send", "0",
+            ref = self.bash("--attach", self.text_attachment, "--send", "0",
                             "--gpg", GNUPG_HOME,
                             "--to", IDENTITY_2,
                             "--from", IDENTITY_1,
@@ -1661,7 +1662,7 @@ class TestAttachment(TestAbstract):
             .attach(path, "foo", "text/csv") \
             .attach([(path, "text/csv", "foo",)]) \
             .attach(((path, "text/csv", "foo",),))
-        model =repr(e.attachments()[0])
+        model = repr(e.attachments()[0])
         # a tuple with a single attachment (and its details)
         e2 = Envelope(attachments=(path, "text/csv", "foo"))
         # a list that contains multiple attachments
@@ -1838,7 +1839,7 @@ class TestLoad(TestBash):
 
     def test_invalid_characters(self):
         msg = "WARNING:envelope.parser:Replacing some invalid characters in text/plain:" \
-              " 'utf-8' codec can't decode byte 0xe1 in position 1: invalid continuation byte"
+            " 'utf-8' codec can't decode byte 0xe1 in position 1: invalid continuation byte"
         with self.assertLogs('envelope', level='WARNING') as cm:
             e = Envelope.load(self.invalid_characters)
         self.assertEqual(cm.output, [msg])
@@ -1876,12 +1877,12 @@ class TestLoad(TestBash):
 
 class TestTransfer(TestBash):
     long_text = "J'interdis aux marchands de vanter trop leurs marchandises." \
-                " Car ils se font vite pédagogues et t'enseignent comme but ce qui n'est par essence qu'un moyen," \
-                " et te trompant ainsi sur la route à suivre les voilà bientôt qui te dégradent," \
+        " Car ils se font vite pédagogues et t'enseignent comme but ce qui n'est par essence qu'un moyen," \
+        " et te trompant ainsi sur la route à suivre les voilà bientôt qui te dégradent," \
                 " car si leur musique est vulgaire ils te fabriquent pour te la vendre une âme vulgaire."
     quoted = "J'interdis aux marchands de vanter trop leurs marchandises. Car ils se font v=" \
-             "\nite p=C3=A9dagogues et t'enseignent comme but ce qui n'est par essence qu'un =" \
-             "\nmoyen, et te trompant ainsi sur la route =C3=A0 suivre les voil=C3=A0 bient=" \
+        "\nite p=C3=A9dagogues et t'enseignent comme but ce qui n'est par essence qu'un =" \
+        "\nmoyen, et te trompant ainsi sur la route =C3=A0 suivre les voil=C3=A0 bient=" \
              "\n=C3=B4t qui te d=C3=A9gradent, car si leur musique est vulgaire ils te fabriq=" \
              "\nuent pour te la vendre une =C3=A2me vulgaire."
 
