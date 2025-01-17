@@ -1532,9 +1532,9 @@ class TestHeaders(TestAbstract):
          the user would not know their recipients are not valid. """
 
         if sys.version_info < (3, 11):
-            return
+                return
 
-        e=(Envelope().to('person1@example.com, [invalid!email], person2@example.com'))
+        e = (Envelope().to('person1@example.com, [invalid!email], person2@example.com'))
         self.assertEqual(3, len(e.to()))
         self.assertFalse(e.check(check_mx=False, check_smtp=False))
 
