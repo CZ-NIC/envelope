@@ -1242,10 +1242,6 @@ class TestRecipients(TestAbstract):
         # If any of these tests fails, it's a good message the underlying Python libraries are better
         # and we may stop remedying.
         # https://github.com/python/cpython/issues/40889#issuecomment-1094001067
-
-        if sys.version_info < (3, 11):
-            return
-
         disguise_addr = "first@example.cz <second@example.com>"
         same = "person@example.com <person@example.com>"
         self.assertEqual(('', 'first@example.cz'), _parseaddr(disguise_addr))
@@ -1530,11 +1526,7 @@ class TestHeaders(TestAbstract):
     def test_invalid_email_addresses(self):
         """ If we discard silently every invalid e-mail address received,
          the user would not know their recipients are not valid. """
-
-        if sys.version_info < (3, 11):
-            return
-
-        e=(Envelope().to('person1@example.com, [invalid!email], person2@example.com'))
+        e = (Envelope().to('person1@example.com, [invalid!email], person2@example.com'))
         self.assertEqual(3, len(e.to()))
         self.assertFalse(e.check(check_mx=False, check_smtp=False))
 

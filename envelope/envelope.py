@@ -32,6 +32,7 @@ from .parser import Parser
 from .smtp_handler import SMTPHandler
 from .utils import AutoSubmittedHeader, Fetched, is_gpg_importable_key, assure_list, assure_fetched, get_mimetype
 
+
 __doc__ = """Quick layer over python-gnupg, M2Crypto, smtplib, magic and email handling packages.
 Their common use cases merged into a single function. Want to sign a text and tired of forgetting how to do it right?
 You do not need to know everything about GPG or S/MIME, you do not have to bother with importing keys.
@@ -1351,7 +1352,6 @@ class Envelope:
                 raise ValueError("failed to load certificate from file")
 
             recipient_certs.append(c)
-
         try:
             pubkey = load_pem_x509_certificate(pubkey)
         except ValueError as e:
