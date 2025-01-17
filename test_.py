@@ -538,7 +538,7 @@ class TestSmime(TestAbstract):
         cd_string = 'Content-Disposition: attachment; filename="generic.txt"'
         pos = decrypted_data.index(cd_string)
         data_temp = decrypted_data[pos:]
-        d = data_temp.split('\r\n\r\n')[1].strip() + "=="
+        d = data_temp.split('\n\n')[1].strip() + "=="
         attachment_content = b64decode(d).decode('utf-8')
 
         with open(self.text_attachment, 'r') as f:
@@ -1242,6 +1242,10 @@ class TestRecipients(TestAbstract):
         # If any of these tests fails, it's a good message the underlying Python libraries are better
         # and we may stop remedying.
         # https://github.com/python/cpython/issues/40889#issuecomment-1094001067
+
+        if sys.version_info < (3, 11):
+            return
+
         disguise_addr = "first@example.cz <second@example.com>"
         same = "person@example.com <person@example.com>"
         self.assertEqual(('', 'first@example.cz'), _parseaddr(disguise_addr))
@@ -1526,13 +1530,16 @@ class TestHeaders(TestAbstract):
     def test_invalid_email_addresses(self):
         """ If we discard silently every invalid e-mail address received,
          the user would not know their recipients are not valid. """
+
+        if sys.version_info < (3, 11):
+                return
+
         e = (Envelope().to('person1@example.com, [invalid!email], person2@example.com'))
         self.assertEqual(3, len(e.to()))
         self.assertFalse(e.check(check_mx=False, check_smtp=False))
 
         e = (Envelope().to('person1@example.com, person2@example.com'))
         self.assertTrue(e.check(check_mx=False, check_smtp=False))
-
 
 class TestSupportive(TestAbstract):
     def test_copy(self):

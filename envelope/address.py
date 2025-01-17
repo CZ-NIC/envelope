@@ -57,10 +57,12 @@ class Address(str):
         if displayed_email:
             v = _parseaddr(cls.remedy(displayed_email))
             name, address = v[0] or name, v[1] or address
+
         if name:
             displayed_email = f"{name} <{address}>"
         else:
             displayed_email = address
+
         instance = super().__new__(cls, displayed_email or "")
         instance._name, instance._address = name or "", address or ""
         return instance
@@ -171,6 +173,8 @@ class Address(str):
             return addresses[0]
         # if len(addresses) == 0:
         #     raise ValueError(f"E-mail address cannot be parsed: {email_or_list}")
+        # if len(addresses) == 0:
+        #     return email_or_list
         return addresses
 
     @classmethod
@@ -179,6 +183,12 @@ class Address(str):
             """ Disguised addresses like "person@example.com <person@example2.com>" are wrongly
             parsed as two distinguish addresses with getaddresses. Rename the at-sign in the display name
             to "person--AT--example.com <person@example2.com>" so that the result of getaddresses is less wrong.
+            """
+
+            """
+            What happens when the string have more addresses?
+            It also needs to get the address from string like "person@example.com, <person@example.com>" so we need to 
+            take care of the comma and semicolon as well.
             """
             if s.group(1).strip() == s.group(2).strip():
                 # Display name is the same as the e-mail in angle brackets

@@ -402,7 +402,12 @@ class Envelope:
             registry.clear()
         addresses = [x for x in addresses if x]  # filter out possible "" or False
         if addresses:
-            registry += (a for a in Address.parse(addresses) if a not in registry)
+            # Split addresses by both commas and semicolons
+            split_addresses = []
+            for address in addresses:
+                split_addresses.extend(address.replace(';', ',').split(','))
+            split_addresses = [x.strip() for x in split_addresses if x.strip()]  # remove empty and whitespace-only strings
+            registry += (a for a in Address.parse(split_addresses) if a not in registry)
 
     def to(self, email_or_more=None) -> Union["Envelope", list[Address]]:
         """ Multiple addresses may be given in a string, delimited by comma (or semicolon).
@@ -1252,10 +1257,17 @@ class Envelope:
         """
         return set(x.address for x in self._to + self._cc + self._bcc + [x for x in [self._from] if x])
 
+    def _import_cryptoraphy_modules(self):
+        try:
+            from cryptography.hazmat.primitives.serialization import load_pem_private_key, pkcs7
+            from cryptography.x509 import load_pem_x509_certificate
+            from cryptography.hazmat.primitives import hashes, serialization
+            return load_pem_private_key, pkcs7, load_pem_x509_certificate, hashes, serialization
+        except ImportError:
+            raise ImportError(smime_import_error)
+        
     def smime_sign_only(self, email, sign):
-        from cryptography.hazmat.primitives.serialization import load_pem_private_key, pkcs7
-        from cryptography.x509 import load_pem_x509_certificate
-        from cryptography.hazmat.primitives import hashes, serialization
+        load_pem_private_key, pkcs7, load_pem_x509_certificate, hashes, serialization = self._import_cryptoraphy_modules()
         # get sender's cert
         # cert and private key can be one file
 
@@ -1296,9 +1308,7 @@ class Envelope:
         return signed_email
 
     def smime_sign_encrypt(self, email, sign, encrypt):
-        from cryptography.hazmat.primitives.serialization import load_pem_private_key, pkcs7
-        from cryptography.x509 import load_pem_x509_certificate
-        from cryptography.hazmat.primitives import hashes, serialization
+        load_pem_private_key, pkcs7, load_pem_x509_certificate, hashes, serialization = self._import_cryptoraphy_modules()
 
         if self._cert:
             sender_cert = self._cert
@@ -1309,7 +1319,7 @@ class Envelope:
         try:
             sender_cert = load_pem_x509_certificate(sender_cert)
         except ValueError as e:
-            print(f"Certificate not found: {e}")
+            logger.warning(f"Certificate not found: {e}")
 
         # get senders private key for signing
         try:
@@ -1342,7 +1352,6 @@ class Envelope:
                 raise ValueError("failed to load certificate from file")
 
             recipient_certs.append(c)
-
         try:
             pubkey = load_pem_x509_certificate(pubkey)
         except ValueError as e:
@@ -1361,9 +1370,7 @@ class Envelope:
 
     def smime_encrypt_only(self, email, encrypt):
 
-        from cryptography.hazmat.primitives.serialization import pkcs7
-        from cryptography.x509 import load_pem_x509_certificate
-        from cryptography.hazmat.primitives import serialization
+        _, pkcs7, load_pem_x509_certificate, _, serialization = self._import_cryptoraphy_modules()
 
         if self._cert:
             certificates = [self._cert]
@@ -1379,7 +1386,7 @@ class Envelope:
 
             recipient_certs.append(c)
 
-        options = [pkcs7.PKCS7Options.Text]
+        options = [pkcs7.PKCS7Options.Binary]
         encrypted_email = pkcs7.PKCS7EnvelopeBuilder().set_data(email)
 
         for recip in recipient_certs:
