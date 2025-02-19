@@ -4,10 +4,10 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 name = "envelope"
-version = "2.1.0"
+version = "2.1.1"
 description = "Insert a message and attachments and send e-mail / sign / encrypt contents by a single line."
 authors = ["Edvard Rejthar <edvard.rejthar@nic.cz>"]
-license = "GNU GPLv3"
+license = "GPL-3.0-or-later"
 homepage = "https://github.com/CZ-NIC/envelope"
 readme = "README.md"
 classifiers = ["Programming Language :: Python :: 3"]

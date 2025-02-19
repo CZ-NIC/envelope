@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 2.1.1 (2025-02-19)
+- fix addresses for older python patched versions (< 3.12.3, < 3.11.?) #45
+
 ## 2.1.0 (2025-01-17)
 - reworked s/mime cryptography
 

@@ -2,6 +2,7 @@ from email.utils import getaddresses, parseaddr
 import logging
 from os import environ
 import re
+import inspect
 import sys
 from .utils import assure_list
 
@@ -14,19 +15,29 @@ logger = logging.getLogger(__name__)
 
 def _getaddresses(*args):
     # NOTE Python finally changed the old way of parsing wrong addresses.
+    # README should reflect that.
+    #
     # We might start using strict=True (default) in the future.
-    if sys.version_info <= (3, 11):
-        return getaddresses(*args)
-    return getaddresses(*args, strict=False)
+    # The difficult version check is due to #45. Docs show that the parameter was added at 3.13,
+    # however older docs show it was at 3.12.6. Mine 3.12.3 has it too. And according to tests,
+    # it seems some 3.11.N have it too. It seems to be backported randomly.
+    # Remove the check as of Python3.13 being the minimum version.
+    # if sys.version_info <= (3, 11) or sys.version_info[:2] == (3, 12) and sys.version_info < (3, 12, 3):
+    signature = inspect.signature(getaddresses)
+    parameters = signature.parameters
+
+    if 'strict' in parameters:
+        return getaddresses(*args, strict=False)
+    return getaddresses(*args)
 
 
 def _parseaddr(*args):
-    # NOTE Python finally changed the old way of parsing wrong addresses.
-    # We might start using strict=True (default) in the future.
-    # README should reflect that.
-    if sys.version_info <= (3, 11):
-        return parseaddr(*args)
-    return parseaddr(*args, strict=False)
+    # See the comment _getaddresses.
+    signature = inspect.signature(getaddresses)
+    parameters = signature.parameters
+    if 'strict' in parameters:
+        return parseaddr(*args, strict=False)
+    return parseaddr(*args)
 
 
 class Address(str):
@@ -187,7 +198,7 @@ class Address(str):
 
             """
             What happens when the string have more addresses?
-            It also needs to get the address from string like "person@example.com, <person@example.com>" so we need to 
+            It also needs to get the address from string like "person@example.com, <person@example.com>" so we need to
             take care of the comma and semicolon as well.
             """
             if s.group(1).strip() == s.group(2).strip():
