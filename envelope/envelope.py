@@ -1260,29 +1260,32 @@ class Envelope:
     def _import_cryptoraphy_modules(self):
         try:
             from cryptography.hazmat.primitives.serialization import load_pem_private_key, pkcs7
-            from cryptography.x509 import load_pem_x509_certificate
+            from cryptography.x509 import load_pem_x509_certificates
             from cryptography.hazmat.primitives import hashes, serialization
-            return load_pem_private_key, pkcs7, load_pem_x509_certificate, hashes, serialization
+            return load_pem_private_key, pkcs7, load_pem_x509_certificates, hashes, serialization
         except ImportError:
             raise ImportError(smime_import_error)
         
     def smime_sign_only(self, email, sign):
-        load_pem_private_key, pkcs7, load_pem_x509_certificate, hashes, serialization = self._import_cryptoraphy_modules()
+        load_pem_private_key, pkcs7, load_pem_x509_certificates, hashes, serialization = self._import_cryptoraphy_modules()
         # get sender's cert
         # cert and private key can be one file
 
         # if certfile is not provided, sign has to have both private key and certificate
         # cert is not in sign (--sign_path file), it is cert.pem
         if self._cert:
-            cert = self._cert
+            certs = self._cert
         else:
             # certificate is in sign (--sign_path file), it is key-cert-together.pem
-            cert = sign
+            certs = sign
 
         try:
-            cert = load_pem_x509_certificate(cert)
+            certs = load_pem_x509_certificates(certs)
         except ValueError as e:
             raise ValueError(f"Certificate not found: {e}")
+        # no certificate found
+        if len(certs) == 0:
+            raise ValueError("Certificate not found")
 
         # get senders private key for signing
         try:
@@ -1297,29 +1300,34 @@ class Envelope:
 
         options = [pkcs7.PKCS7Options.DetachedSignature]
 
-        signed_email = pkcs7.PKCS7SignatureBuilder().set_data(
+        signature_builder = pkcs7.PKCS7SignatureBuilder().set_data(
             email
         ).add_signer(
-            cert, key, hashes.SHA256()
-        ).sign(
+            certs[0], key, hashes.SHA256()
+        )
+        # add the whole certificate chain
+        for cert in certs[1:]:
+            signature_builder = signature_builder.add_certificate(cert)
+
+        return signature_builder.sign(
             serialization.Encoding.SMIME, options
         )
 
-        return signed_email
-
     def smime_sign_encrypt(self, email, sign, encrypt):
-        load_pem_private_key, pkcs7, load_pem_x509_certificate, hashes, serialization = self._import_cryptoraphy_modules()
+        load_pem_private_key, pkcs7, load_pem_x509_certificates, hashes, serialization = self._import_cryptoraphy_modules()
 
         if self._cert:
-            sender_cert = self._cert
+            sender_certs = self._cert
         else:
             # certificate is in sign (--sign_path file), it is key-cert-together.pem
-            sender_cert = sign
+            sender_certs = sign
 
         try:
-            sender_cert = load_pem_x509_certificate(sender_cert)
+            sender_certs = load_pem_x509_certificates(sender_cert)
         except ValueError as e:
             logger.warning(f"Certificate not found: {e}")
+        if len(sender_certs) == 0:
+            raise ValueError("Certificate not found")
 
         # get senders private key for signing
         try:
@@ -1333,7 +1341,10 @@ class Envelope:
 
         # sign the message first
         signature_builder = pkcs7.PKCS7SignatureBuilder().set_data(email)
-        signature_builder = signature_builder.add_signer(sender_cert, sender_key, hash_algorithm=hashes.SHA256())
+        signature_builder = signature_builder.add_signer(sender_certs[0], sender_key, hash_algorithm=hashes.SHA256())
+        # add the whole certificate chain
+        for cert in sender_certs[1:]:
+            signature_builder = signature_builder.add_certificate(cert)
         signed_email = signature_builder.sign(serialization.Encoding.SMIME, [pkcs7.PKCS7Options.DetachedSignature])
 
         # get recipent's certificate for encryption
