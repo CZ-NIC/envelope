@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 2.2.0 (2025-03-25)
+- Licence change from GPL-3.0-or-later to LGPL-3.0-or-later.
+
 ## 2.1.1 (2025-02-19)
 - fix addresses for older python patched versions (< 3.12.3, < 3.11.?) #45
 
