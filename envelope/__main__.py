@@ -171,7 +171,11 @@ def main():
                 or args["subject"] is True \
                 or args["message"] is True \
                 or select.select([sys.stdin, ], [], [], 0.0)[0]:
-            instance = Envelope.load(sys.stdin.read())
+            stdin = sys.stdin.read()
+            if "\r" in stdin or "\n" in stdin:
+                instance = Envelope.load(stdin)
+            else:
+                instance = Envelope(message=stdin)
     except select.error:  # XX check if using `select` to detect STDIN does not mess up Windows
         pass
     del args["load"]

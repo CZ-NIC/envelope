@@ -24,6 +24,7 @@ from quopri import decodestring
 from types import GeneratorType
 from typing import Literal, Union, Optional, Any
 
+from ._auth import AuthResult
 from .address import Address, _getaddresses
 from .attachment import Attachment
 from .constants import ISSUE_LINK, smime_import_error, gnupg, CRLF, AUTO, PLAIN, HTML, SIMULATION, SAFE_LOCALE
@@ -205,13 +206,25 @@ class Envelope:
         :param key: S/MIME key to decrypt with.
         :param cert: S/MIME cert to decrypt with. (If not bundled with the key.)
         :param gnupg_home: Path to the GNUPG_HOME or None if the environment default should be used.
+
+        :raise ValueError: If the message cannot be loaded.
         """
         if path:
             message = Path(path)
         elif isinstance(message, Message):
             message = str(message)
 
-        o = message_from_bytes(assure_fetched(message, bytes))
+        msg_ = assure_fetched(message, bytes)
+        o = message_from_bytes(msg_)
+
+        # NOTE this breaks up .load("hello text")
+        # quick check
+        for _ in o.keys():
+            break
+        else:  # there are no headers
+            if not path and b"\n" not in msg_ and b"\r" not in msg_:
+                raise ValueError(f"Message cannot be loaded. Didn't you forgot to use the `Envelope.load(path=...)`?")
+
         e = Envelope()
         try:
             return Parser(e, key=key, cert=cert, gnupg_home=gnupg_home or e._get_gnupg_home()) \
@@ -406,7 +419,8 @@ class Envelope:
             split_addresses = []
             for address in addresses:
                 split_addresses.extend(address.replace(';', ',').split(','))
-            split_addresses = [x.strip() for x in split_addresses if x.strip()]  # remove empty and whitespace-only strings
+            # remove empty and whitespace-only strings
+            split_addresses = [x.strip() for x in split_addresses if x.strip()]
             registry += (a for a in Address.parse(split_addresses) if a not in registry)
 
     def to(self, email_or_more=None) -> Union["Envelope", list[Address]]:
@@ -607,7 +621,8 @@ class Envelope:
         :param one_click: If True, rfc8058 List-Unsubscribe-Post header is added.
             This says user can unsubscribe with a single click that is realized by a POST request
             in order to prevent e-mail scanner to access the unsubscribe page by mistake. A 'https' url must be present.
-        :param web: URL. Ex: "example.com/unsubscribe", "http://example.com/unsubscribe"
+        :param web: URL. Ex: "https://example.com/unsubscribe"
+            Without protocol, `https://` is prepended, "example.com/unsubscribe" -> "https://example.com/unsubscribe"
         :param email: E-mail address. Ex: "me@example.com", "mailto:me@example.com"
         :return: self
         """
@@ -1265,7 +1280,7 @@ class Envelope:
             return load_pem_private_key, pkcs7, load_pem_x509_certificate, hashes, serialization
         except ImportError:
             raise ImportError(smime_import_error)
-        
+
     def smime_sign_only(self, email, sign):
         load_pem_private_key, pkcs7, load_pem_x509_certificate, hashes, serialization = self._import_cryptoraphy_modules()
         # get sender's cert
@@ -1715,6 +1730,11 @@ class Envelope:
             print("Trying to connect to the SMTP...")
             passed *= bool(self._smtp.connect())  # check SMTP
         return passed
+
+    def _check_auth(self):
+        """ Experimental. """
+        # NOTE Do not know how to map in API. Because .check() seems to be for sending and this one for receiving.
+        return AuthResult.from_headers(self._headers)
 
     def smtp_quit(self=None):
         """ Explicitly closes cached SMTP connections. Either class or instance can be called.

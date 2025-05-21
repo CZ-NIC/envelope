@@ -1375,7 +1375,7 @@ class TestRecipients(TestAbstract):
         self.assertNotIn(f"To: {contact}", self.bash("--to", "", "contact", file=self.eml))
 
     def test_reading_contact(self):
-        self.assertIn("Person <person@example.com>", self.bash("--to"))
+        self.assertIn("Person <person@example.com>", self.bash("--to", debug=True))
         self.assertIn("Harry Potter Junior via online--hey-list-open <some-list-email-address@example.com>",
                       self.bash("--from"))
 
@@ -1389,7 +1389,7 @@ class TestRecipients(TestAbstract):
 
     def test_empty_contact(self):
         """ Be sure to receive an address even if the header misses. """
-        e1 = Envelope.load("Empty message")
+        e1 = Envelope("Empty message")
         self.assertTrue(isinstance(e1.from_(), Address))
         self.assertTrue(isinstance(e1.to(), list))
         self.assertTrue(isinstance(e1.cc(), list))
@@ -1532,7 +1532,7 @@ class TestHeaders(TestAbstract):
          the user would not know their recipients are not valid. """
 
         if sys.version_info < (3, 11):
-                return
+            return
 
         e = (Envelope().to('person1@example.com, [invalid!email], person2@example.com'))
         self.assertEqual(3, len(e.to()))
@@ -1540,6 +1540,7 @@ class TestHeaders(TestAbstract):
 
         e = (Envelope().to('person1@example.com, person2@example.com'))
         self.assertTrue(e.check(check_mx=False, check_smtp=False))
+
 
 class TestSupportive(TestAbstract):
     def test_copy(self):
@@ -1762,6 +1763,17 @@ class TestLoad(TestBash):
         self.assertEqual(len(e.header("Received")), 2)
         self.assertEqual(e.header("Received")[1][:26], "from receiver2.example.com")
 
+    # NOTE Currently, no check is implemented.
+    # def test_mistaken_file(self):
+    #     e = Envelope.load(path=self.eml)
+    #     self.assertEqual(e.subject(), "Hello world subject")
+    #     e = Envelope.load(self.eml)
+    #     self.assertEqual(e.subject(), "Hello world subject")
+    #     e = Envelope.load(path=str(self.eml))
+    #     self.assertEqual(e.subject(), "Hello world subject")
+    #     with self.assertRaises(ValueError):
+    #         e = Envelope.load(str(self.eml))
+
     def test_encoded_headers(self):
         e = Envelope.load(path=str(self.utf_header))
         self.assertEqual(e.subject(), "Re: text")
@@ -1969,6 +1981,36 @@ class TestReport(TestAbstract):
         with self.assertLogs('envelope', level='WARNING') as cm:
             Envelope.load(t)
         self.assertEqual(cm.output, [msg])
+
+
+class TestCheck(TestAbstract):
+    def test_check_auth(self):
+        def _(msg, true=True):
+            e = Envelope.load(msg)._check_auth()
+            if true:
+                self.assertTrue(e)
+            else:
+                self.assertFalse(e)
+
+        _("Received-SPF: pass (...)")
+        _("Subject: None")
+        _("Received-SPF: fail (...)", False)
+        _("""Authentication-Results: mx.server;
+       dkim=pass header.i=@example.com header.s=pf2023 header.b=XY;
+       spf=pass (server: domain of noreply@example.com designates 1.1.1.1 as permitted sender) smtp.mailfrom=noreply@example.com;
+       dmarc=pass (p=REJECT sp=REJECT dis=NONE) header.from=example.com
+Received-SPF: pass (server: domain of noreply@example.com designates 1.1.1.1 as permitted sender) client-ip=1.1.1.1;
+       """)
+        _("""Authentication-Results: mx.server;
+       dkim=pass header.i=@example.com header.s=pf2023 header.b=XY;
+       spf=pass (server: domain of noreply@example.com designates 1.1.1.1 as permitted sender) smtp.mailfrom=noreply@example.com;
+       dmarc=pass (p=REJECT sp=REJECT dis=NONE) header.from=example.com
+Received-SPF: softfail (server: domain of noreply@example.com designates 1.1.1.1 as permitted sender) client-ip=1.1.1.1;
+       """, False)
+        _("""Authentication-Results: mail.nic.cz;
+	dkim=none;
+	spf=pass (mail.nic.cz: domain of tomas.vecera22@pcr.cz designates 185.17.213.134 as permitted sender) smtp.mailfrom=tomas.vecera22@pcr.cz;
+	dmarc=none""")
 
 
 if __name__ == '__main__':
