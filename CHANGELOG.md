@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 2.2.1 (2025-05-21)
+- feat: Experimental ._check_auth method
+
 ## 2.2.0 (2025-03-25)
 - Licence change from GPL-3.0-or-later to LGPL-3.0-or-later.
 
