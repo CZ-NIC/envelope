@@ -33,12 +33,8 @@ class SMTPHandler:
         d = locals()
         del d["self"]
         self.key = repr(d)
-
-    def _obfuscated_key(self):
-        # Obfuscate the password for logging
-        d = eval(self.key)
-        d['password'] = '********' if d.get('password') else None
-        return repr(d)
+        d["password"] = "********"
+        self.obfuscated_key = repr(d)
 
     def connect(self):
         if self.instance:  # we received this instance as is so we suppose it is already connected
@@ -61,13 +57,13 @@ class SMTPHandler:
                     smtp.login(self.user, self.password)
                 except SMTPAuthenticationError as e:
                     logger.error(
-                        f"SMTP authentication failed: {self._obfuscated_key()}.\n{e}")
+                        f"SMTP authentication failed: {self.obfuscated_key}.\n{e}")
                     return False
         except SMTPException as e:
-            logger.error(f"SMTP connection failed: {self._obfuscated_key()}.\n{e}")
+            logger.error(f"SMTP connection failed: {self.obfuscated_key}.\n{e}")
             return False
         except (gaierror, ConnectionError):
-            logger.error(f"SMTP connection refused: {self._obfuscated_key()}.")
+            logger.error(f"SMTP connection refused: {self.obfuscated_key}.")
             return False
         return smtp
 
