@@ -1,5 +1,6 @@
 import logging
 import re
+import os
 import sys
 from base64 import b64encode
 from contextlib import redirect_stdout
@@ -325,12 +326,81 @@ class TestEnvelope(TestAbstract):
 
 
 class TestSmime(TestAbstract):
+    # For the simple not chained tests, we can use the following commands:
     # create a key and its certificate valid for 100 years
     # openssl req -newkey rsa:1024 -nodes -x509 -days 36500 -out certificate.pem
+    #
+    # For the chained test, we need to create the following certificates:
+    #
+    # # Create root CA
+    # openssl genrsa -out rootCA.key 2048
+    # openssl req -x509 -new -nodes -key rootCA.key -sha256 -days 36500 -out rootCA.crt -subj "/CN=Dummy Root CA"
+    #
+    # # Create intermediate CA with proper CA extensions
+    # openssl genrsa -out intermediateCA.key 2048
+    # openssl req -new -key intermediateCA.key -out intermediateCA.csr -subj "/CN=Dummy Intermediate CA"
+    # openssl x509 -req -in intermediateCA.csr -CA rootCA.crt -CAkey rootCA.key -CAcreateserial \
+    #     -out intermediateCA.crt -days 36500 -sha256 \
+    #     -extensions v3_ca -extfile <(echo "[v3_ca]"; echo "basicConstraints=CA:TRUE"; echo "keyUsage=keyCertSign,cRLSign")
+    #
+    # # Create signer certificate with email protection extensions, with passphrase
+    # openssl genrsa -out signer.key 2048
+    # openssl req -new -key signer.key -out signer.csr -subj "/CN=Dummy SMIME Signer"
+    # openssl x509 -req -in signer.csr -CA intermediateCA.crt -CAkey intermediateCA.key -CAcreateserial \
+    #     -out signer.crt -days 36500 -sha256 \
+    #     -extensions email_ext -extfile <(echo "[email_ext]"; echo "keyUsage=digitalSignature,keyEncipherment"; echo "extendedKeyUsage=emailProtection")
+    #
+    # # Create signer certificate with passphrase and email protection extensions
+    # openssl genpkey -algorithm RSA -aes256 -pkeyopt rsa_keygen_bits:2048 -pass pass:test -out signer_passphrase.key
+    # openssl req -new -key signer_passphrase.key -passin pass:test -out signer_passphrase.csr -subj "/CN=Dummy SMIME Signer"
+    # openssl x509 -req -in signer_passphrase.csr -CA intermediateCA.crt -CAkey intermediateCA.key -CAcreateserial \
+    #     -out signer_passphrase.crt -days 36500 -sha256 \
+    #     -extensions email_ext -extfile <(echo "[email_ext]"; echo "keyUsage=digitalSignature,keyEncipherment"; echo "extendedKeyUsage=emailProtection")
+    #
+    # # Create chained certificate files
+    # cat signer.crt intermediateCA.crt > chained_cert.pem
+    # cat signer.key chained_cert.pem > key-chained-cert-together.pem
+    # cat signer_passphrase.key signer_passphrase.crt intermediateCA.crt > key-chained-cert-together-passphrase.pem
 
     smime_key = 'tests/smime/key.pem'
     smime_cert = 'tests/smime/cert.pem'
     key_cert_together = Path("tests/smime/key-cert-together.pem")
+    key_cert_together_passphrase = Path("tests/smime/key-cert-together-passphrase.pem")
+    chained_smime_cert = 'tests/smime_chained/chained_cert.pem'
+    chained_key_cert_together = Path("tests/smime_chained/key-chained-cert-together.pem")
+    chained_key_cert_together_passphrase = Path("tests/smime_chained/key-chained-cert-together-passphrase.pem")
+    chained_root_cert = 'tests/smime_chained/rootCA.crt'
+
+    def smime_verify_signature_with_root_ca(self, signed_message, root_ca_path):
+        """
+        Verify S/MIME signature using OpenSSL and root CA certificate.
+        The signed message has to be signed with the signer and the intermediate CA.
+        :param signed_message: The signed email message (EmailMessage object)
+        :param root_ca_path: Path to the root CA certificate file
+        :return: True if signature is valid; False if signature is invalid or other errors occur.
+        """
+        # Write the signed message to a temp file
+        with TemporaryDirectory() as temp_dir:
+            signed_file = Path(temp_dir) / "signed_message.eml"
+            signed_file.write_text(signed_message.as_message().as_string())
+
+            # Use bash function to run openssl
+            try:
+                output = self.bash(
+                    "openssl", "cms", "-verify",
+                    "-in", str(signed_file),
+                    "-CAfile", root_ca_path,
+                    "-out", os.devnull,
+                    envelope=False  # Don't prepend "python3 -m envelope"
+                )
+                if output == "CMS Verification successful":
+                    return True
+                else:
+                    print(f"S/MIME verification failed: {output}")
+                    return False
+            except Exception as e:
+                print(f"S/MIME verification failed: {output}")
+                return False
 
     def test_smime_sign(self):
         # Message will look that way:
@@ -377,6 +447,60 @@ class TestSmime(TestAbstract):
                          .sign(),
                          ('Content-Disposition: attachment; filename="smime.p7s"',
                           "MIIEUwYJKoZIhvcNAQcCoIIERDCCBEACAQExDzANBglghkgBZQMEAgEFADALBgkq"), 10)
+
+    def test_smime_chained_sign(self):
+        signed_message = (Envelope(MESSAGE)
+                          .smime()
+                          .subject("my subject")
+                          .reply_to("test-reply@example.com")
+                          .signature(Path("tests/smime_chained/signer.key"), cert=Path(self.chained_smime_cert))
+                          .send(False))
+        self.check_lines(signed_message,
+                         ("Subject: my subject",
+                          "Reply-To: test-reply@example.com",
+                          MESSAGE,
+                          'Content-Disposition: attachment; filename="smime.p7s"',
+                          "MIIIoQYJKoZIhvcNAQcCoIIIkjCCCI4CAQExDzANBglghkgBZQMEAgEFADALBgkq",), 10)
+        self.assertTrue(self.smime_verify_signature_with_root_ca(signed_message, self.chained_root_cert))
+
+    def test_smime_chained_without_intermediate_sign(self):
+        signed_message = (Envelope(MESSAGE)
+                          .smime()
+                          .subject("my subject")
+                          .reply_to("test-reply@example.com")
+                          .signature(Path("tests/smime_chained/signer.key"), cert=Path("tests/smime_chained/signer.crt"))
+                          .send(False))
+        self.check_lines(signed_message,
+                         ("Subject: my subject",
+                          "Reply-To: test-reply@example.com",
+                          MESSAGE,
+                          'Content-Disposition: attachment; filename="smime.p7s"',
+                          "MIIFeAYJKoZIhvcNAQcCoIIFaTCCBWUCAQExDzANBglghkgBZQMEAgEFADALBgkq",), 10)
+        self.assertFalse(self.smime_verify_signature_with_root_ca(signed_message, self.chained_root_cert))
+
+    def test_smime_chained_key_cert_together(self):
+        signed_message = (Envelope(MESSAGE)
+                          .smime()
+                          .subject("my subject")
+                          .reply_to("test-reply@example.com")
+                          .signature(self.chained_key_cert_together)
+                          .send(False))
+        self.check_lines(signed_message,
+                         ('Content-Disposition: attachment; filename="smime.p7s"',
+                          "MIIIoQYJKoZIhvcNAQcCoIIIkjCCCI4CAQExDzANBglghkgBZQMEAgEFADALBgkq"))
+        self.assertTrue(self.smime_verify_signature_with_root_ca(signed_message, self.chained_root_cert))
+
+    def test_smime_chained_key_cert_together_passphrase(self):
+        signed_message = (Envelope(MESSAGE)
+                          .smime()
+                          .subject("my subject")
+                          .reply_to("test-reply@example.com")
+                          .signature(self.chained_key_cert_together_passphrase, passphrase=GPG_PASSPHRASE)
+                          .send(False))
+        self.check_lines(signed_message,
+                         ('Content-Disposition: attachment; filename="smime.p7s"',
+                          "MIIIoQYJKoZIhvcNAQcCoIIIkjCCCI4CAQExDzANBglghkgBZQMEAgEFADALBgkq"), 10)
+        self.assertTrue(self.smime_verify_signature_with_root_ca(signed_message, self.chained_root_cert))
 
     def test_smime_encrypt(self):
         # Message will look that way:
@@ -1035,7 +1159,7 @@ class TestGPG(TestAbstract):
              .gpg(GNUPG_HOME)
              .from_(IDENTITY_1)
              .signature("3C8124A8245618D286CF871E94CE2905DB00CDB7", GPG_PASSPHRASE)
-             .attach("some data", name="A"*35))
+             .attach("some data", name="A" * 35))
 
         def verify_inline_message(txt: str):
             boundary = re.search(r'boundary="(.*)"', txt).group(1)
@@ -1296,14 +1420,14 @@ class TestRecipients(TestAbstract):
              ("", "a@example.com")],
             [("", "alone@example.com")],
             [("John Smith", "john.smith@example.com")],
-            [("User (nested comment)",  "foo@bar.com"),
-             ("",  "example@example.com"),
+            [("User (nested comment)", "foo@bar.com"),
+             ("", "example@example.com"),
              ("", "test@example.com"),
              ("hello", "another@dom.com")],
             [("User (nested comment)", "foo@bar.com"),
-             ("",  "example@example.com"),
+             ("", "example@example.com"),
              ("", "test@example.com"),
-             ("hello",  "another@dom.cz"),
+             ("hello", "another@dom.cz"),
              ("ugly--AT--example.com", "another@example.com")],
             [("ug--AT--ly3--AT--example.com", "another3@example.com"),
              ("ugly2--AT--example.com", "another2@example.com"),
