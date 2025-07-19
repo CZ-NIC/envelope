@@ -1,6 +1,10 @@
 # CHANGELOG
 
-## 2.2.1 (2025-05-21)
+## 2.3.0 (2025-07-19)
+- feat: allow certificate chains in S/MIME Signatures #51
+- enh: obfuscate password from logs
+
+## 2.2.1 (2025-05-23)
 - feat: Experimental ._check_auth method
 
 ## 2.2.0 (2025-03-25)

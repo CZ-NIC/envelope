@@ -4,7 +4,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 name = "envelope"
-version = "2.2.1"
+version = "2.3.0"
 description = "Insert a message and attachments and send e-mail / sign / encrypt contents by a single line."
 authors = ["Edvard Rejthar <edvard.rejthar@nic.cz>"]
 license = "LGPL-3.0-or-later"
