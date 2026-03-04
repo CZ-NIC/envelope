@@ -80,7 +80,8 @@ class SMTPHandler:
                 return smtp.send_message(email, from_addr=from_addr, to_addrs=to_addrs)
             except (timeout_exc, SMTPException) as e:
                 # this connection is gone, reconnect next time
-                del self._instances[self.key]
+                if self.key in self._instances:
+                    del self._instances[self.key]
                 if isinstance(e, SMTPAuthenticationError):
                     logger.warning(
                         f"SMTP authentication error, will not re-try. {e}")

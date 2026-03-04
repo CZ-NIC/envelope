@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 2.3.1 (2026-03-04)
+- fix (smtp): password timeout crash #52
+
 ## 2.3.0 (2025-07-19)
 - feat: allow certificate chains in S/MIME Signatures #51
 - enh: obfuscate password from logs
