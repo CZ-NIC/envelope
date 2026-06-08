@@ -7,7 +7,7 @@ from jsonpickle import decode
 
 from .envelope import Envelope, __doc__ as doc
 from .attachment import Attachment
-
+from .constants import SENDMAIL_PATH
 
 class SmartFormatter(argparse.RawDescriptionHelpFormatter):
 
@@ -141,6 +141,9 @@ def main():
                                  " Security may be explicitly set to 'starttls', 'tls'"
                                  " or automatically determined by port.",
                             nargs="*", action=BlankTrue, metavar=("HOST", "PORT"))
+    group_send.add_argument('--sendmail', help="Path to sendmail binary. Disables SMTP."
+                                          f" Leave blank for default {SENDMAIL_PATH}.", nargs="?", action=BlankTrue,
+                                          metavar="PATH")
     group_send.add_argument('--send', help="Send e-mail. Blank to send now.", nargs="?", action=BlankTrue)
 
     group_supp = parser.add_argument_group("Supportive")
@@ -231,6 +234,8 @@ def main():
     # smtp can be a dict
     if args["smtp"] and args["smtp"][0].startswith("{"):
         args["smtp"] = decode(" ".join(args["smtp"]))
+    elif args["smtp"] and args["smtp"].lower() in ["0", "false", "no"]:
+        args["smtp"] = False
 
     # send = False turns on debugging
     if args["send"] and type(args["send"]) is not bool:
@@ -297,7 +302,7 @@ def main():
             # if there is anything to do, pretend the input parameters are a bone of a message
             print(str(res))
             sys.exit(0)
-        elif res:
+        elif res or (args["send"] and not(args["encrypt"] or args["sign"])):
             if not quiet:
                 print(res)
         else:
