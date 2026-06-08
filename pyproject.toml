@@ -18,9 +18,10 @@ jsonpickle = "*"
 python-magic = "*"
 python-gnupg = ">=0.5"
 py3-validate-email = "*"
+cryptography = { version = ">=43", optional = true }
 
-[tool.poetry.project.optional-dependencies]
-smime = ["cryptography>=43"]
+[tool.poetry.extras]
+smime = ["cryptography"]
 
 [tool.poetry.scripts]
 envelope = "envelope.__main__:main"

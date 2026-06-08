@@ -27,7 +27,7 @@ from typing import Literal, Union, Optional, Any
 from ._auth import AuthResult
 from .address import Address, _getaddresses
 from .attachment import Attachment
-from .constants import ISSUE_LINK, smime_import_error, gnupg, CRLF, AUTO, PLAIN, HTML, SIMULATION, SAFE_LOCALE
+from .constants import ISSUE_LINK, smime_import_error, gnupg, CRLF, AUTO, PLAIN, HTML, SIMULATION, SAFE_LOCALE, SENDMAIL_PATH
 from .message import _Message
 from .parser import Parser
 from .smtp_handler import SMTPHandler
@@ -268,7 +268,7 @@ class Envelope:
                  gpg=None, smime=None,
                  encrypt=None, sign=None, passphrase=None, attach_key=None, cert=None, subject_encrypted=None,
                  sender=None, cc=None, bcc=None, reply_to=None, mime=None, attachments=None,
-                 smtp=None, output=None, send=None):
+                 smtp=None, sendmail=None, output=None, send=None):
         """
         :rtype: object If output not set, return output bytes, else True/False if output file was correctly written to.
 
@@ -302,6 +302,10 @@ class Envelope:
         :param mime: Set contents mime subtype: "html" (default) or "plain" for plain text
         :param smtp: tuple or dict of these optional parameters: host, port, username, password, security ("tlsstart").
             Or link to existing INI file with the SMTP section.
+            Or False to not use SMTP.
+        :param sendmail: True or path to ubiquitious sendmail binary.
+            Otherwise the standard "/usr/sbin/sendmail" is used.
+            Sendmail is only used if this method OR smtp(False) is called
         :param send: True for sending the mail. False will just print the output.
         :param cc: E-mail or more in an iterable.
         :param bcc: E-mail or more in an iterable.
@@ -336,7 +340,6 @@ class Envelope:
         self._reply_to: list[Address] = []
         self._subject: Union[str, None] = None
         self._subject_encrypted: Union[str, bool] = True
-        self._smtp = None
         self._attachments: list[Attachment] = []
         self._mime = AUTO
         self._nl2br = AUTO
@@ -349,7 +352,8 @@ class Envelope:
         self._result: list[Union[str, EmailMessage, Message]] = []  # text output for str() conversion
         self._result_cache: Optional[str] = None
         self._result_cache_hash: Optional[int] = None
-        self._smtp = SMTPHandler()
+        self._smtp: Union[SMTPHandler, bool] = SMTPHandler()
+        self._sendmail: Union[str, bool, None, Path] = False
         self.auto_submitted = AutoSubmittedHeader(self)  # allows fluent interface to set header
 
         self._multipart_report_message: Optional[Message] = None
@@ -729,7 +733,7 @@ class Envelope:
         Obtain SMTP server connection.
         Note that you may safely call this in a loop,
             envelope will remember the settings and connect only once (without reconnecting every iteration).
-        :param host: hostname, smtplib.SMTP, INI file path, or a list or dict with the parameters (see README.md)
+        :param host: hostname, smtplib.SMTP, INI file path, False, or a list or dict with the parameters (see README.md)
         :param port:
         :param user:
         :param password:
@@ -771,9 +775,22 @@ class Envelope:
             self._smtp = SMTPHandler(*host)
         elif isinstance(host, smtplib.SMTP):
             self._smtp = SMTPHandler(host)
+        elif host == False:
+            self._smtp = False
+            self._sendmail = True
         else:
             self._smtp = SMTPHandler(host, port, user, password, security, timeout=timeout, attempts=attempts,
                                      delay=delay, local_hostname=local_hostname)
+        return self
+
+    def sendmail(self, sendmail=True):
+        """
+        :param sendmail: String for Sendmail binary or True.
+        Disables SMTP when enabled.
+        """
+        self._sendmail = sendmail
+        if bool(self._sendmail):
+            self._smtp = False
         return self
 
     def attach(self, attachment=None, mimetype=None, name=None, inline=None, *, path=None):
@@ -1144,15 +1161,8 @@ class Envelope:
 
         if send and send != SIMULATION:
             recipients = list(map(str, set(self._to + self._cc + self._bcc)))
-            with mock.patch.object(Generator, '_handle_multipart_signed', Generator._handle_multipart):
-                # https://github.com/python/cpython/issues/99533 and #19
-                failures = self._smtp.send_message(email,
-                                                   from_addr=self._from_addr,
-                                                   to_addrs=recipients)
-            if failures:
-                logger.warning(f"Unable to send to all recipients: {repr(failures)}.")
-            elif failures is False:
-                # TODO add here and test, logger.warning(f"Sending {recipients}, Message-ID: {email["Message-ID"]}")
+            success = self._deliver_now(email, recipients)
+            if not success:
                 return False
         else:
             if send != SIMULATION:
@@ -1166,6 +1176,64 @@ class Envelope:
                 self._result.append("")
 
         return email
+
+    def _deliver_now(self, email, recipients):
+        # _smtp XOR _sendmail
+        if (_smtp := bool(self._smtp)) == (_sendmail := bool(self._sendmail)):
+            logger.error(f"Need either SMTP (is {("off", "on")[_smtp]}) or local delivery/sendmail (is {("off", "on")[_sendmail]}) to send")
+            return False
+        if self._smtp:
+            success_or_failures = self._deliver_smtp(email, self._from_addr, recipients)
+        elif self._sendmail:
+            success_or_failures = self._deliver_sendmail(email, self._from_addr or self._from, recipients)
+        else:
+            assert False, "Should not reach, either SMTP or Sendmail should work"
+
+        if success_or_failures:
+            logger.warning(f"Unable to send to all recipients: {repr(failures)}.")
+        # elif success_or_failures is False:
+        #     # TODO add here and test, logger.warning(f"Sending {recipients}, Message-ID: {email["Message-ID"]}")
+        #     return False
+        return success_or_failures
+
+    def _deliver_smtp(self, email, from_addr, recipients):
+        """
+        Use configured SMTP server to deliver email.
+        :param email: String contents of whole email to send
+        :param from_addr: Email address of sender
+        :param recipients: List of recipient email addresses
+        :returns: List of recipients to whom delivery failed.
+            Or False for an unspecified error condition
+        :rtype: list or False
+        """
+        if not isinstance(self._smtp, SMTPHandler):
+            self._smtp = SMTPHandler()
+        with mock.patch.object(Generator, '_handle_multipart_signed', Generator._handle_multipart):
+            # https://github.com/python/cpython/issues/99533 and #19
+            return self._smtp.send_message(email,
+                                           from_addr=self._from_addr,
+                                           to_addrs=recipients)
+
+    def _deliver_sendmail(self, email, from_addr, to_addrs):
+        """
+        Use a  local MTA with sendmail interface to send mail via queue"
+
+        :param email: String contents of whole email to send
+        :param from_addr: Email address of sender
+        :param recipients: (unused, for signature compatibility with _deliver_smtp,
+            Originally: List of recipient email addresses)
+        :returns: Empty list on success or False for an unspecified error condition
+            (For return compatibilty with _deliver_smtp)
+        :rtype: list or False
+        """
+        self._sendmail = SENDMAIL_PATH if self._sendmail == True  else str(self._sendmail)
+        _unused = to_addrs
+        args = ["/usr/sbin/sendmail", "-t", "-oi", "-f", from_addr]
+        try:
+            subprocess.run(args, input=str(email), text=True, check=True)
+            return []
+        except CalledProcessError:
+            return False
 
     def _param_hash(self):
         """ Check if headers changed from last _start call."""

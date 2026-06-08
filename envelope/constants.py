@@ -20,3 +20,4 @@ SIMULATION = "simulation"
 SAFE_LOCALE = "C" if (sys.version_info.major, sys.version_info.minor) > (3, 6) else "C.UTF-8"
 
 ISSUE_LINK = "https://github.com/CZ-NIC/envelope/issues/new"
+SENDMAIL_PATH = "/usr/sbin/sendmail"
