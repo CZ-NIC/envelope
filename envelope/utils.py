@@ -1,5 +1,5 @@
 import logging
-from io import TextIOBase, BufferedIOBase
+from io import IOBase
 from pathlib import Path
 from typing import TYPE_CHECKING, Iterable
 
@@ -76,7 +76,7 @@ def assure_list(v):
     """
     if v is None:
         return []
-    if isinstance(v, Iterable) and not isinstance(v, (TextIOBase, BufferedIOBase, str, bytes)):
+    if isinstance(v, Iterable) and not isinstance(v, (IOBase, str, bytes)):
         return list(v)
     return [v]
 
@@ -96,7 +96,7 @@ def assure_fetched(message, retyped=None) -> Fetched:
         return None
     elif isinstance(message, Path):
         message = message.read_bytes()
-    elif isinstance(message, (TextIOBase, BufferedIOBase)):
+    elif isinstance(message, IOBase):
         message = message.read()
     elif not isinstance(message, (str, bytes, bool)):
         raise ValueError(
