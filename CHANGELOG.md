@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## 2.4.0 ()
+- enh: relax IO class requirements for attachments
+- feat: allow local MTA instead of SMTP, using traditional sendmail command
+
 ## 2.3.1 (2026-03-04)
 - fix (smtp): password timeout crash #52
 
