@@ -1228,7 +1228,7 @@ class Envelope:
         """
         self._sendmail = SENDMAIL_PATH if self._sendmail == True  else str(self._sendmail)
         _unused = to_addrs
-        args = ["/usr/sbin/sendmail", "-t", "-oi", "-f", from_addr]
+        args = [self._sendmail, "-t", "-oi", "-f", from_addr]
         try:
             subprocess.run(args, input=str(email), text=True, check=True)
             return []
