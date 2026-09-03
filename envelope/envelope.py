@@ -1180,7 +1180,7 @@ class Envelope:
     def _deliver_now(self, email, recipients):
         # _smtp XOR _sendmail
         if (_smtp := bool(self._smtp)) == (_sendmail := bool(self._sendmail)):
-            logger.error(f"Need either SMTP (is {("off", "on")[_smtp]}) or local delivery/sendmail (is {("off", "on")[_sendmail]}) to send")
+            logger.error(f"Need either SMTP (is {('off', 'on')[_smtp]}) or local delivery/sendmail (is {('off', 'on')[_sendmail]}) to send")
             return False
         if self._smtp:
             success_or_failures = self._deliver_smtp(email, self._from_addr, recipients)

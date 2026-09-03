@@ -1,0 +1,60 @@
+site_name: "Envelope"
+site_description: "Insert a message and attachments and send e-mail / sign / encrypt contents by a single line."
+repo_name: CZ-NIC/envelope
+repo_url: https://github.com/CZ-NIC/envelope
+site_url: https://cz-nic.github.io/envelope/
+docs_dir: docs
+
+theme:
+  name: "material"
+  features:
+    - navigation.expand
+    - navigation.sections
+    - content.code.copy
+    - toc.follow
+  palette:
+    - scheme: default
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - scheme: slate
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+
+plugins:
+  - search
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+      use_pygments: true
+      linenums: false
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.keys
+  - tables
+  - footnotes
+  - toc:
+      permalink: true
+  - attr_list
+
+nav:
+  - Home: index.md
+  - Installation: installation.md
+  - Usage: usage.md
+  - Reference:
+      - Overview: reference/overview.md
+      - Input / Output: reference/input-output.md
+      - Recipients: reference/recipients.md
+      - Sending: reference/sending.md
+      - Ciphering: reference/ciphering.md
+      - Supportive: reference/supportive.md
+      - Experimental: reference/experimental.md
+      - Envelope object: reference/envelope-object.md
+  - Examples: examples.md
+  - Related affairs: related-affairs.md
+  - Changelog: changelog.md
