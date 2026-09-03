@@ -302,7 +302,7 @@ def main():
             # if there is anything to do, pretend the input parameters are a bone of a message
             print(str(res))
             sys.exit(0)
-        elif res or (args["send"] and not(args["encrypt"] or args["sign"])):
+        elif res:
             if not quiet:
                 print(res)
         else:
