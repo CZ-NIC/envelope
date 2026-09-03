@@ -1190,7 +1190,7 @@ class Envelope:
             assert False, "Should not reach, either SMTP or Sendmail should work"
 
         if success_or_failures:
-            logger.warning(f"Unable to send to all recipients: {repr(failures)}.")
+            logger.warning(f"Unable to send to all recipients: {repr(success_or_failures)}.")
         # elif success_or_failures is False:
         #     # TODO add here and test, logger.warning(f"Sending {recipients}, Message-ID: {email["Message-ID"]}")
         #     return False
@@ -1232,7 +1232,7 @@ class Envelope:
         try:
             subprocess.run(args, input=str(email), text=True, check=True)
             return []
-        except CalledProcessError:
+        except subprocess.CalledProcessError:
             return False
 
     def _param_hash(self):
