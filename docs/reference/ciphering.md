@@ -1,7 +1,15 @@
 # Ciphering
 
 ## Cipher standard method
-Note that if neither *gpg* nor *smime* is specified, we try to determine the method automatically.
+If neither *gpg* nor *smime* is specified explicitly, the method is auto-detected: envelope tries to parse whatever you passed to `sign`/`encrypt` as a PEM-encoded S/MIME private key (for signing) or certificate (for encrypting); if that parses, S/MIME is used, otherwise it falls back to GPG.
+
+```python3
+Envelope(message="Hello world", sign=True)  # no PEM key given → signed with the default GPG key
+Envelope(message="Hello world", sign=Path("key.pem"))  # key.pem parses as an S/MIME key → signed with S/MIME
+```
+
+You may bypass the auto-detection and pick the method yourself:
+
   * **gpg**: True to prefer GPG over S/MIME or home path to GNUPG rings (otherwise default ~/.gnupg is used)
     * **--gpg [path]**
     * **.gpg(gnugp_home=True)**

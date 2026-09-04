@@ -2,9 +2,9 @@
 
 [![Build Status](https://github.com/CZ-NIC/envelope/actions/workflows/run-unittest.yml/badge.svg)](https://github.com/CZ-NIC/envelope/actions) [![Downloads](https://static.pepy.tech/badge/envelope)](https://pepy.tech/project/envelope)
 
-Quick layer over [python-gnupg](https://bitbucket.org/vinay.sajip/python-gnupg/src), [cryptography](https://github.com/pyca/cryptography), [M2Crypto](https://m2crypto.readthedocs.io/), [smtplib](https://docs.python.org/3/library/smtplib.html), [magic](https://pypi.org/project/python-magic/) and [email](https://docs.python.org/3/library/email.html?highlight=email#module-email) handling packages. Their common use cases merged into a single function. Want to sign a text and tired of forgetting how to do it right? You do not need to know everything about GPG or S/MIME, you do not have to bother with importing keys. Do not hassle with reconnecting to an SMTP server. Do not study various headers meanings to let your users unsubscribe via a URL.
-You insert a message, attachments and inline images and receive signed and/or encrypted output to the file or to your recipients' e-mail.
-Just single line of code. With the great help of the examples below.
+A thin, fluent layer over [python-gnupg](https://bitbucket.org/vinay.sajip/python-gnupg/src), [cryptography](https://github.com/pyca/cryptography), [M2Crypto](https://m2crypto.readthedocs.io/), [smtplib](https://docs.python.org/3/library/smtplib.html), [magic](https://pypi.org/project/python-magic/) and [email](https://docs.python.org/3/library/email.html?highlight=email#module-email) — their common use cases merged into a single object. Tired of forgetting how to sign a message correctly? You do not need to know everything about GPG or S/MIME, you do not have to bother with importing keys, you do not have to hassle with reconnecting to an SMTP server, and you do not have to study what every header means just to let your users unsubscribe via a URL.
+You insert a message, attachments and inline images and get back signed and/or encrypted output — written to a file or sent straight to your recipients' e-mail.
+Just a single line of code, as the examples below show.
 
 ```python3
 Envelope("my message")

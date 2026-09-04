@@ -9,14 +9,14 @@
         * *Attachment* object has the attributes *.name* file name, *.mimetype*, *.data* raw data
             * if casted to *str*/*bytes*, its raw *.data* are returned
   * **.copy()**: Return deep copy of the instance to be used independently.
-  ```python3
+    ```python3
     factory = Envelope().cc("original@example.com").copy
     e1 = factory().to("to-1@example.com")
     e2 = factory().to("to-2@example.com").cc("additional@example.com")  #
 
     print(e1.recipients())  # {'to-1@example.com', 'original@example.com'}
     print(e2.recipients())  # {'to-2@example.com', 'original@example.com', 'additional@example.com'}
-```
+    ```
   * Read message and subject by **.message()** and **.subject()**
   * **preview**: Returns the string of the message or data as a human-readable text.
             Ex: whilst we have to use quoted-printable (as seen in __str__), here the output will be plain text.
@@ -43,44 +43,49 @@
      print(type(e), e.get_payload())  # <class 'email.message.EmailMessage'> hello\n
      ```
      Note: due to a bug in a standard Python library https://github.com/python/cpython/issues/99533 and #19 you void GPG when you access the message this way wihle signing an attachment with a name longer than 34 chars.
-  * **load**: Parse [any attainable contents](https://cz-nic.github.io/envelope/reference/overview/#any-attainable-contents) (including email.message.Message) like an EML file to build an Envelope object.
-     * It can decrypt the message and parse its (inline or enclosed) attachments.
-     * Note that if you will send this reconstructed message, you might not probably receive it due to the Message-ID duplication. Delete at least Message-ID header prior to re-sending.
-     * (*static*) **.load(message, \*, path=None, key=None, cert=None, gnupg_home=None)**
-         * **message**: [Any attainable contents](https://cz-nic.github.io/envelope/reference/overview/#any-attainable-contents)
-         * **path**: Path to the file, alternative to the `message`
-         * **key**, **cert**: Specify when decrypting an S/MIME message (may be bundled together to the `key`)
-         * **gnupg_home**: Path to the GNUPG_HOME or None if the environment default should be used.
-         ```python3
-         Envelope.load("Subject: testing message").subject()  # "testing message"
-         ```
-     * bash
-         * allows use blank `--subject` or `--message` flags to display the
-         * **--load FILE**
-             ```bash
-             $ envelope --load email.eml
-             Content-Type: text/plain; charset="utf-8"
-             Content-Transfer-Encoding: 7bit
-             MIME-Version: 1.0
-             Subject: testing message
+  * **load**: Parse [any attainable contents](https://cz-nic.github.io/envelope/reference/overview/#any-attainable-contents) (including email.message.Message) like an EML file to build an Envelope object. It can decrypt the message and parse its (inline or enclosed) attachments.
 
-             Message body
+    Note that if you send this reconstructed message, you might not receive it due to Message-ID duplication — delete at least the `Message-ID` header prior to re-sending.
 
-             $ envelope --load email.eml --subject
-             testing message
-             ```
-         * (*bash*) piped in content, envelope executable used with no argument
-             ```bash
-             $ echo "Subject: testing message" | envelope
-             Content-Type: text/plain; charset="utf-8"
-             Content-Transfer-Encoding: 7bit
-             MIME-Version: 1.0
-             Subject: testing message
+    (*static*) **.load(message, \*, path=None, key=None, cert=None, gnupg_home=None)**
 
-            $ cat email.eml | envelope
+    * **message**: [Any attainable contents](https://cz-nic.github.io/envelope/reference/overview/#any-attainable-contents)
+    * **path**: Path to the file, alternative to the `message`
+    * **key**, **cert**: Specify when decrypting an S/MIME message (may be bundled together to the `key`)
+    * **gnupg_home**: Path to the GNUPG_HOME or None if the environment default should be used.
 
-            $ envelope < email.eml
-            ```
+    ```python3
+    Envelope.load("Subject: testing message").subject()  # "testing message"
+    ```
+
+    In bash, blank `--subject` or `--message` flags display the respective value of the loaded message. Use **--load FILE** to load an EML file:
+
+    ```bash
+    $ envelope --load email.eml
+    Content-Type: text/plain; charset="utf-8"
+    Content-Transfer-Encoding: 7bit
+    MIME-Version: 1.0
+    Subject: testing message
+
+    Message body
+
+    $ envelope --load email.eml --subject
+    testing message
+    ```
+
+    Content may also be piped in, with `envelope` run without any arguments:
+
+    ```bash
+    $ echo "Subject: testing message" | envelope
+    Content-Type: text/plain; charset="utf-8"
+    Content-Transfer-Encoding: 7bit
+    MIME-Version: 1.0
+    Subject: testing message
+
+    $ cat email.eml | envelope
+
+    $ envelope < email.eml
+    ```
   * **smtp_quit()**: As Envelope tends to re-use all the SMTP instances, you may want to quit them explicitly. Either call this method to the Envelope class to close all the cached connections or to an Envelope object to close only the connection it currently uses.
     ```python3
     e = Envelope().smtp(server1).smtp(server2)

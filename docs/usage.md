@@ -1,4 +1,10 @@
 # Usage
+Envelope offers the very same functionality through three interfaces, so pick whichever fits the moment:
+
+* **CLI** – for shell scripts and one-off terminal use.
+* **Fluent interface** – for application code, when your IDE's autocompletion should guide you method by method.
+* **One-liner function** – for application code, when you already know every parameter you want to set and prefer a single call.
+
 As an example, let's produce in three equal ways an `output_file` with the GPG-encrypted "Hello world" content.
 ## CLI
 Launch as a CLI application in terminal, see `envelope --help`

@@ -48,7 +48,7 @@ Envelope(message="Hello world", sign=True, passphrase="my-password")
 Sign a message with signing by default turned previously on and having a default keyring path. Every `factory` call will honour these defaults.
 ```python3
 factory = Envelope().signature(True).gpg("/tmp/my-keyring").copy
-factory().(message="Hello world")
+factory().message("Hello world")
 ```
 
 ## Sending
@@ -93,7 +93,7 @@ Envelope().attach(path="/tmp/file.txt", name="filename.txt")
 ```
 
 ## Inline images
-The only thing you have to do is to set the `inline=True` parameter of the attachment. Then, you can reference the image from within your message, with the help of `cid` keyword. For more details, see *attachments* in the [Sending](#sending) section.
+The only thing you have to do is to set the `inline=True` parameter of the attachment. Then, you can reference the image from within your message, with the help of `cid` keyword. For more details, see *attachments* in the [Sending](https://cz-nic.github.io/envelope/reference/sending/#sending) section.
 ```python3
 (Envelope()
     .attach(path="/tmp/file.jpg", inline=True)
