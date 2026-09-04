@@ -14,7 +14,6 @@ classifiers = ["Programming Language :: Python :: 3"]
 
 [tool.poetry.dependencies]
 python = ">=3.10"
-jsonpickle = "*"
 python-magic = "*"
 python-gnupg = ">=0.5"
 py3-validate-email = "*"

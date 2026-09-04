@@ -1,9 +1,8 @@
 import argparse
+import json
 import select
 import sys
 from pathlib import Path
-
-from jsonpickle import decode
 
 from .envelope import Envelope, __doc__ as doc
 from .attachment import Attachment
@@ -233,7 +232,18 @@ def main():
 
     # smtp can be a dict
     if args["smtp"] and args["smtp"][0].startswith("{"):
-        args["smtp"] = decode(" ".join(args["smtp"]))
+        smtp_allowed_keys = {"host", "port", "user", "password", "security", "timeout",
+                             "attempts", "delay", "local_hostname"}
+        try:
+            smtp_dict = json.loads(" ".join(args["smtp"]))
+        except json.JSONDecodeError as e:
+            raise RuntimeError(f"Invalid JSON in --smtp: {e}")
+        if not isinstance(smtp_dict, dict):
+            raise RuntimeError("--smtp JSON must be an object/dict.")
+        unknown_keys = smtp_dict.keys() - smtp_allowed_keys
+        if unknown_keys:
+            raise RuntimeError(f"Unknown --smtp key(s): {', '.join(unknown_keys)}")
+        args["smtp"] = smtp_dict
     elif args["smtp"] and args["smtp"].lower() in ["0", "false", "no"]:
         args["smtp"] = False
 

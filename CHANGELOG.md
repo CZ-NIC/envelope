@@ -1,8 +1,10 @@
 # CHANGELOG
 
-## 2.4.0 ()
+## 2.4.0 (2026-09-04)
 - enh: relax IO class requirements for attachments
 - feat: allow local MTA instead of SMTP, using traditional sendmail command
+- fix (security): close jsonpickle RCE, argv injection, and parser recursion DoS
+- feat (docs): new documentation site (mkdocs), split from README
 
 ## 2.3.1 (2026-03-04)
 - fix (smtp): password timeout crash #52

@@ -11,6 +11,8 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+MAX_PARSE_DEPTH = 20
+
 
 class Parser:
 
@@ -20,7 +22,9 @@ class Parser:
         self.cert = cert
         self.gnupg_home = gnupg_home
 
-    def parse(self, o: Message, add_headers=False):
+    def parse(self, o: Message, add_headers=False, depth=0):
+        if depth > MAX_PARSE_DEPTH:
+            raise ValueError(f"MIME structure nested too deeply (> {MAX_PARSE_DEPTH} levels)")
         if add_headers:
             for k, val in o.items():
                 # We skip "Content-Type" and "Content-Transfer-Encoding" since we decode text payload before importing.
@@ -45,12 +49,12 @@ class Parser:
         if o.is_multipart():
             payload: List[Message] = o.get_payload()
             if subtype == "alternative":
-                [self.parse(x) for x in payload]
+                [self.parse(x, depth=depth + 1) for x in payload]
             elif subtype in ("related", "mixed", "report"):
                 for p in payload:
                     if p.get_content_maintype() in ["text", "multipart"] \
                             and p.get_content_disposition() != "attachment":
-                        self.parse(p)
+                        self.parse(p, depth=depth + 1)
                     elif subtype == "report" and p.get_content_maintype() == "message":
                         if p.get_content_type() != FEEDBACK_REPORT:  # only XARF implemented
                             raise ValueError(f"Parsing {maintype}/{subtype} / {p.get_content_type()} not implemented.")
@@ -69,13 +73,14 @@ class Parser:
                     if p.get_content_type() == o.get_param("protocol"):  # ex: application/x-pkcs7-signature
                         continue  # XX we might verify signature
                     else:
-                        self.parse(p)
+                        self.parse(p, depth=depth + 1)
             elif subtype == "encrypted":
                 for p in payload:
                     if p.get_content_type() == o.get_param("protocol"):  # ex: application/pgp-encrypted
                         continue
                     elif p.get_content_type() == "application/octet-stream":
-                        self.parse(message_from_string(self.gpg_decrypt(p.get_payload(decode=True))), add_headers=True)
+                        self.parse(message_from_string(self.gpg_decrypt(p.get_payload(decode=True))),
+                                  add_headers=True, depth=depth + 1)
                     else:
                         raise ValueError(f"Cannot decrypt.")
             else:
@@ -96,7 +101,7 @@ class Parser:
             else:
                 raise ValueError(f"Unknown subtype: {subtype}")
         elif maintype == "application" and subtype == "x-pkcs7-mime":  # decrypting S/MIME
-            self.parse(message_from_bytes(self.smime_decrypt(o.as_bytes())), add_headers=True)
+            self.parse(message_from_bytes(self.smime_decrypt(o.as_bytes())), add_headers=True, depth=depth + 1)
         else:
             raise ValueError(f"Unknown maintype: {maintype}")
         return self.e

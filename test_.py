@@ -15,10 +15,10 @@ from unittest import main, TestCase, mock
 
 from envelope import Envelope
 from envelope.address import Address, _parseaddr, _getaddresses
-from envelope.constants import AUTO, PLAIN, HTML
-from envelope.parser import Parser
+from envelope.constants import AUTO, PLAIN, HTML, SENDMAIL_PATH
+from envelope.parser import Parser, MAX_PARSE_DEPTH
 from envelope.smtp_handler import SMTPHandler
-from envelope.utils import assure_list, assure_fetched, get_mimetype
+from envelope.utils import assure_list, assure_fetched, get_mimetype, is_safe_argv_value
 
 logging.basicConfig(stream=sys.stderr, level=logging.WARNING)
 
@@ -2073,6 +2073,29 @@ class TestSMTP(TestAbstract):
         self.assertSubset(Envelope().smtp("tests/smtp-configuration.ini")._smtp.__dict__,
                           {"timeout": 3, "user": "envelope-example-identity@example.com", "password": "", "port": 123})
 
+    def test_smtp_cli_json_dict(self):
+        """ --smtp accepts a plain JSON dict, same as before the jsonpickle -> json switch. """
+        out = self.bash("--smtp", '{"host": "localhost", "port": 25}', "--preview", piped="hello")
+        self.assertIn("hello", out)
+        self.assertNotIn("Traceback", out)
+
+    def test_smtp_cli_json_rejects_unknown_key(self):
+        """ A key outside the whitelist (host/port/user/password/security/timeout/attempts/delay/local_hostname)
+        is rejected instead of being silently deserialized into arbitrary attributes. """
+        out = self.bash("--smtp", '{"host": "localhost", "unknown_key": 1}', "--preview", piped="hello")
+        self.assertIn("Unknown --smtp key", out)
+
+    def test_smtp_cli_json_rejects_malformed_json(self):
+        """ Malformed JSON fails with a clear error instead of a jsonpickle-style traceback. """
+        out = self.bash("--smtp", "{bad json", "--preview", piped="hello")
+        self.assertIn("Invalid JSON in --smtp", out)
+
+    def test_smtp_cli_json_rejects_object_payload(self):
+        """ A jsonpickle-style `py/object` payload is no longer deserialized into an arbitrary object;
+        it is either rejected as an unknown key or fails as it is not a bare dict of known scalars. """
+        out = self.bash("--smtp", '{"py/object": "os.system", "host": "localhost"}', "--preview", piped="hello")
+        self.assertIn("Unknown --smtp key", out)
+
 
 class TestReport(TestAbstract):
     xarf = Path("tests/eml/multipart-report-xarf.eml")
@@ -2135,6 +2158,107 @@ Received-SPF: softfail (server: domain of noreply@example.com designates 1.1.1.1
 	dkim=none;
 	spf=pass (mail.nic.cz: domain of tomas.vecera22@pcr.cz designates 185.17.213.134 as permitted sender) smtp.mailfrom=tomas.vecera22@pcr.cz;
 	dmarc=none""")
+
+
+class TestSecurity(TestAbstract):
+    """ Regression + new coverage for the 2026-09-04 security review (see PLAN.md). """
+
+    def test_is_safe_argv_value(self):
+        self.assertTrue(is_safe_argv_value("person@example.com"))
+        self.assertTrue(is_safe_argv_value("example.com"))
+        self.assertFalse(is_safe_argv_value(""))
+        self.assertFalse(is_safe_argv_value("-oQ/tmp/evil"))
+        self.assertFalse(is_safe_argv_value("--help"))
+        self.assertFalse(is_safe_argv_value("a b"))
+        self.assertFalse(is_safe_argv_value("a\tb"))
+        self.assertFalse(is_safe_argv_value("a\nb"))
+        self.assertFalse(is_safe_argv_value("a\rb"))
+
+    def test_deliver_sendmail_safe_from_addr_unchanged(self):
+        """ Regression: a normal From address still reaches subprocess.run with the same argv as before. """
+        e = Envelope().message("hello")
+        e._sendmail = True
+        with mock.patch("envelope.envelope.subprocess.run") as run:
+            result = e._deliver_sendmail(str(e), "person@example.com", [])
+        self.assertEqual([], result)
+        run.assert_called_once()
+        (args,), kwargs = run.call_args
+        self.assertEqual(args, [SENDMAIL_PATH, "-t", "-oi", "-f", "person@example.com"])
+        self.assertEqual(kwargs.get("input"), str(e))
+
+    def test_deliver_sendmail_rejects_malicious_from_addr(self):
+        """ A From address that looks like an extra CLI flag must never reach subprocess. """
+        e = Envelope().message("hello")
+        e._sendmail = True
+        with mock.patch("envelope.envelope.subprocess.run") as run:
+            result = e._deliver_sendmail(str(e), "-oQ/tmp/evil", [])
+        self.assertFalse(result)
+        run.assert_not_called()
+
+    def test_deliver_sendmail_rejects_control_chars_in_from_addr(self):
+        e = Envelope().message("hello")
+        e._sendmail = True
+        with mock.patch("envelope.envelope.subprocess.run") as run:
+            result = e._deliver_sendmail(str(e), "person@example.com\nBcc: attacker@evil.com", [])
+        self.assertFalse(result)
+        run.assert_not_called()
+
+    def test_dig_safe_domain_unchanged(self):
+        """ Regression: a normal domain still reaches subprocess.check_output as before,
+        with the plain domain as the last, unmodified argv item. """
+        e = Envelope()
+        e._from = Address(address="person@example.com")
+        with mock.patch("envelope.envelope.subprocess.check_output", return_value=b"") as check_output:
+            e.check(check_mx=False, check_smtp=False)
+        self.assertTrue(check_output.called)
+        (first_args,), _ = check_output.call_args_list[0]
+        self.assertEqual(first_args, ["dig", "-t", "TXT", "example.com"])
+
+    def test_dig_rejects_malicious_domain(self):
+        """ A From-header-derived domain that looks like a dig option must never itself be handed to
+        subprocess as a bare argv value (it would be interpreted as another `dig` flag). """
+        e = Envelope()
+        e._from = Address(address="attacker@-evil.com")
+        with mock.patch("envelope.envelope.subprocess.check_output", return_value=b"") as check_output:
+            e.check(check_mx=False, check_smtp=False)
+        for (args,), _ in check_output.call_args_list:
+            query = args[-1]
+            self.assertFalse(query.startswith("-"), f"unsafe dig query reached subprocess: {query!r}")
+        # the direct, unprefixed lookup of the malicious domain must have been skipped entirely
+        self.assertNotIn(["dig", "-t", "TXT", "-evil.com"], [a for (a,), _ in check_output.call_args_list])
+        self.assertNotIn(["dig", "-t", "SPF", "-evil.com"], [a for (a,), _ in check_output.call_args_list])
+
+    def test_parser_depth_limit_raises(self):
+        """ A pathologically nested MIME structure must raise instead of exhausting the call stack. """
+        from email.mime.multipart import MIMEMultipart
+        from email.mime.text import MIMEText
+
+        def nested(depth):
+            msg = MIMEText("leaf", "plain")
+            for _ in range(depth):
+                outer = MIMEMultipart("mixed")
+                outer.attach(msg)
+                msg = outer
+            return msg
+
+        with self.assertRaises(ValueError):
+            Parser(Envelope()).parse(nested(MAX_PARSE_DEPTH + 5))
+
+    def test_parser_depth_limit_allows_reasonable_nesting(self):
+        """ Regression: nesting well under the cap still parses normally. """
+        from email.mime.multipart import MIMEMultipart
+        from email.mime.text import MIMEText
+
+        def nested(depth):
+            msg = MIMEText("leaf", "plain")
+            for _ in range(depth):
+                outer = MIMEMultipart("mixed")
+                outer.attach(msg)
+                msg = outer
+            return msg
+
+        e = Parser(Envelope()).parse(nested(MAX_PARSE_DEPTH - 5))
+        self.assertEqual("leaf", e.message())
 
 
 if __name__ == '__main__':

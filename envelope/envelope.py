@@ -31,7 +31,8 @@ from .constants import ISSUE_LINK, smime_import_error, gnupg, CRLF, AUTO, PLAIN,
 from .message import _Message
 from .parser import Parser
 from .smtp_handler import SMTPHandler
-from .utils import AutoSubmittedHeader, Fetched, is_gpg_importable_key, assure_list, assure_fetched, get_mimetype
+from .utils import AutoSubmittedHeader, Fetched, is_gpg_importable_key, assure_list, assure_fetched, get_mimetype, \
+    is_safe_argv_value
 
 
 __doc__ = """Quick layer over python-gnupg, M2Crypto, smtplib, magic and email handling packages.
@@ -1228,6 +1229,10 @@ class Envelope:
         """
         self._sendmail = SENDMAIL_PATH if self._sendmail == True  else str(self._sendmail)
         _unused = to_addrs
+        from_addr = str(from_addr)
+        if not is_safe_argv_value(from_addr):
+            logger.error(f"Refusing to invoke sendmail with a suspicious From address: {from_addr!r}")
+            return False
         args = [self._sendmail, "-t", "-oi", "-f", from_addr]
         try:
             subprocess.run(args, input=str(email), text=True, check=True)
@@ -1765,6 +1770,9 @@ class Envelope:
                     if type(query_or_list) is not list:
                         query_or_list = [query_or_list]
                     for query in query_or_list:
+                        if not is_safe_argv_value(query):
+                            logger.warning(f"Refusing to run dig with a suspicious query: {query!r}")
+                            return []
                         try:
                             text = subprocess.check_output(["dig", "-t", rr, query],
                                                            env=dict(environ, LC_ALL=SAFE_LOCALE)).decode("utf-8")

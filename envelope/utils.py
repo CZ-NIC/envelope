@@ -65,6 +65,16 @@ def get_mimetype(data: bytes = None, path: Path = None):
             return magic.detect_from_filename(str(path)).mime_type
 
 
+def is_safe_argv_value(s: str) -> bool:
+    """ Check a string is safe to pass as a single subprocess argv value derived from
+    untrusted (e.g. parsed e-mail) content: not empty, does not start with "-" (which some
+    CLI parsers could otherwise mistake for a new option) and contains no whitespace or
+    control characters. """
+    if not s or s[0] == "-":
+        return False
+    return all(c.isprintable() and not c.isspace() for c in s)
+
+
 def assure_list(v):
     """ Accepts object and returns list.
     If object is tuple, generator, set, frozenset, it's converted to a list.
