@@ -22,7 +22,7 @@ from os import environ
 from pathlib import Path
 from quopri import decodestring
 from types import GeneratorType
-from typing import Literal, Union, Optional, Any
+from typing import IO, Literal, Union, Optional, Any, Iterable, overload
 
 from ._auth import AuthResult
 from .address import Address, _getaddresses
@@ -428,6 +428,12 @@ class Envelope:
             split_addresses = [x.strip() for x in split_addresses if x.strip()]
             registry += (a for a in Address.parse(split_addresses) if a not in registry)
 
+    @overload
+    def to(self, email_or_more: None = None) -> list[Address]: ...
+
+    @overload
+    def to(self, email_or_more: Union[str, Address, Iterable[Union[str, Address]]]) -> "Envelope": ...
+
     def to(self, email_or_more=None) -> Union["Envelope", list[Address]]:
         """ Multiple addresses may be given in a string, delimited by comma (or semicolon).
          (The same is valid for `to`, `cc`, `bcc` and `reply-to`.)
@@ -441,17 +447,35 @@ class Envelope:
         self._parse_addresses(self._to, email_or_more)
         return self
 
+    @overload
+    def cc(self, email_or_more: None = None) -> list[Address]: ...
+
+    @overload
+    def cc(self, email_or_more: Union[str, Address, Iterable[Union[str, Address]]]) -> "Envelope": ...
+
     def cc(self, email_or_more=None) -> Union["Envelope", list[Address]]:
         if email_or_more is None:
             return self._cc
         self._parse_addresses(self._cc, email_or_more)
         return self
 
+    @overload
+    def bcc(self, email_or_more: None = None) -> list[Address]: ...
+
+    @overload
+    def bcc(self, email_or_more: Union[str, Address, Iterable[Union[str, Address]]]) -> "Envelope": ...
+
     def bcc(self, email_or_more=None) -> Union["Envelope", list[Address]]:
         if email_or_more is None:
             return self._bcc
         self._parse_addresses(self._bcc, email_or_more)
         return self
+
+    @overload
+    def reply_to(self, email_or_more: None = None) -> list[Address]: ...
+
+    @overload
+    def reply_to(self, email_or_more: Union[str, Address, Iterable[Union[str, Address]]]) -> "Envelope": ...
 
     def reply_to(self, email_or_more=None) -> Union["Envelope", list[Address]]:
         if email_or_more is None:
@@ -466,6 +490,15 @@ class Envelope:
     def text(self, text=None, *, path=None):
         """ An alias of .message """
         return self.message(text=text, path=path)
+
+    @overload
+    def message(self, text: None = None, *, path: None = None, alternative: str = AUTO, boundary: Optional[str] = None) -> str: ...
+
+    @overload
+    def message(self, text: Union[str, bytes, Path, IO[Any]], *, path: Union[str, Path, None] = None, alternative: str = AUTO, boundary: Optional[str] = None) -> "Envelope": ...
+
+    @overload
+    def message(self, text: None = None, *, path: Union[str, Path], alternative: str = AUTO, boundary: Optional[str] = None) -> "Envelope": ...
 
     def message(self, text=None, *, path=None, alternative=AUTO, boundary=None) -> Union["Envelope", str]:
         """
@@ -565,12 +598,24 @@ class Envelope:
                                   " to the unambiguous naming clash between the From and the Sender e-mail header."
                                   ' Use Envelope().from_(...) and Envelope().header("Sender", ...) instead.')
 
+    @overload
+    def from_(self, email: None = None) -> Address: ...
+
+    @overload
+    def from_(self, email: Union[str, Address, Literal[False]]) -> "Envelope": ...
+
     def from_(self, email=None) -> Union["Envelope", Address]:
         """ Set the `From` header. If None, current `From` returned. """
         if email is None:
             return self._from or Address()
         self._from = Address.parse(email, single=True, allow_false=True)
         return self
+
+    @overload
+    def from_addr(self, email: None = None) -> Address: ...
+
+    @overload
+    def from_addr(self, email: Union[str, Address, Literal[False]]) -> "Envelope": ...
 
     def from_addr(self, email=None) -> Union["Envelope", Address]:
         if email is None:
@@ -593,7 +638,19 @@ class Envelope:
         self._gpg = False
         return self
 
-    def subject(self, subject=None, encrypted: Union[str, bool] = None) -> Union["Envelope", str]:
+    @overload
+    def subject(self, subject: None = None, encrypted: None = None) -> str: ...
+
+    @overload
+    def subject(self, subject: str, encrypted: Union[str, bool, None] = None) -> "Envelope": ...
+
+    @overload
+    def subject(self, subject: None = None, *, encrypted: Union[str, bool]) -> "Envelope": ...
+
+    @overload
+    def subject(self, subject: None, encrypted: Union[str, bool]) -> "Envelope": ...
+
+    def subject(self, subject=None, encrypted: Optional[Union[str, bool]] = None) -> Union["Envelope", str]:
         """ Get or set the message subject
         :param subject: Subject text.
         :param encrypted: Text used instead of the real protected subject while PGP encrypting. False to not encrypt.
@@ -667,6 +724,18 @@ class Envelope:
         return self
 
     auto_submitted: AutoSubmittedHeader
+
+    @overload
+    def header(self, key: str, val: None = None, replace: Literal[False] = False) -> Union[str, list, Address, None]: ...
+
+    @overload
+    def header(self, key: str, val: str, replace: bool = False) -> "Envelope": ...
+
+    @overload
+    def header(self, key: str, val: None, replace: Literal[True]) -> "Envelope": ...
+
+    @overload
+    def header(self, key: str, val: Optional[str] = None, replace: bool = False) -> Union["Envelope", list, str, Address, None]: ...
 
     def header(self, key, val=None, replace=False) -> Union["Envelope", list, str, None]:
         """ Add a generic header.
@@ -1698,6 +1767,15 @@ class Envelope:
                 email["Subject"] = self._subject
         return email
 
+    @overload
+    def recipients(self, *, clear: Literal[False] = False) -> set[Address]: ...
+
+    @overload
+    def recipients(self, *, clear: Literal[True]) -> "Envelope": ...
+
+    @overload
+    def recipients(self, *, clear: bool) -> Union[set[Address], 'Envelope']: ...
+
     def recipients(self, *, clear=False) -> Union[set[Address], 'Envelope']:
         """ Return set of all recipients – To, Cc, Bcc
             :param: clear If true, all To, Cc and Bcc recipients are removed and the object is returned.
@@ -1729,6 +1807,12 @@ class Envelope:
 
         raise NotImplemented("Current multipart/report has not been impemented."
                              f"Please post current message as a new issue at {ISSUE_LINK}")
+
+    @overload
+    def attachments(self, name: None = None, inline: Optional[bool] = None) -> list[Attachment]: ...
+
+    @overload
+    def attachments(self, name: str, inline: Optional[bool] = None) -> Union[Attachment, Literal[False]]: ...
 
     def attachments(self, name=None, inline=None) -> Union[Attachment, list[Attachment], bool]:
         """ Access the attachments.

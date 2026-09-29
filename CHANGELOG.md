@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## Unreleased
+- enh: `@overload` typing for dual getter/setter methods (`to`, `subject`, `header`, ...)
+
 ## 2.4.0 (2026-09-04)
 - enh: relax IO class requirements for attachments
 - feat: allow local MTA instead of SMTP, using traditional sendmail command
