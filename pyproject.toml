@@ -36,6 +36,12 @@ test = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["tests"]
+markers = [
+    "gpg: needs the gpg binary",
+    "smime: needs the S/MIME extras (cryptography, M2Crypto)",
+    "cli: exercises the command line interface",
+]
 addopts = ["-ra", "--strict-markers"]
 filterwarnings = [
     "error",

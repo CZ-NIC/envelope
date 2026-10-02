@@ -20,12 +20,12 @@ jobs:
         run: pytest -n auto
       # As we support both python-magic and file-magic, try them one by one.
       - name: Test python-magic
-        run: pytest tests/test_legacy.py::TestMime::test_libmagic
+        run: pytest tests/test_mime.py::test_libmagic
       - name: Uninstall python-magic
         run: pip uninstall python-magic -y
       - name: Test libmagic missing
         id: should_fail
-        run: pytest tests/test_legacy.py::TestMime::test_libmagic
+        run: pytest tests/test_mime.py::test_libmagic
         continue-on-error: true
       - name: Check on failures
         if: steps.should_fail.outcome != 'failure'
@@ -33,4 +33,4 @@ jobs:
       - name: Install file-magic
         run: pip install file-magic
       - name: Test file-magic
-        run: pytest tests/test_legacy.py::TestMime::test_libmagic
+        run: pytest tests/test_mime.py::test_libmagic
