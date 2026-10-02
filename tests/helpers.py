@@ -1,5 +1,6 @@
 """ Plain helper functions and constants shared by the test modules. Pytest fixtures live in conftest.py. """
 import os
+import re
 from pathlib import Path
 from subprocess import PIPE, STDOUT, run
 
@@ -90,3 +91,10 @@ def run_subprocess(*cmd: str | Path, stdin: str | bytes | Path = b"", env: dict 
         env = {**os.environ, **{k: str(v) for k, v in env.items()}}
     result = run([str(c) for c in cmd], input=stdin, stdout=PIPE, stderr=STDOUT, env=env).stdout
     return result.decode().rstrip() if decode else result
+
+
+def normalize_boundaries(text: str) -> str:
+    """ Replace random MIME boundaries (`===============1234567890==`) with stable ones, for snapshot tests. """
+    boundaries = {}
+    return re.sub(r"=+\d+==", lambda m: boundaries.setdefault(m.group(0), f"===BOUNDARY-{len(boundaries) + 1}==="),
+                  str(text))

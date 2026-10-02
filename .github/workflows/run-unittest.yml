@@ -1,36 +1,25 @@
 name: tests
 on: [push]
 jobs:
-  build:
+  tests:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.10", 3.11, 3.12, 3.13]
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v4
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -e . --group test
-      - name: Run tests
-        run: pytest -n auto
-      # As we support both python-magic and file-magic, try them one by one.
-      - name: Test python-magic
-        run: pytest tests/test_mime.py::test_libmagic
-      - name: Uninstall python-magic
-        run: pip uninstall python-magic -y
-      - name: Test libmagic missing
-        id: should_fail
-        run: pytest tests/test_mime.py::test_libmagic
-        continue-on-error: true
-      - name: Check on failures
-        if: steps.should_fail.outcome != 'failure'
-        run: exit 1
-      - name: Install file-magic
-        run: pip install file-magic
-      - name: Test file-magic
-        run: pytest tests/test_mime.py::test_libmagic
+      - run: pip install nox
+      - run: nox -s tests-${{ matrix.python-version }}
+  # As we support both python-magic and file-magic, try them one by one (and assert failure without either).
+  magic:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install nox
+      - run: nox -s magic

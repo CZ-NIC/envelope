@@ -30,6 +30,8 @@ test = [
     "pytest>=8",
     "pytest-xdist",
     "pytest-cov",
+    "syrupy",
+    "aiosmtpd",
     "cryptography>=43",
     "M2Crypto",
 ]

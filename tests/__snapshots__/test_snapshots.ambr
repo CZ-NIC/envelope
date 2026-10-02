@@ -1,0 +1,182 @@
+# serializer version: 1
+# name: test_message_snapshot[attachment]
+  '''
+  MIME-Version: 1.0
+  Content-Type: multipart/mixed; boundary="===BOUNDARY-1==="
+  Subject: Snapshot
+  From: Sender <sender@example.com>
+  To: Recipient <to@example.com>
+  
+  --===BOUNDARY-1===
+  Content-Type: text/plain; charset="utf-8"
+  Content-Transfer-Encoding: 7bit
+  
+  Hello world.
+  
+  --===BOUNDARY-1===
+  Content-Type: text/plain
+  Content-Transfer-Encoding: base64
+  Content-Disposition: attachment; filename="generic.txt"
+  MIME-Version: 1.0
+  
+  U21hbGwgc2FtcGxlIHRleHQgYXR0YWNobWVudC4K
+  
+  --===BOUNDARY-1===--
+  
+  '''
+# ---
+# name: test_message_snapshot[html-only]
+  '''
+  Content-Type: text/html; charset="utf-8"
+  Content-Transfer-Encoding: 7bit
+  MIME-Version: 1.0
+  Subject: Snapshot
+  From: Sender <sender@example.com>
+  To: Recipient <to@example.com>
+  
+  <b>Hello</b> world.
+  
+  '''
+# ---
+# name: test_message_snapshot[inline-image]
+  '''
+  MIME-Version: 1.0
+  Content-Type: multipart/alternative;
+   boundary="===BOUNDARY-1==="
+  Subject: Snapshot
+  From: Sender <sender@example.com>
+  To: Recipient <to@example.com>
+  
+  --===BOUNDARY-1===
+  Content-Type: text/plain; charset="utf-8"
+  Content-Transfer-Encoding: 7bit
+  
+  Hello world.
+  
+  --===BOUNDARY-1===
+  MIME-Version: 1.0
+  Content-Type: multipart/related;
+   boundary="===BOUNDARY-2==="
+  
+  --===BOUNDARY-2===
+  Content-Type: text/html; charset="utf-8"
+  Content-Transfer-Encoding: 7bit
+  
+  <img src='cid:image.gif'>
+  
+  --===BOUNDARY-2===
+  Content-Type: image/gif
+  Content-Transfer-Encoding: base64
+  Content-ID: <image.gif>
+  MIME-Version: 1.0
+  Content-Disposition: inline
+  
+  R0lGODlhAwADAKEDAAIJAvz9/v///wAAACH+EUNyZWF0ZWQgd2l0aCBHSU1QACwAAAAAAwADAAAC
+  BERsEVIAOw==
+  
+  --===BOUNDARY-2===--
+  
+  --===BOUNDARY-1===--
+  
+  '''
+# ---
+# name: test_message_snapshot[long-line-base64]
+  '''
+  Content-Type: text/plain; charset="utf-8"
+  Content-Transfer-Encoding: base64
+  MIME-Version: 1.0
+  Subject: Snapshot
+  From: Sender <sender@example.com>
+  To: Recipient <to@example.com>
+  
+  TG9uZ2VyIHRoYW4gdGhvdXNhbmQgY2hhcnMuIExvbmdlciB0aGFuIHRob3VzYW5kIGNoYXJzLiBM
+  b25nZXIgdGhhbiB0aG91c2FuZCBjaGFycy4gTG9uZ2VyIHRoYW4gdGhvdXNhbmQgY2hhcnMuIExv
+  bmdlciB0aGFuIHRob3VzYW5kIGNoYXJzLiBMb25nZXIgdGhhbiB0aG91c2FuZCBjaGFycy4gTG9u
+  Z2VyIHRoYW4gdGhvdXNhbmQgY2hhcnMuIExvbmdlciB0aGFuIHRob3VzYW5kIGNoYXJzLiBMb25n
+  ZXIgdGhhbiB0aG91c2FuZCBjaGFycy4gTG9uZ2VyIHRoYW4gdGhvdXNhbmQgY2hhcnMuIExvbmdl
+  ciB0aGFuIHRob3VzYW5kIGNoYXJzLiBMb25nZXIgdGhhbiB0aG91c2FuZCBjaGFycy4gTG9uZ2Vy
+  IHRoYW4gdGhvdXNhbmQgY2hhcnMuIExvbmdlciB0aGFuIHRob3VzYW5kIGNoYXJzLiBMb25nZXIg
+  dGhhbiB0aG91c2FuZCBjaGFycy4gTG9uZ2VyIHRoYW4gdGhvdXNhbmQgY2hhcnMuIExvbmdlciB0
+  aGFuIHRob3VzYW5kIGNoYXJzLiBMb25nZXIgdGhhbiB0aG91c2FuZCBjaGFycy4gTG9uZ2VyIHRo
+  YW4gdGhvdXNhbmQgY2hhcnMuIExvbmdlciB0aGFuIHRob3VzYW5kIGNoYXJzLiBMb25nZXIgdGhh
+  biB0aG91c2FuZCBjaGFycy4gTG9uZ2VyIHRoYW4gdGhvdXNhbmQgY2hhcnMuIExvbmdlciB0aGFu
+  IHRob3VzYW5kIGNoYXJzLiBMb25nZXIgdGhhbiB0aG91c2FuZCBjaGFycy4gTG9uZ2VyIHRoYW4g
+  dGhvdXNhbmQgY2hhcnMuIExvbmdlciB0aGFuIHRob3VzYW5kIGNoYXJzLiBMb25nZXIgdGhhbiB0
+  aG91c2FuZCBjaGFycy4gTG9uZ2VyIHRoYW4gdGhvdXNhbmQgY2hhcnMuIExvbmdlciB0aGFuIHRo
+  b3VzYW5kIGNoYXJzLiBMb25nZXIgdGhhbiB0aG91c2FuZCBjaGFycy4gTG9uZ2VyIHRoYW4gdGhv
+  dXNhbmQgY2hhcnMuIExvbmdlciB0aGFuIHRob3VzYW5kIGNoYXJzLiBMb25nZXIgdGhhbiB0aG91
+  c2FuZCBjaGFycy4gTG9uZ2VyIHRoYW4gdGhvdXNhbmQgY2hhcnMuIExvbmdlciB0aGFuIHRob3Vz
+  YW5kIGNoYXJzLiBMb25nZXIgdGhhbiB0aG91c2FuZCBjaGFycy4gTG9uZ2VyIHRoYW4gdGhvdXNh
+  bmQgY2hhcnMuIExvbmdlciB0aGFuIHRob3VzYW5kIGNoYXJzLiBMb25nZXIgdGhhbiB0aG91c2Fu
+  ZCBjaGFycy4gTG9uZ2VyIHRoYW4gdGhvdXNhbmQgY2hhcnMuIA==
+  
+  '''
+# ---
+# name: test_message_snapshot[plain-and-html]
+  '''
+  MIME-Version: 1.0
+  Content-Type: multipart/alternative;
+   boundary="===BOUNDARY-1==="
+  Subject: Snapshot
+  From: Sender <sender@example.com>
+  To: Recipient <to@example.com>
+  
+  --===BOUNDARY-1===
+  Content-Type: text/plain; charset="utf-8"
+  Content-Transfer-Encoding: 7bit
+  
+  Hello world.
+  
+  --===BOUNDARY-1===
+  Content-Type: text/html; charset="utf-8"
+  Content-Transfer-Encoding: 7bit
+  MIME-Version: 1.0
+  
+  <b>Hello</b> world.
+  
+  --===BOUNDARY-1===--
+  
+  '''
+# ---
+# name: test_message_snapshot[plain]
+  '''
+  Content-Type: text/plain; charset="utf-8"
+  Content-Transfer-Encoding: 7bit
+  MIME-Version: 1.0
+  Subject: Snapshot
+  From: Sender <sender@example.com>
+  To: Recipient <to@example.com>
+  
+  Hello world.
+  
+  '''
+# ---
+# name: test_message_snapshot[recipients-and-headers]
+  '''
+  Content-Type: text/plain; charset="utf-8"
+  Content-Transfer-Encoding: 7bit
+  MIME-Version: 1.0
+  Subject: Snapshot
+  From: Sender <sender@example.com>
+  To: Recipient <to@example.com>
+  Cc: Čeněk <cc@example.com>
+  Reply-To: reply@example.com
+  X-Custom: value
+  
+  Hello world.
+  
+  '''
+# ---
+# name: test_message_snapshot[utf-8]
+  '''
+  Content-Type: text/plain; charset="utf-8"
+  Content-Transfer-Encoding: base64
+  MIME-Version: 1.0
+  Subject: Příliš žluťoučký kůň
+  From: Sender <sender@example.com>
+  To: Recipient <to@example.com>
+  
+  w7pwxJtsIMSPw6FiZWxza8OpIMOzZHkK
+  
+  '''
+# ---

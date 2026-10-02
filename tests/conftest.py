@@ -1,6 +1,7 @@
 import io
 import logging
 import shutil
+import socket
 import subprocess
 import sys
 import traceback
@@ -96,3 +97,33 @@ def cli(monkeypatch, tmp_path):
         return result.decode().rstrip() if decode else result
 
     return run
+
+
+@pytest.fixture
+def smtp_server(monkeypatch):
+    """ A real local SMTP server (aiosmtpd) on a free port. Received messages are in `smtp_server.messages`
+    as aiosmtpd Envelope objects (`.mail_from`, `.rcpt_tos`, `.content`). Use `.smtp("localhost", smtp_server.port)`. """
+    controller_module = pytest.importorskip("aiosmtpd.controller")
+    from envelope.smtp_handler import SMTPHandler
+
+    class Handler:
+        def __init__(self):
+            self.messages = []
+
+        async def handle_DATA(self, server, session, envelope):
+            self.messages.append(envelope)
+            return "250 Message accepted for delivery"
+
+    with socket.socket() as s:
+        s.bind(("localhost", 0))
+        port = s.getsockname()[1]
+
+    handler = Handler()
+    controller = controller_module.Controller(handler, hostname="localhost", port=port)
+    controller.start()
+    handler.port = port
+    # isolate the class-level connection cache so that connections do not leak between tests
+    monkeypatch.setattr(SMTPHandler, "_instances", {})
+    yield handler
+    SMTPHandler.quit_all()
+    controller.stop()
