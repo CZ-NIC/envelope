@@ -71,10 +71,11 @@ class SMTPHandler:
         for attempt in range(self.attempts):  # an attempt to reconnect possible
             try:
                 if self.key not in self._instances:
-                    self._instances[self.key] = self.connect()
+                    smtp = self.connect()
+                    if smtp is False:  # never cache a failed connection
+                        return False
+                    self._instances[self.key] = smtp
                 smtp = self._instances[self.key]
-                if smtp is False:
-                    return False
 
                 # recipients cannot be taken from headers when encrypting, we have to re-list them again
                 return smtp.send_message(email, from_addr=from_addr, to_addrs=to_addrs)

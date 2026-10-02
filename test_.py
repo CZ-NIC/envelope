@@ -1714,6 +1714,15 @@ class TestSupportive(TestAbstract):
             Envelope.smtp_quit()
         self.assertEqual("\n".join([f"dummy{i}" for i in [3, 0, 1, 2, 3, 2, 0, 1, 2, 3]]), stdout.getvalue().rstrip())
 
+    def test_smtp_failed_connection_not_cached(self):
+        """ A failed connection must not be cached, otherwise .smtp_quit() fails on a bool. (#60) """
+        SMTPHandler._instances = {}
+        handler = SMTPHandler("failing-host")
+        with mock.patch.object(SMTPHandler, "connect", return_value=False):
+            self.assertFalse(handler.send_message(None, "from@example.com", ["to@example.com"]))
+        self.assertNotIn(handler.key, SMTPHandler._instances)
+        Envelope.smtp_quit()  # does not raise AttributeError
+
 
 class TestBash(TestAbstract):
 

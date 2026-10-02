@@ -2,6 +2,7 @@
 
 ## Unreleased
 - enh: `@overload` typing for dual getter/setter methods (`to`, `subject`, `header`, ...)
+- fix (smtp): do not cache failed connection #60
 
 ## 2.4.0 (2026-09-04)
 - enh: relax IO class requirements for attachments
