@@ -102,13 +102,21 @@ def cli(monkeypatch, tmp_path):
 @pytest.fixture
 def smtp_server(monkeypatch):
     """ A real local SMTP server (aiosmtpd) on a free port. Received messages are in `smtp_server.messages`
-    as aiosmtpd Envelope objects (`.mail_from`, `.rcpt_tos`, `.content`). Use `.smtp("localhost", smtp_server.port)`. """
+    as aiosmtpd Envelope objects (`.mail_from`, `.rcpt_tos`, `.content`). Use `.smtp("localhost", smtp_server.port)`.
+    Add addresses to `smtp_server.rejected` to make the server refuse them. """
     controller_module = pytest.importorskip("aiosmtpd.controller")
     from envelope.smtp_handler import SMTPHandler
 
     class Handler:
         def __init__(self):
             self.messages = []
+            self.rejected = set()  # recipient addresses the server refuses
+
+        async def handle_RCPT(self, server, session, envelope, address, rcpt_options):
+            if address in self.rejected:
+                return "550 No such user"
+            envelope.rcpt_tos.append(address)
+            return "250 OK"
 
         async def handle_DATA(self, server, session, envelope):
             self.messages.append(envelope)

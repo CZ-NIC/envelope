@@ -50,11 +50,6 @@ def test_cli_json_rejects_object_payload(cli):
     assert "Unknown --smtp key" in out
 
 
-# Regression from b0a7d5b (2.4.0): `_send_now` treats `_deliver_now`'s empty "failed recipients" result as a failure,
-# so a successful delivery leaves bool(envelope) False (and the CLI exits 1).
-SEND_STATUS_BUG = pytest.mark.xfail(strict=True, reason="successful send reported as failure since b0a7d5b")
-
-
 def test_send_delivers_to_real_server(smtp_server):
     (Envelope("hello")
      .subject("delivered")
@@ -74,9 +69,20 @@ def test_send_delivers_to_real_server(smtp_server):
     assert "bcc@example.com" not in content  # Bcc is an envelope recipient only, never a header
 
 
-@SEND_STATUS_BUG
 def test_send_reports_success(smtp_server):
     assert Envelope("hello").from_("sender@example.com").to("to@example.com").smtp("localhost", smtp_server.port).send()
+
+
+def test_send_partially_refused_still_succeeds(smtp_server, caplog):
+    smtp_server.rejected.add("refused@example.com")
+    assert (Envelope("hello")
+            .from_("sender@example.com")
+            .to("to@example.com, refused@example.com")
+            .smtp("localhost", smtp_server.port)
+            .send())
+    [received] = smtp_server.messages
+    assert received.rcpt_tos == ["to@example.com"]
+    assert any("Unable to send to all recipients" in m and "refused@example.com" in m for m in caplog.messages)
 
 
 def test_send_reports_failure_when_server_unreachable(smtp_server):
@@ -141,3 +147,15 @@ def test_send_without_from_is_refused(smtp_server, caplog):
     assert not Envelope("hello").to("to@example.com").smtp("localhost", smtp_server.port).send()
     assert not smtp_server.messages
     assert "You have to specify From e-mail." in caplog.messages
+
+
+def test_send_fails_when_every_attempt_times_out(monkeypatch, caplog):
+    class TimingOut:
+        def send_message(self, *args, **kwargs):
+            raise TimeoutError
+
+    monkeypatch.setattr(SMTPHandler, "_instances", {})
+    monkeypatch.setattr(SMTPHandler, "connect", lambda self: TimingOut())
+    e = Envelope("hello").from_("sender@example.com").to("to@example.com").smtp(attempts=2, delay=0)
+    assert not e.send()
+    assert any("timed out 2 times" in m for m in caplog.messages)

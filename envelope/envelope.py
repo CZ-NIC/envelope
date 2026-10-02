@@ -1231,8 +1231,8 @@ class Envelope:
 
         if send and send != SIMULATION:
             recipients = list(map(str, set(self._to + self._cc + self._bcc)))
-            success = self._deliver_now(email, recipients)
-            if not success:
+            # `_deliver_now` returns the failed recipients (an empty container on full success) or False on error
+            if self._deliver_now(email, recipients) is False:
                 return False
         else:
             if send != SIMULATION:

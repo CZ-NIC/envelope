@@ -102,6 +102,8 @@ class SMTPHandler:
                         logger.warning(
                             f"{type(e).__name__}: sending failed. {e}")
                         return False
+        logger.warning(f"SMTP sending timed out {self.attempts} times at {self.obfuscated_key}.")
+        return False
 
     def quit(self):
         if self.key in self._instances:
