@@ -111,4 +111,4 @@ class SMTPHandler:
 
     @classmethod
     def quit_all(cls):
-        [c.quit() for c in cls._instances.values()]
+        [c.quit() for c in cls._instances.values() if isinstance(c, SMTP)]
