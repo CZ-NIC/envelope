@@ -135,8 +135,6 @@ def test_cli_send_with_smtp_dict_delivers(smtp_server, cli):
 
 
 @pytest.mark.cli
-@pytest.mark.xfail(strict=True, raises=AssertionError,
-                   reason="since b0a7d5b, `--smtp HOST PORT` crashes on list.lower() in __main__.py")
 def test_cli_send_with_smtp_host_port_delivers(smtp_server, cli):
     output = cli("--from", "sender@example.com", "--to", "to@example.com", "--smtp", "localhost", smtp_server.port, "--send", stdin="cli message")
     assert "Traceback" not in output
@@ -159,3 +157,21 @@ def test_send_fails_when_every_attempt_times_out(monkeypatch, caplog):
     e = Envelope("hello").from_("sender@example.com").to("to@example.com").smtp(attempts=2, delay=0)
     assert not e.send()
     assert any("timed out 2 times" in m for m in caplog.messages)
+
+
+@pytest.mark.cli
+def test_cli_blank_smtp_means_default_server(cli):
+    output = cli("--smtp", "--preview", stdin="hello")
+    assert "Traceback" not in output
+    assert "hello" in output
+
+
+@pytest.mark.cli
+@pytest.mark.parametrize("value", ["0", "false", "NO"])
+def test_cli_smtp_off_switches_to_sendmail(cli, monkeypatch, value):
+    calls = []
+    monkeypatch.setattr(Envelope, "_deliver_sendmail", lambda self, *args: calls.append(args) or [])
+    output = cli("--from", "sender@example.com", "--to", "to@example.com", "--smtp", value, "--send",
+                 stdin="hello")
+    assert "Traceback" not in output
+    assert len(calls) == 1

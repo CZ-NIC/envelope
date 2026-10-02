@@ -230,8 +230,10 @@ def main():
         args["cert"] = Path(args["cert_path"])
     del args["cert_path"]
 
-    # smtp can be a dict
-    if args["smtp"] and args["smtp"][0].startswith("{"):
+    # smtp is a list of `host [port [user ...]]` (nargs="*"), a JSON dict, or True when left blank
+    if args["smtp"] is True:  # blank → the default SMTP server (localhost)
+        args["smtp"] = None
+    elif args["smtp"] and args["smtp"][0].startswith("{"):
         smtp_allowed_keys = {"host", "port", "user", "password", "security", "timeout",
                              "attempts", "delay", "local_hostname"}
         try:
@@ -244,8 +246,8 @@ def main():
         if unknown_keys:
             raise RuntimeError(f"Unknown --smtp key(s): {', '.join(unknown_keys)}")
         args["smtp"] = smtp_dict
-    elif args["smtp"] and args["smtp"].lower() in ["0", "false", "no"]:
-        args["smtp"] = False
+    elif args["smtp"] and len(args["smtp"]) == 1 and args["smtp"][0].lower() in ["0", "false", "no"]:
+        args["smtp"] = False  # disables SMTP in favour of sendmail
 
     # send = False turns on debugging
     if args["send"] and type(args["send"]) is not bool:

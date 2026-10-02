@@ -1,9 +1,10 @@
 # CHANGELOG
 
-## Unreleased
+## 2.4.1 (2026-10-02)
 - enh: `@overload` typing for dual getter/setter methods (`to`, `subject`, `header`, ...)
 - fix (smtp): do not cache failed connection #60
 - fix (smtp): successful sending reported as failure (bool(envelope) False, CLI exit 1) since 2.4.0
+- fix (cli): `--smtp HOST PORT ...`, blank `--smtp` and `--smtp 0` crashed since 2.4.0
 
 ## 2.4.0 (2026-09-04)
 - enh: relax IO class requirements for attachments
