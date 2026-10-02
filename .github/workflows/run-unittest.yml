@@ -7,27 +7,25 @@ jobs:
       matrix:
         python-version: ["3.10", 3.11, 3.12, 3.13]
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install M2Crypto  # TODO remove when tests are updated
-          pip install cryptography
-          pip install -e .
+          pip install -e . --group test
       - name: Run tests
-        run: python3 test_.py
+        run: pytest -n auto
       # As we support both python-magic and file-magic, try them one by one.
       - name: Test python-magic
-        run: python3 test_.py TestMime.test_libmagic
+        run: pytest tests/test_legacy.py::TestMime::test_libmagic
       - name: Uninstall python-magic
         run: pip uninstall python-magic -y
       - name: Test libmagic missing
         id: should_fail
-        run: python3 test_.py TestMime.test_libmagic
+        run: pytest tests/test_legacy.py::TestMime::test_libmagic
         continue-on-error: true
       - name: Check on failures
         if: steps.should_fail.outcome != 'failure'
@@ -35,4 +33,4 @@ jobs:
       - name: Install file-magic
         run: pip install file-magic
       - name: Test file-magic
-        run: python3 test_.py TestMime.test_libmagic
+        run: pytest tests/test_legacy.py::TestMime::test_libmagic

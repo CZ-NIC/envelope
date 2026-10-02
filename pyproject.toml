@@ -24,3 +24,20 @@ smime = ["cryptography"]
 
 [tool.poetry.scripts]
 envelope = "envelope.__main__:main"
+
+[dependency-groups]
+test = [
+    "pytest>=8",
+    "pytest-xdist",
+    "pytest-cov",
+    "cryptography>=43",
+    "M2Crypto",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = ["-ra", "--strict-markers"]
+filterwarnings = [
+    "error",
+    "ignore:distutils Version classes are deprecated:DeprecationWarning:M2Crypto",
+]

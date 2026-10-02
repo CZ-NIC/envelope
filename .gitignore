@@ -1,4 +1,6 @@
 dist
 envelope.egg-info
 __pycache__
-tests/gpg_ring/random_seed
+.pytest_cache
+.nox
+tests/fixtures/gpg_ring/random_seed

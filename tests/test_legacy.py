@@ -27,23 +27,23 @@ IDENTITY_1_GPG_FINGERPRINT = "F14F2E8097E0CCDE93C4E871F4A4F26779FA03BB"
 IDENTITY_1 = "envelope-example-identity@example.com"
 IDENTITY_2 = "envelope-example-identity-2@example.com"
 IDENTITY_3 = "envelope-example-identity-3@example.com"
-GNUPG_HOME = "tests/gpg_ring/"
+GNUPG_HOME = "tests/fixtures/gpg_ring/"
 PGP_MESSAGE = "-----BEGIN PGP MESSAGE-----"
 MESSAGE = "dumb message"
 environ["GNUPGHOME"] = GNUPG_HOME
 
 
 class TestAbstract(TestCase):
-    utf_header = Path("tests/eml/utf-header.eml")  # the file has encoded headers
-    charset = Path("tests/eml/charset.eml")  # the file has encoded headers
-    internationalized = Path("tests/eml/internationalized.eml")
-    quopri = Path("tests/eml/quopri.eml")  # the file has CRLF separators
-    eml = Path("tests/eml/mail.eml")
-    text_attachment = "tests/eml/generic.txt"
-    image_file = Path("tests/eml/image.gif")
-    group_recipient = Path("tests/eml/group-recipient.eml")
-    invalid_characters = Path("tests/eml/invalid-characters.eml")
-    invalid_headers = Path("tests/eml/invalid-headers.eml")
+    utf_header = Path("tests/fixtures/eml/utf-header.eml")  # the file has encoded headers
+    charset = Path("tests/fixtures/eml/charset.eml")  # the file has encoded headers
+    internationalized = Path("tests/fixtures/eml/internationalized.eml")
+    quopri = Path("tests/fixtures/eml/quopri.eml")  # the file has CRLF separators
+    eml = Path("tests/fixtures/eml/mail.eml")
+    text_attachment = "tests/fixtures/eml/generic.txt"
+    image_file = Path("tests/fixtures/eml/image.gif")
+    group_recipient = Path("tests/fixtures/eml/group-recipient.eml")
+    invalid_characters = Path("tests/fixtures/eml/invalid-characters.eml")
+    invalid_headers = Path("tests/fixtures/eml/invalid-headers.eml")
 
     def check_lines(self, o, lines: Union[str, Tuple[str, ...]] = (), longer: Union[int, Tuple[int, int]] = None,
                     debug=False, not_in: Union[str, Tuple[str, ...]] = (), raises=(), result=None):
@@ -250,7 +250,7 @@ class TestEnvelope(TestAbstract):
 
     def test_contents_fetching(self):
         t = "Small sample text attachment.\n"
-        with open("tests/eml/generic.txt") as f:
+        with open("tests/fixtures/eml/generic.txt") as f:
             e1 = Envelope(f)
             e2 = e1.copy()  # stays intact even if copied to another instance
             self.assertEqual(e1.message(), t)
@@ -258,7 +258,7 @@ class TestEnvelope(TestAbstract):
         self.assertEqual(e2.copy().message(), t)
 
     def test_preview(self):
-        self.check_lines(Envelope(Path("tests/eml/generic.txt")).preview(),
+        self.check_lines(Envelope(Path("tests/fixtures/eml/generic.txt")).preview(),
                          ('Content-Type: text/plain; charset="utf-8"',
                           "Subject: ",
                           "Small sample text attachment."))
@@ -362,14 +362,14 @@ class TestSmime(TestAbstract):
     # cat signer.key chained_cert.pem > key-chained-cert-together.pem
     # cat signer_passphrase.key signer_passphrase.crt intermediateCA.crt > key-chained-cert-together-passphrase.pem
 
-    smime_key = 'tests/smime/key.pem'
-    smime_cert = 'tests/smime/cert.pem'
-    key_cert_together = Path("tests/smime/key-cert-together.pem")
-    key_cert_together_passphrase = Path("tests/smime/key-cert-together-passphrase.pem")
-    chained_smime_cert = 'tests/smime_chained/chained_cert.pem'
-    chained_key_cert_together = Path("tests/smime_chained/key-chained-cert-together.pem")
-    chained_key_cert_together_passphrase = Path("tests/smime_chained/key-chained-cert-together-passphrase.pem")
-    chained_root_cert = 'tests/smime_chained/rootCA.crt'
+    smime_key = 'tests/fixtures/smime/key.pem'
+    smime_cert = 'tests/fixtures/smime/cert.pem'
+    key_cert_together = Path("tests/fixtures/smime/key-cert-together.pem")
+    key_cert_together_passphrase = Path("tests/fixtures/smime/key-cert-together-passphrase.pem")
+    chained_smime_cert = 'tests/fixtures/smime_chained/chained_cert.pem'
+    chained_key_cert_together = Path("tests/fixtures/smime_chained/key-chained-cert-together.pem")
+    chained_key_cert_together_passphrase = Path("tests/fixtures/smime_chained/key-chained-cert-together-passphrase.pem")
+    chained_root_cert = 'tests/fixtures/smime_chained/rootCA.crt'
 
     def smime_verify_signature_with_root_ca(self, signed_message, root_ca_path):
         """
@@ -424,7 +424,7 @@ class TestSmime(TestAbstract):
                          .smime()
                          .subject("my subject")
                          .reply_to("test-reply@example.com")
-                         .signature(Path("tests/smime/key.pem"), cert=Path(self.smime_cert))
+                         .signature(Path("tests/fixtures/smime/key.pem"), cert=Path(self.smime_cert))
                          .send(False),
                          ("Subject: my subject",
                           "Reply-To: test-reply@example.com",
@@ -443,7 +443,7 @@ class TestSmime(TestAbstract):
     def test_smime_key_cert_together_passphrase(self):
         self.check_lines(Envelope(MESSAGE)
                          .smime()
-                         .signature(Path("tests/smime/key-cert-together-passphrase.pem"), passphrase=GPG_PASSPHRASE)
+                         .signature(Path("tests/fixtures/smime/key-cert-together-passphrase.pem"), passphrase=GPG_PASSPHRASE)
                          .sign(),
                          ('Content-Disposition: attachment; filename="smime.p7s"',
                           "MIIEUwYJKoZIhvcNAQcCoIIERDCCBEACAQExDzANBglghkgBZQMEAgEFADALBgkq"), 10)
@@ -453,7 +453,7 @@ class TestSmime(TestAbstract):
                           .smime()
                           .subject("my subject")
                           .reply_to("test-reply@example.com")
-                          .signature(Path("tests/smime_chained/signer.key"), cert=Path(self.chained_smime_cert))
+                          .signature(Path("tests/fixtures/smime_chained/signer.key"), cert=Path(self.chained_smime_cert))
                           .send(False))
         self.check_lines(signed_message,
                          ("Subject: my subject",
@@ -468,7 +468,7 @@ class TestSmime(TestAbstract):
                           .smime()
                           .subject("my subject")
                           .reply_to("test-reply@example.com")
-                          .signature(Path("tests/smime_chained/signer.key"), cert=Path("tests/smime_chained/signer.crt"))
+                          .signature(Path("tests/fixtures/smime_chained/signer.key"), cert=Path("tests/fixtures/smime_chained/signer.crt"))
                           .send(False))
         self.check_lines(signed_message,
                          ("Subject: my subject",
@@ -534,10 +534,10 @@ class TestSmime(TestAbstract):
 
         # Implicit GPG
         self.check_lines(Envelope(MESSAGE).from_(IDENTITY_2).to(IDENTITY_2)
-                         .encryption(key=Path("tests/gpg_keys/envelope-example-identity-2@example.com.key")),
+                         .encryption(key=Path("tests/fixtures/gpg_keys/envelope-example-identity-2@example.com.key")),
                          result=True)
         self.check_lines(Envelope(MESSAGE).from_(IDENTITY_2).to(IDENTITY_2)
-                         .signature(key=Path("tests/gpg_keys/envelope-example-identity-2@example.com.key"), passphrase=GPG_PASSPHRASE),
+                         .signature(key=Path("tests/fixtures/gpg_keys/envelope-example-identity-2@example.com.key"), passphrase=GPG_PASSPHRASE),
                          result=True)
 
         # Implicit S/MIME
@@ -579,11 +579,11 @@ class TestSmime(TestAbstract):
                   .smime()
                   .reply_to("test-reply@example.com")
                   .subject("my message")
-                  .encrypt([Path(self.smime_cert), Path("tests/smime/smime-identity@example.com-cert.pem")]))
+                  .encrypt([Path(self.smime_cert), Path("tests/fixtures/smime/smime-identity@example.com-cert.pem")]))
 
         # First key
-        decrypted_message = decrypt('tests/smime/smime-identity@example.com-key.pem',
-                                    'tests/smime/smime-identity@example.com-cert.pem', output).decode('utf-8')
+        decrypted_message = decrypt('tests/fixtures/smime/smime-identity@example.com-key.pem',
+                                    'tests/fixtures/smime/smime-identity@example.com-cert.pem', output).decode('utf-8')
         result = re.search(msg, decrypted_message)
         self.assertTrue(result)
 
@@ -600,8 +600,8 @@ class TestSmime(TestAbstract):
                   .encrypt([Path(self.smime_cert)]))
 
         # Should be false, no search required
-        decrypted_message = decrypt('tests/smime/smime-identity@example.com-key.pem',
-                                    'tests/smime/smime-identity@example.com-cert.pem', output)
+        decrypted_message = decrypt('tests/fixtures/smime/smime-identity@example.com-key.pem',
+                                    'tests/fixtures/smime/smime-identity@example.com-cert.pem', output)
         self.assertFalse(decrypted_message)
 
         decrypted_message = decrypt(self.smime_key, self.smime_cert, output).decode('utf-8')
@@ -609,7 +609,7 @@ class TestSmime(TestAbstract):
         self.assertTrue(result)
 
     def test_smime_decrypt(self):
-        e = Envelope.load(path="tests/eml/smime_encrypt.eml", key=self.smime_key, cert=self.smime_cert)
+        e = Envelope.load(path="tests/fixtures/eml/smime_encrypt.eml", key=self.smime_key, cert=self.smime_cert)
         self.assertEqual(MESSAGE, e.message())
 
     def test_smime_decrypt_attachments(self):
@@ -673,12 +673,12 @@ class TestSmime(TestAbstract):
     # XX smime_sign.eml is not used right now.
     # Make signature verification possible first.
     # def test_smime_sign(self):
-    #     e = Envelope.load(path="tests/eml/smime_sign.eml", key=self.smime_key, cert=self.smime_cert)
+    #     e = Envelope.load(path="tests/fixtures/eml/smime_sign.eml", key=self.smime_key, cert=self.smime_cert)
     #     self.assertEqual(MESSAGE, e.message())
 
     def test_smime_key_cert_together(self):
         # XX verify signature
-        e = Envelope.load(path="tests/eml/smime_key_cert_together.eml", key=self.key_cert_together)
+        e = Envelope.load(path="tests/fixtures/eml/smime_key_cert_together.eml", key=self.key_cert_together)
         self.assertEqual(MESSAGE, e.message())
 
 
@@ -822,10 +822,11 @@ class TestGPG(TestAbstract):
     def test_arbitrary_encrypt(self):
         """ Keys to be encrypted with explicitly chosen  """
         temp = [TemporaryDirectory() for _ in range(4)]  # must exist in the scope to preserve the dirs
+        [self.addCleanup(t.cleanup) for t in temp]
         rings = [t.name for t in temp]
         message = MESSAGE
-        key1_raw = Path("tests/gpg_keys/envelope-example-identity@example.com.bytes.key").read_bytes()
-        key1_armored = Path("tests/gpg_keys/envelope-example-identity@example.com.key").read_text()
+        key1_raw = Path("tests/fixtures/gpg_keys/envelope-example-identity@example.com.bytes.key").read_bytes()
+        key1_armored = Path("tests/fixtures/gpg_keys/envelope-example-identity@example.com.key").read_text()
         _importer = Envelope("just importer")
 
         # helper methods
@@ -834,7 +835,7 @@ class TestGPG(TestAbstract):
             m(message, Envelope.load(s, gnupg_home=rings[ring]).message())
 
         def importer(ring, key, passphrase=None):
-            _importer.gpg(rings[ring]).sign(Path("tests/gpg_keys/" + key), passphrase=passphrase)
+            _importer.gpg(rings[ring]).sign(Path("tests/fixtures/gpg_keys/" + key), passphrase=passphrase)
 
         # Message encrypted for envelope-example-identity@example.com only, not for the sender
         e1 = str(Envelope(message)
@@ -903,7 +904,7 @@ class TestGPG(TestAbstract):
                                              .gpg(GNUPG_HOME)
                                              .as_message()))
                 self.assertIn(f'WARNING:envelope.envelope:Key for {IDENTITY_3} seems missing,'
-                              f' see: GNUPGHOME=tests/gpg_ring/ gpg --list-keys', cm.output)
+                              f' see: GNUPGHOME=tests/fixtures/gpg_ring/ gpg --list-keys', cm.output)
                 self.assertIn('ERROR:envelope.envelope:Signing/encrypting failed.', cm.output)
                 self.assertNotIn(f'WARNING:envelope.envelope:Key for {IDENTITY_2} seems missing', cm.output)
 
@@ -947,15 +948,15 @@ class TestGPG(TestAbstract):
 
         logged(False, [IDENTITY_3, "invalid"],
                f'WARNING:envelope.envelope:Key for {IDENTITY_3},'
-               ' invalid seems missing, see: GNUPGHOME=tests/gpg_ring/ gpg --list-keys')
+               ' invalid seems missing, see: GNUPGHOME=tests/fixtures/gpg_ring/ gpg --list-keys')
         logged(False, [IDENTITY_1])
         logged(IDENTITY_1, [IDENTITY_1])
         logged(IDENTITY_3, [IDENTITY_1],
                f'WARNING:envelope.envelope:The secret key for {IDENTITY_3} seems to not be used,'
-               f" check if it is in the keyring: GNUPGHOME=tests/gpg_ring/ gpg --list-secret-keys")
+               f" check if it is in the keyring: GNUPGHOME=tests/fixtures/gpg_ring/ gpg --list-secret-keys")
         logged(IDENTITY_3, False,
                f'WARNING:envelope.envelope:The secret key for {IDENTITY_3} seems to not be used,'
-               f" check if it is in the keyring: GNUPGHOME=tests/gpg_ring/ gpg --list-secret-keys")
+               f" check if it is in the keyring: GNUPGHOME=tests/fixtures/gpg_ring/ gpg --list-secret-keys")
 
         self.assertEqual("", str(model.copy().encrypt(IDENTITY_2, sign=IDENTITY_3)))
         self.assertIn(PGP_MESSAGE, str(model.copy().encrypt(IDENTITY_2, sign=IDENTITY_1)))
@@ -1013,6 +1014,7 @@ class TestGPG(TestAbstract):
 
     def test_auto_import(self):
         temp = TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
 
         # no signature - empty ring
         self.check_lines(Envelope(MESSAGE)
@@ -1023,7 +1025,7 @@ class TestGPG(TestAbstract):
         # import key to the ring
         self.check_lines(Envelope(MESSAGE)
                          .gpg(temp.name)
-                         .sign(Path("tests/gpg_keys/envelope-example-identity@example.com.key")),
+                         .sign(Path("tests/fixtures/gpg_keys/envelope-example-identity@example.com.key")),
                          (MESSAGE,
                           '-----BEGIN PGP SIGNATURE-----',
                           '-----END PGP SIGNATURE-----',), 10)
@@ -1065,7 +1067,7 @@ class TestGPG(TestAbstract):
                          .gpg(temp.name)
                          .from_(IDENTITY_1)
                          .to(IDENTITY_2)
-                         .encryption(Path("tests/gpg_keys/envelope-example-identity-2@example.com.key")),
+                         .encryption(Path("tests/fixtures/gpg_keys/envelope-example-identity-2@example.com.key")),
                          result=True)
 
         # signing with an invalid passphrase should fail for identity-2
@@ -1085,15 +1087,15 @@ class TestGPG(TestAbstract):
     def test_signed_gpg(self):
         # XX we should test signature verification with e._gpg_verify(),
         # however .load does not load application/pgp-signature content at the moment
-        e = Envelope.load(path="tests/eml/test_signed_gpg.eml")
+        e = Envelope.load(path="tests/fixtures/eml/test_signed_gpg.eml")
         self.assertEqual(MESSAGE, e.message())
 
     def test_encrypted_gpg(self):
-        e = Envelope.load(path="tests/eml/test_encrypted_gpg.eml")
+        e = Envelope.load(path="tests/fixtures/eml/test_encrypted_gpg.eml")
         self.assertEqual("dumb encrypted message", e.message())
 
     def test_encrypted_signed_gpg(self):
-        e = Envelope.load(path="tests/eml/test_encrypted_signed_gpg.eml")
+        e = Envelope.load(path="tests/fixtures/eml/test_encrypted_signed_gpg.eml")
         self.assertEqual("dumb encrypted and signed message", e.message())
 
     def test_encrypted_gpg_subject(self):
@@ -1264,7 +1266,7 @@ Third
         e = (Envelope()
              .attach("hello", "text/plain")
              .attach(b"hello bytes")
-             .attach(Path("tests/gpg_ring/trustdb.gpg"))
+             .attach(Path("tests/fixtures/gpg_ring/trustdb.gpg"))
              .attach(b"<!DOCTYPE html>hello")
              .attach("<!DOCTYPE html>hello")
              .attach(self.image_file))
@@ -1883,7 +1885,7 @@ class TestAttachment(TestAbstract):
 
 
 class TestLoad(TestBash):
-    inline_image = "tests/eml/inline_image.eml"
+    inline_image = "tests/fixtures/eml/inline_image.eml"
 
     def test_load(self):
         self.assertEqual(Envelope.load("Subject: testing message").subject(), "testing message")
@@ -2079,7 +2081,7 @@ class TestSMTP(TestAbstract):
         self.assertSubset(Envelope().smtp(port=32)._smtp.__dict__,
                           {"host": "localhost", "port": 32})
         self.assertSubset(Envelope().smtp(timeout=5)._smtp.__dict__, {"timeout": 5})
-        self.assertSubset(Envelope().smtp("tests/smtp-configuration.ini")._smtp.__dict__,
+        self.assertSubset(Envelope().smtp("tests/fixtures/smtp-configuration.ini")._smtp.__dict__,
                           {"timeout": 3, "user": "envelope-example-identity@example.com", "password": "", "port": 123})
 
     def test_smtp_cli_json_dict(self):
@@ -2107,7 +2109,7 @@ class TestSMTP(TestAbstract):
 
 
 class TestReport(TestAbstract):
-    xarf = Path("tests/eml/multipart-report-xarf.eml")
+    xarf = Path("tests/fixtures/eml/multipart-report-xarf.eml")
 
     def test_loading_xarf(self):
         # no report in an empty object
