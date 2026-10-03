@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 2.4.2 (unreleased)
+- fix (smtp): `smtp_quit()` keeps closed connections cached and crashes when the server has already dropped one
+
 ## 2.4.1 (2026-10-02)
 - enh: `@overload` typing for dual getter/setter methods (`to`, `subject`, `header`, ...)
 - fix (smtp): do not cache failed connection #60

@@ -105,10 +105,19 @@ class SMTPHandler:
         logger.warning(f"SMTP sending timed out {self.attempts} times at {self.obfuscated_key}.")
         return False
 
+    @staticmethod
+    def _quit(smtp):
+        try:
+            smtp.quit()
+        except (SMTPException, OSError) as e:  # ex: the server has already closed the connection
+            logger.debug(f"SMTP quit failed, connection dropped anyway. {e}")
+
     def quit(self):
         if self.key in self._instances:
-            self._instances[self.key].quit()
+            self._quit(self._instances.pop(self.key))
 
     @classmethod
     def quit_all(cls):
-        [c.quit() for c in cls._instances.values()]
+        instances = list(cls._instances.values())
+        cls._instances.clear()
+        [cls._quit(c) for c in instances]
