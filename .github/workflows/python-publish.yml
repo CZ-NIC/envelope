@@ -8,11 +8,15 @@ on:
 jobs:
   pypi:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write  # create the GitHub release
     steps:
       - name: Checkout
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
+      - name: Check the tag matches the version
+        run: grep -q "^version = \"$GITHUB_REF_NAME\"" pyproject.toml || { echo "::error::tag $GITHUB_REF_NAME differs from the version in pyproject.toml"; exit 1; }
       - name: Replace media paths in README.md
         run: sed -E 's#(\]\((asset/[a-zA-Z0-9._-]+))#](https://github.com/CZ-NIC/envelope/blob/main/\2?raw=True#g' README.md | less > README.md.tmp && mv README.md.tmp README.md
       - name: Build the package
@@ -21,3 +25,14 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           password: ${{ secrets.PYPI_GITHUB_ENVELOPE }}
+      # GitHub release (so that "Watch → Releases" notifies), notes taken from the CHANGELOG.md section of the tag
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          awk -v tag="$TAG" '/^## /{found = ($2 == tag); next} found' CHANGELOG.md > notes.md
+          flags=()
+          [[ "$TAG" == *rc* ]] && flags+=(--prerelease)
+          if grep -q "[^[:space:]]" notes.md; then flags+=(--notes-file notes.md); else flags+=(--generate-notes); fi
+          gh release create "$TAG" dist/* --title "$TAG" --verify-tag "${flags[@]}"
