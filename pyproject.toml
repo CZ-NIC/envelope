@@ -4,7 +4,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 name = "envelope"
-version = "2.4.1"
+version = "2.4.2"
 description = "Insert a message and attachments and send e-mail / sign / encrypt contents by a single line."
 authors = ["Edvard Rejthar <edvard.rejthar@nic.cz>"]
 license = "LGPL-3.0-or-later"
@@ -49,3 +49,24 @@ filterwarnings = [
     "error",
     "ignore:distutils Version classes are deprecated:DeprecationWarning:M2Crypto",
 ]
+
+# Releasing: see Makefile. The topmost "## Unreleased" CHANGELOG.md heading is required, a bump dates it.
+[tool.bumpversion]
+current_version = "2.4.2"
+commit = true
+tag = true
+tag_name = "{new_version}"
+tag_message = "{new_version}"
+message = "chore(release): {new_version}"
+
+# CHANGELOG first, so that a missing heading fails before anything is written.
+[[tool.bumpversion.files]]
+filename = "CHANGELOG.md"
+search = "## Unreleased"
+replace = "## {new_version} ({now:%Y-%m-%d})"
+
+[[tool.bumpversion.files]]
+filename = "pyproject.toml"
+search = '^version = "{current_version}"'
+replace = 'version = "{new_version}"'
+regex = true

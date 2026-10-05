@@ -5,3 +5,4 @@ __pycache__
 .nox
 tests/fixtures/gpg_ring/random_seed
 .coverage
+.release-venv
