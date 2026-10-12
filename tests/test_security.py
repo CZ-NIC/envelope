@@ -36,7 +36,7 @@ def _sendmail_envelope():
 def test_deliver_sendmail_safe_from_addr_unchanged():
     """ Regression: a normal From address still reaches subprocess.run with the same argv as before. """
     e = _sendmail_envelope()
-    with mock.patch("envelope.envelope.subprocess.run") as run:
+    with mock.patch("envelope._delivery.subprocess.run") as run:
         result = e._deliver_sendmail(str(e), "person@example.com", [])
     assert result == []
     run.assert_called_once()
@@ -52,7 +52,7 @@ def test_deliver_sendmail_safe_from_addr_unchanged():
 def test_deliver_sendmail_rejects_malicious_from_addr(from_addr):
     """ A malicious From address must never reach subprocess. """
     e = _sendmail_envelope()
-    with mock.patch("envelope.envelope.subprocess.run") as run:
+    with mock.patch("envelope._delivery.subprocess.run") as run:
         result = e._deliver_sendmail(str(e), from_addr, [])
     assert not result
     run.assert_not_called()
@@ -63,7 +63,7 @@ def test_dig_safe_domain_unchanged():
     with the plain domain as the last, unmodified argv item. """
     e = Envelope()
     e._from = Address(address="person@example.com")
-    with mock.patch("envelope.envelope.subprocess.check_output", return_value=b"") as check_output:
+    with mock.patch("envelope._delivery.subprocess.check_output", return_value=b"") as check_output:
         e.check(check_mx=False, check_smtp=False)
     assert check_output.called
     (first_args,), _ = check_output.call_args_list[0]
@@ -75,7 +75,7 @@ def test_dig_rejects_malicious_domain():
     subprocess as a bare argv value (it would be interpreted as another `dig` flag). """
     e = Envelope()
     e._from = Address(address="attacker@-evil.com")
-    with mock.patch("envelope.envelope.subprocess.check_output", return_value=b"") as check_output:
+    with mock.patch("envelope._delivery.subprocess.check_output", return_value=b"") as check_output:
         e.check(check_mx=False, check_smtp=False)
     calls = [args for (args,), _ in check_output.call_args_list]
     for args in calls:
