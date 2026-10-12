@@ -112,6 +112,9 @@ Envelope().attach(Path("file.jpg"), inline="foo") # <img src='cid:foo' />
 Envelope(attachments=[(Path("/tmp/file.txt"), "displayed-name.txt", "text/plain"), Path("/tmp/another-file.txt")])
 ```
 
+!!! warning "Do not forward user-supplied file names"
+    `envelope` reads any file you point it at (`.attach(path=...)`, a `Path` in `Envelope(attachments=...)`, etc.) – choosing the path is the caller's job. If your application builds the path from user input (ex: a web form field), validate it against an allow-list or a fixed directory first, otherwise you are exposed to path traversal (`../../etc/passwd`) and arbitrary file read. Passing the contents as `bytes` / a stream with an explicit `name=` avoids touching the file system at all.
+
 ## mime
 Sets contents mime subtype: "**auto**" (default), "**html**" or "**plain**" for plain text.
 Maintype is always set to "text".

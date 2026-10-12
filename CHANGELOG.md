@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## Unreleased
+- docs: warn about path traversal when forwarding user-supplied file names to `.attach(path=...)`
+
 ## 2.4.2 (2026-10-05)
 - enh: GitHub releases created on tag push (with CHANGELOG notes and built dist files) #58
 - fix (smtp): `smtp_quit()` keeps closed connections cached and crashes when the server has already dropped one
