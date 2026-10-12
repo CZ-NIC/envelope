@@ -746,6 +746,16 @@ class Envelope:
                         Otherwise another header of the same name is appended.
         :return: Envelope|str|list|None Returned self if `val` is not None or replace=True, else returns value of the header
                  or its list if the header was used multiple times. (Note that cc and bcc headers always return list.)
+
+        Special case: the headers To, Cc, Bcc, Reply-To, From and Subject (case-insensitive) are not stored
+        as generic headers. They are delegated to their dedicated methods `.to()`, `.cc()`, `.bcc()`, `.reply_to()`,
+        `.from_()` and `.subject()`, so they behave exactly like those (ex: the Subject can be encrypted).
+        That makes their return values differ from the generic headers:
+            * reading To/Cc/Bcc/Reply-To returns `list[Address]` (even for a single address, even when empty),
+              From returns an `Address`, Subject returns a `str` (instead of the `str|list|None` of generic headers)
+            * setting To/Cc/Bcc/Reply-To appends to the current addresses, setting From/Subject overwrites it
+            * an RFC 2047 encoded value (ex: `=?UTF-8?Q?...?=`) is decoded before it is passed to the method
+            * replace=True only clears the field, the `val` passed along is currently ignored (edvard-hub#188)
         """
 
         # lowercase header to its method name
