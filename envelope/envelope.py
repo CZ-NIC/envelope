@@ -1423,7 +1423,7 @@ class Envelope:
         except ImportError:
             raise ImportError(smime_import_error)
 
-    def smime_sign_only(self, email, sign):
+    def _smime_sign_only(self, email, sign):
         load_pem_private_key, pkcs7, load_pem_x509_certificates, _, hashes, serialization = self._import_cryptoraphy_modules()
         # get sender's cert
         # cert and private key can be one file
@@ -1472,7 +1472,7 @@ class Envelope:
 
         return signed_email
 
-    def smime_sign_encrypt(self, email, sign, encrypt):
+    def _smime_sign_encrypt(self, email, sign, encrypt):
         load_pem_private_key, pkcs7, load_pem_x509_certificates, load_pem_x509_certificate, hashes, serialization = self._import_cryptoraphy_modules()
 
         if self._cert:
@@ -1538,7 +1538,7 @@ class Envelope:
         encrypted_email = envelope_builder.encrypt(serialization.Encoding.SMIME, options)
         return encrypted_email
 
-    def smime_encrypt_only(self, email, encrypt):
+    def _smime_encrypt_only(self, email, encrypt):
 
         _, pkcs7, _, load_pem_x509_certificate, _, serialization = self._import_cryptoraphy_modules()
 
@@ -1580,13 +1580,13 @@ class Envelope:
             sign = assure_fetched(sign, bytes)
 
         if sign and not encrypt:
-            output = self.smime_sign_only(email, sign)
+            output = self._smime_sign_only(email, sign)
 
         elif sign and encrypt:
-            output = self.smime_sign_encrypt(email, sign, encrypt)
+            output = self._smime_sign_encrypt(email, sign, encrypt)
 
         elif not sign and encrypt:
-            output = self.smime_encrypt_only(email, encrypt)
+            output = self._smime_encrypt_only(email, encrypt)
 
         return output
 
