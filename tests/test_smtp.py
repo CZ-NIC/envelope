@@ -149,7 +149,10 @@ def test_send_without_from_is_refused(smtp_server, caplog):
 
 def test_send_fails_when_every_attempt_times_out(monkeypatch, caplog):
     class TimingOut:
-        def send_message(self, *args, **kwargs):
+        def ehlo_or_helo_if_needed(self):
+            pass
+
+        def sendmail(self, *args, **kwargs):
             raise TimeoutError
 
     monkeypatch.setattr(SMTPHandler, "_instances", {})
@@ -175,3 +178,33 @@ def test_cli_smtp_off_switches_to_sendmail(cli, monkeypatch, value):
                  stdin="hello")
     assert "Traceback" not in output
     assert len(calls) == 1
+
+
+def test_send_internationalized_address(monkeypatch):
+    """ A non-ASCII address is sent with SMTPUTF8 when the server supports it. """
+    controller_module = pytest.importorskip("aiosmtpd.controller")
+    import socket
+
+    class Handler:
+        messages = []
+
+        async def handle_DATA(self, server, session, envelope):
+            self.messages.append(envelope)
+            return "250 OK"
+
+    with socket.socket() as s:
+        s.bind(("localhost", 0))
+        port = s.getsockname()[1]
+    handler = Handler()
+    controller = controller_module.Controller(handler, hostname="localhost", port=port, enable_SMTPUTF8=True)
+    controller.start()
+    monkeypatch.setattr(SMTPHandler, "_instances", {})
+    try:
+        assert Envelope("hello").from_("odesílatel@příklad.cz").to("to@example.com").smtp("localhost", port).send()
+    finally:
+        SMTPHandler.quit_all()
+        controller.stop()
+    [received] = handler.messages
+    assert received.mail_from == "odesílatel@příklad.cz"
+    assert "SMTPUTF8" in received.mail_options
+

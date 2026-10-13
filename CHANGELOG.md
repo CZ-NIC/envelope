@@ -1,6 +1,8 @@
 # CHANGELOG
 
 ## Unreleased
+- fix (gpg): sending via sendmail broke the signature of messages with long attachment file names #19
+- enh: no global patching of `email.generator.Generator` at runtime (thread-safe output of signed messages)
 - enh: `Attachment` importable from the package (`from envelope import Attachment`)
 - fix (smime): signing + encrypting crashed when the key and the certificate were in a single file, or with an invalid key
 - fix: `Address.is_valid(check_mx=True)` never performed the MX check

@@ -5,9 +5,7 @@ import logging
 import smtplib
 import subprocess
 import sys
-from unittest import mock
 from configparser import ConfigParser
-from email.generator import Generator
 from email.utils import make_msgid, formatdate
 from os import environ
 from pathlib import Path
@@ -16,7 +14,7 @@ from typing import Any
 from ._auth import AuthResult
 from .constants import SIMULATION, SAFE_LOCALE, SENDMAIL_PATH
 from .smtp_handler import SMTPHandler
-from .utils import is_safe_argv_value
+from .utils import is_safe_argv_value, message_as_string
 
 logger = logging.getLogger("envelope.envelope")  # same logger name as before the split
 
@@ -192,11 +190,7 @@ class _DeliveryMixin:
         """
         if not isinstance(self._smtp, SMTPHandler):
             self._smtp = SMTPHandler()
-        with mock.patch.object(Generator, '_handle_multipart_signed', Generator._handle_multipart):
-            # https://github.com/python/cpython/issues/99533 and #19
-            return self._smtp.send_message(email,
-                                           from_addr=self._from_addr,
-                                           to_addrs=recipients)
+        return self._smtp.send_message(email, from_addr=self._from_addr, to_addrs=recipients)
 
     def _deliver_sendmail(self, email, from_addr, to_addrs):
         """
@@ -218,7 +212,7 @@ class _DeliveryMixin:
             return False
         args = [self._sendmail, "-t", "-oi", "-f", from_addr]
         try:
-            subprocess.run(args, input=str(email), text=True, check=True)
+            subprocess.run(args, input=message_as_string(email), text=True, check=True)
             return []
         except subprocess.CalledProcessError:
             return False

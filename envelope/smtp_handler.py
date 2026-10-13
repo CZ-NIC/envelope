@@ -1,10 +1,14 @@
 import logging
 from collections import defaultdict
-from smtplib import SMTP, SMTP_SSL, SMTPAuthenticationError, SMTPException, SMTPSenderRefused
+from copy import copy
+from email.utils import getaddresses
+from smtplib import SMTP, SMTP_SSL, SMTPAuthenticationError, SMTPException, SMTPNotSupportedError, SMTPSenderRefused
 import ssl
 from typing import Dict
 from socket import gaierror, timeout as timeout_exc
 from time import sleep
+
+from .utils import message_as_smtp_bytes
 logger = logging.getLogger(__name__)
 
 
@@ -67,6 +71,30 @@ class SMTPHandler:
             return False
         return smtp
 
+    @staticmethod
+    def _send_message(smtp: SMTP, email, from_addr, to_addrs):
+        """ Same as `smtp.send_message`, but flattens the message with our generator so that a GPG signature stays intact.
+        (Envelope does not use the Resent-* headers so their handling is omitted.) """
+        if from_addr is None:
+            from_addr = getaddresses([email["Sender"] if "Sender" in email else email["From"]])[0][1]
+        msg = copy(email)
+        del msg["Bcc"]
+        del msg["Resent-Bcc"]
+        smtp.ehlo_or_helo_if_needed()  # needed for has_extn
+        mail_options = ()
+        policy = None
+        try:
+            "".join([from_addr, *to_addrs]).encode("ascii")
+        except UnicodeEncodeError:
+            if not smtp.has_extn("smtputf8"):
+                raise SMTPNotSupportedError(
+                    "One or more source or delivery addresses require"
+                    " internationalized email support, but the server"
+                    " does not advertise the required SMTPUTF8 capability")
+            policy = email.policy.clone(utf8=True)
+            mail_options = ("SMTPUTF8", "BODY=8BITMIME")
+        return smtp.sendmail(from_addr, to_addrs, message_as_smtp_bytes(msg, policy), mail_options)
+
     def send_message(self, email, from_addr, to_addrs):
         for attempt in range(self.attempts):  # an attempt to reconnect possible
             try:
@@ -78,7 +106,7 @@ class SMTPHandler:
                 smtp = self._instances[self.key]
 
                 # recipients cannot be taken from headers when encrypting, we have to re-list them again
-                return smtp.send_message(email, from_addr=from_addr, to_addrs=to_addrs)
+                return self._send_message(smtp, email, from_addr, to_addrs)
             except (timeout_exc, SMTPException) as e:
                 # this connection is gone, reconnect next time
                 if self.key in self._instances:

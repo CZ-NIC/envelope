@@ -3,12 +3,10 @@ import binascii
 from json import loads
 import logging
 import re
-from unittest import mock
 from base64 import b64decode
 from copy import deepcopy
 from email import message_from_bytes
 from email.header import decode_header
-from email.generator import Generator
 from email.message import EmailMessage, Message
 from email.parser import BytesParser
 from pathlib import Path
@@ -26,7 +24,7 @@ from .constants import ISSUE_LINK, gnupg, CRLF, AUTO, PLAIN, HTML, SIMULATION
 from .message import _Message
 from .parser import Parser
 from .smtp_handler import SMTPHandler
-from .utils import AutoSubmittedHeader, assure_list, assure_fetched, get_mimetype
+from .utils import AutoSubmittedHeader, assure_list, assure_fetched, get_mimetype, message_as_string
 
 
 __doc__ = """Quick layer over python-gnupg, M2Crypto, smtplib, magic and email handling packages.
@@ -161,9 +159,7 @@ class Envelope(_AddressingMixin, _SigningMixin, _EncryptionMixin, _DeliveryMixin
     def _get_result_str(self):
         """ concatenate output string """
         if not self._result_cache:
-            with mock.patch.object(Generator, '_handle_multipart_signed', Generator._handle_multipart):
-                # https://github.com/python/cpython/issues/99533 and #19
-                s = "\n".join(str(r) for r in self._result)
+            s = "\n".join(message_as_string(r) for r in self._result)  # #19
             self._result_cache = s  # slightly quicker next time if ever containing a huge amount of lines
         return self._result_cache
 

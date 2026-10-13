@@ -1,5 +1,7 @@
 import logging
-from io import IOBase
+from email.generator import BytesGenerator, Generator
+from email.message import Message, MIMEPart
+from io import BytesIO, IOBase, StringIO
 from pathlib import Path
 from typing import TYPE_CHECKING, Iterable
 
@@ -13,6 +15,43 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 Fetched = str | bytes | None
+
+
+class _SignedPreservingGenerator(Generator):
+    """ Flatten multipart/signed like any other multipart.
+
+    The stdlib disables header folding inside multipart/signed, so a long header (ex: attachment file name
+    longer than 34 chars) gets output differently than it was when the GPG signature was computed and the signature
+    breaks. See #19 and https://github.com/python/cpython/issues/99533
+    (Used instead of patching `Generator` globally, which would affect all the threads.)
+    """
+    _handle_multipart_signed = Generator._handle_multipart
+
+
+class _SignedPreservingBytesGenerator(BytesGenerator):
+    _handle_multipart_signed = Generator._handle_multipart
+
+
+def message_as_string(msg) -> str:
+    """ Same as `str(msg)`, using the `_SignedPreservingGenerator`. Non-Message objects are just cast to str. """
+    if not isinstance(msg, Message):
+        return str(msg)
+    if isinstance(msg, MIMEPart):  # EmailMessage
+        policy = msg.policy.clone(utf8=True)
+        maxheaderlen = policy.max_line_length
+    else:
+        policy = msg.policy
+        maxheaderlen = 0
+    fp = StringIO()
+    _SignedPreservingGenerator(fp, mangle_from_=False, maxheaderlen=maxheaderlen, policy=policy).flatten(msg)
+    return fp.getvalue()
+
+
+def message_as_smtp_bytes(msg: Message, policy=None) -> bytes:
+    """ Same as `smtplib.SMTP.send_message` flattens the message, using the `_SignedPreservingBytesGenerator`. """
+    with BytesIO() as fp:
+        _SignedPreservingBytesGenerator(fp, policy=policy).flatten(msg, linesep="\r\n")
+        return fp.getvalue()
 
 
 class AutoSubmittedHeader:

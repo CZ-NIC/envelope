@@ -432,12 +432,14 @@ def test_long_attachment_filename_corrected_on_output(signed_attachment, render)
     assert verify_inline_message(signed_attachment, render(signed_attachment))
 
 
-def test_long_attachment_filename_corrected_on_send(signed_attachment, monkeypatch):
-    verified = []
+def test_long_attachment_filename_corrected_on_smtp_send(signed_attachment, smtp_server):
+    signed_attachment.smtp("localhost", smtp_server.port).send()
+    [received] = smtp_server.messages
+    assert verify_inline_message(signed_attachment, received.content.decode().replace("\r\n", "\n"))
 
-    def check_sending(self, email, **_):
-        verified.append(verify_inline_message(signed_attachment, signed_attachment.as_message().as_string()))
 
-    monkeypatch.setattr(SMTPHandler, "send_message", check_sending)
-    signed_attachment.send()
-    assert verified == [True]
+def test_long_attachment_filename_corrected_on_sendmail(signed_attachment, monkeypatch):
+    sent = []
+    monkeypatch.setattr("envelope._delivery.subprocess.run", lambda args, input, **_: sent.append(input))
+    signed_attachment.sendmail().send()
+    assert verify_inline_message(signed_attachment, sent[0])
