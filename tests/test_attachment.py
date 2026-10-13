@@ -1,6 +1,11 @@
-from envelope import Envelope
+from envelope import Attachment, Envelope
 from envelope.constants import HTML, PLAIN
 from helpers import IMAGE_FILE, TEXT_ATTACHMENT, assert_lines
+
+
+def test_attachment_exported():
+    """ Attachment is returned by the public .attachments(), so it is importable from the package for type hints. """
+    assert isinstance(Envelope().attach(b"data", name="file.txt").attachments()[0], Attachment)
 
 
 def test_casting():

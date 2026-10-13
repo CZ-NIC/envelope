@@ -1,6 +1,7 @@
 # CHANGELOG
 
 ## Unreleased
+- enh: `Attachment` importable from the package (`from envelope import Attachment`)
 - fix (smime): signing + encrypting crashed when the key and the certificate were in a single file, or with an invalid key
 - fix: `Address.is_valid(check_mx=True)` never performed the MX check
 - docs: read receipt example (Disposition-Notification-To header)

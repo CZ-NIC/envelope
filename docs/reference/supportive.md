@@ -6,7 +6,7 @@
       * **.attachments(name=None, inline=None)**
         * **name** (str): The name of the only desired attachment to be returned.
         * **inline** (bool): Filter inline/enclosed attachments only.
-        * *Attachment* object has the attributes *.name* file name, *.mimetype*, *.data* raw data
+        * *Attachment* object (importable for type hints: `from envelope import Attachment`) has the attributes *.name* file name, *.mimetype*, *.data* raw data, *.inline*
             * if casted to *str*/*bytes*, its raw *.data* are returned
   * **.copy()**: Return deep copy of the instance to be used independently.
     ```python3
