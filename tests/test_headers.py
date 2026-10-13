@@ -48,11 +48,12 @@ def test_specific_header_manipulation():
     assert e.header("cc") == [id3]
 
 
-@pytest.mark.xfail(strict=True, reason="header() drops the value of a specific header when replace=True (edvard-hub#188)")
 def test_specific_header_replace_with_value():
     e = Envelope(MESSAGE).to("person@example.com")
     e.header("To", "person2@example.com", replace=True)
     assert e.to() == ["person2@example.com"]
+    assert e.header("Subject", "first").header("Subject", "second", replace=True).subject() == "second"
+    assert e.header("From", "a@example.com").header("From", "b@example.com", replace=True).from_() == "b@example.com"
 
 
 def test_date_header_can_be_disabled():

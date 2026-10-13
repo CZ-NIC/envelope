@@ -442,7 +442,7 @@ class Envelope(_AddressingMixin, _ContentMixin, _SigningMixin, _EncryptionMixin,
               From returns an `Address`, Subject returns a `str` (instead of the `str|list|None` of generic headers)
             * setting To/Cc/Bcc/Reply-To appends to the current addresses, setting From/Subject overwrites it
             * an RFC 2047 encoded value (ex: `=?UTF-8?Q?...?=`) is decoded before it is passed to the method
-            * replace=True only clears the field, the `val` passed along is currently ignored (edvard-hub#188)
+            * replace=True clears the field first, then sets the `val` if given
         """
 
         # lowercase header to its method name
@@ -456,7 +456,8 @@ class Envelope(_AddressingMixin, _ContentMixin, _SigningMixin, _EncryptionMixin,
             if replace:
                 attr = getattr(self, self._get_private_var(k))
                 setattr(self, self._get_private_var(k), None if type(attr) is str else [])
-                return self
+                if val is None:
+                    return self
             # Xif type(val) is str:  # None has to stay None
             # We have to type the value to `str` due to this strange fact:
             # `key = "subject"; email["Subject"] = policy.header_store_parse(key, "hello")[1];`
