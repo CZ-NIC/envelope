@@ -6,6 +6,7 @@ from smtplib import SMTP, SMTP_SSL, SMTPAuthenticationError, SMTPException, SMTP
 import ssl
 from typing import Dict
 from socket import gaierror, timeout as timeout_exc
+from threading import RLock
 from time import sleep
 
 from .utils import message_as_smtp_bytes
@@ -18,6 +19,8 @@ class SMTPHandler:
     # cache of different smtp connections.
     # Usecase: user passes smtp server info in dict in a loop but we do want it connects just once
     _instances: Dict[str, SMTP] = {}
+    # A cached connection is shared by every thread sending through the same server: one thread at a time.
+    _locks: Dict[str, RLock] = {}
 
     def __init__(self, host="localhost", port=25, user=None, password=None, security=None, timeout=3, attempts=3,
                  delay=3, local_hostname=None):
@@ -97,7 +100,15 @@ class SMTPHandler:
             mail_options = ("SMTPUTF8", "BODY=8BITMIME")
         return smtp.sendmail(from_addr, to_addrs, message_as_smtp_bytes(msg, policy), mail_options)
 
+    @classmethod
+    def _lock(cls, key) -> RLock:
+        return cls._locks.setdefault(key, RLock())
+
     def send_message(self, email, from_addr, to_addrs):
+        with self._lock(self.key):
+            return self._send_with_attempts(email, from_addr, to_addrs)
+
+    def _send_with_attempts(self, email, from_addr, to_addrs):
         for attempt in range(self.attempts):  # an attempt to reconnect possible
             try:
                 if self.key not in self._instances:
@@ -147,11 +158,13 @@ class SMTPHandler:
             logger.debug(f"SMTP quit failed, connection dropped anyway. {e}")
 
     def quit(self):
-        if self.key in self._instances:
-            self._quit(self._instances.pop(self.key))
+        with self._lock(self.key):
+            if self.key in self._instances:
+                self._quit(self._instances.pop(self.key))
 
     @classmethod
     def quit_all(cls):
-        instances = list(cls._instances.values())
-        cls._instances.clear()
-        [cls._quit(c) for c in instances]
+        for key in list(cls._instances):
+            with cls._lock(key):  # do not close a connection another thread is just sending through
+                if key in cls._instances:
+                    cls._quit(cls._instances.pop(key))

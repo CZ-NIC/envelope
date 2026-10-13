@@ -1,3 +1,6 @@
+import time
+from concurrent.futures import ThreadPoolExecutor
+
 import pytest
 
 from envelope import Envelope
@@ -226,3 +229,32 @@ def test_send_internationalized_address(monkeypatch):
     assert received.mail_from == "odesílatel@příklad.cz"
     assert "SMTPUTF8" in received.mail_options
 
+
+
+def test_send_from_threads_does_not_share_connection_concurrently(monkeypatch):
+    """ Threads sending through the same SMTP config get the same cached connection, one at a time. """
+    class Connection:
+        busy = False
+        sent = 0
+
+        def ehlo_or_helo_if_needed(self):
+            pass
+
+        def sendmail(self, *args, **kwargs):
+            assert not self.busy, "two threads are using one SMTP connection at once"
+            self.busy = True
+            time.sleep(0.01)
+            self.busy = False
+            self.sent += 1
+            return {}
+
+    connection = Connection()
+    monkeypatch.setattr(SMTPHandler, "_instances", {})
+    monkeypatch.setattr(SMTPHandler, "connect", lambda self: connection)
+
+    def send(i):
+        return Envelope(f"message {i}").from_("sender@example.com").to("to@example.com").smtp(attempts=1).send()
+
+    with ThreadPoolExecutor(8) as pool:
+        assert all(pool.map(send, range(16)))
+    assert connection.sent == 16

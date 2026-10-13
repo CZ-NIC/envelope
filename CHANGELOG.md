@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## Unreleased
+- fix (smtp): sending from multiple threads through the same SMTP server no longer uses one cached connection concurrently (ex: threaded web server, `ThreadPoolExecutor`)
+
 ## 2.4.3 (2026-10-13)
 - chore (smime): M2Crypto is no longer used; the `smime` extra requires cryptography>=44. `Envelope.load()` decrypts AES-CBC S/MIME only — legacy 3DES messages (old Outlook, M2Crypto) raise `Cannot decrypt S/MIME: …`
 - fix (gpg): sending via sendmail broke the signature of messages with long attachment file names #19
