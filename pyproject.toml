@@ -17,7 +17,7 @@ python = ">=3.10"
 python-magic = "*"
 python-gnupg = ">=0.5"
 py3-validate-email = "*"
-cryptography = { version = ">=43", optional = true }
+cryptography = { version = ">=44", optional = true }
 
 [tool.poetry.extras]
 smime = ["cryptography"]
@@ -32,8 +32,7 @@ test = [
     "pytest-cov",
     "syrupy",
     "aiosmtpd",
-    "cryptography>=43",
-    "M2Crypto",
+    "cryptography>=44",
 ]
 
 [tool.pytest.ini_options]
@@ -41,14 +40,11 @@ testpaths = ["tests"]
 pythonpath = ["tests"]
 markers = [
     "gpg: needs the gpg binary",
-    "smime: needs the S/MIME extras (cryptography, M2Crypto)",
+    "smime: needs the S/MIME extra (cryptography)",
     "cli: exercises the command line interface",
 ]
 addopts = ["-ra", "--strict-markers"]
-filterwarnings = [
-    "error",
-    "ignore:distutils Version classes are deprecated:DeprecationWarning:M2Crypto",
-]
+filterwarnings = ["error"]
 
 # Releasing: see Makefile. The topmost "## Unreleased" CHANGELOG.md heading is required, a bump dates it.
 [tool.bumpversion]

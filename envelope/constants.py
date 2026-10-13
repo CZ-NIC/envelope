@@ -5,7 +5,7 @@ try:
 except ImportError:
     gnupg = None
 
-smime_import_error = "Cannot import cryptography. Run: `sudo apt install cryptography`"
+smime_import_error = "Cannot import cryptography, needed for S/MIME. Run: `pip install envelope[smime]`"
 CRLF = '\r\n'
 AUTO = "auto"
 PLAIN = "plain" # XX allow text/plain too?

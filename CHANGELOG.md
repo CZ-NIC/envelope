@@ -8,6 +8,7 @@
 - fix: `Address.is_valid(check_mx=True)` never performed the MX check
 - fix: `header("To", val, replace=True)` (and Cc, Bcc, Reply-To, From, Subject) ignored the `val`
 - fix (smime): encrypting with the sender's `cert` set encrypted for the cert only, ignoring the recipients
+- fix (smime): S/MIME auto-detection (`.signature(key)`/`.encryption(cert)` without `.smime()`) and decrypting in `Envelope.load()` work with the `smime` extra alone — M2Crypto is no longer used; requires cryptography>=44. Decrypting supports AES-CBC only (legacy 3DES S/MIME no longer decrypts).
 - fix (smime): rendering a message signed with a passphrase twice crashed (ex: changing the subject after `str(e)`)
 
 ## 2.4.2 (2026-10-05)

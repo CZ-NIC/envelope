@@ -2,9 +2,11 @@ import logging
 from email import header, message_from_string, message_from_bytes
 from email.message import Message
 from os import environ
+from pathlib import Path
 from typing import List, TYPE_CHECKING
 
 from .constants import FEEDBACK_REPORT, smime_import_error, gnupg, PLAIN, HTML, SAFE_LOCALE
+from .utils import assure_fetched
 
 if TYPE_CHECKING:
     from .envelope import Envelope
@@ -115,18 +117,28 @@ class Parser:
             raise ValueError(f"Cannot decrypt GPG data. " + output.status)
 
     def smime_decrypt(self, data):
-        key = self.key
-        cert = self.cert
+        """ :return: Decrypted bytes or False if the key does not fit. """
         try:
-            from M2Crypto import BIO, Rand, SMIME, X509, EVP  # we save up to 30 - 120 ms to load it here
+            from cryptography.exceptions import UnsupportedAlgorithm
+            from cryptography.hazmat.primitives.serialization import load_pem_private_key, pkcs7
+            from cryptography.x509 import load_pem_x509_certificate
         except ImportError:
             raise ImportError(smime_import_error)
 
-        # Load private key and cert and decrypt
-        s = SMIME.SMIME()
-        s.load_key(key, cert)
-        p7, data = SMIME.smime_load_pkcs7_bio(BIO.MemoryBuffer(bytes(data)))
+        # Load private key and cert (the key file may contain the cert too) and decrypt
+        key = self._read_pem(self.key)
+        cert = self._read_pem(self.cert) if self.cert else key
         try:
-            return s.decrypt(p7)
-        except SMIME.PKCS7_Error:
+            return pkcs7.pkcs7_decrypt_smime(bytes(data), load_pem_x509_certificate(cert),
+                                             load_pem_private_key(key, password=None), [])
+        except UnsupportedAlgorithm as e:  # ex: legacy 3DES
+            raise ValueError(f"Cannot decrypt S/MIME: {e}")
+        except ValueError:
             return False
+
+    @staticmethod
+    def _read_pem(contents) -> bytes:
+        """ A str is a file path unless it holds PEM contents. """
+        if isinstance(contents, str) and "-----BEGIN" not in contents:
+            contents = Path(contents)
+        return assure_fetched(contents, bytes)

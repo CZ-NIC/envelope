@@ -93,17 +93,7 @@ class _SigningMixin:
             if self._gpg is not None:
                 gpg_on = bool(self._gpg)
             else:
-                try:  # check whether we have SMIME-loadable contents
-                    from M2Crypto import X509, EVP  # we save up to 30 - 120 ms to load it here
-                    if sign:
-                        EVP.load_key_string(sign)
-                        gpg_on = False
-                    elif encrypt:
-                        sk = X509.X509_Stack()
-                        [sk.push(X509.load_cert_string(e)) for e in assure_list(encrypt)]
-                        gpg_on = False
-                except (ImportError, TypeError, ValueError):
-                    gpg_on = True
+                gpg_on = not self._is_smime_loadable(encrypt, sign)
 
             if gpg_on:
                 self._gnupg = gnupg.GPG(gnupghome=self._get_gnupg_home(), options=["--trust-model=always"],
@@ -216,6 +206,27 @@ class _SigningMixin:
             fp.write(signature)
             fp.seek(0)
             return bool(self._gnupg.verify_data(fp.name, data))
+
+    def _is_smime_loadable(self, encrypt: Fetched | list[Fetched], sign: Fetched) -> bool:
+        """ Whether the contents to sign with is a PEM private key, or the contents to encrypt with are certificates. """
+        try:
+            load_pem_private_key, _, _, load_pem_x509_certificate, *_ = self._import_cryptoraphy_modules()
+        except ImportError:
+            # Do not let an S/MIME key or certificate be misinterpreted as a GPG key without the S/MIME extra.
+            if any(isinstance(c, bytes) and re.search(rb"-----BEGIN [A-Z ]*(PRIVATE KEY|CERTIFICATE)-----", c)
+                   for c in [sign, *assure_list(encrypt)]):
+                raise
+            return False
+        try:
+            if sign:
+                load_pem_private_key(sign, password=None)
+            else:
+                [load_pem_x509_certificate(e) for e in assure_list(encrypt)]
+        except TypeError:  # not bytes (ex: True, a fingerprint), or a key protected by a passphrase not passed here
+            return bool(sign) and isinstance(sign, bytes)
+        except ValueError:
+            return False
+        return True
 
     def _import_cryptoraphy_modules(self):
         try:

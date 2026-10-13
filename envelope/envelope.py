@@ -24,7 +24,7 @@ from .smtp_handler import SMTPHandler
 from .utils import AutoSubmittedHeader, assure_fetched, get_mimetype, message_as_string
 
 
-__doc__ = """Quick layer over python-gnupg, M2Crypto, smtplib, magic and email handling packages.
+__doc__ = """Quick layer over python-gnupg, cryptography, smtplib, magic and email handling packages.
 Their common use cases merged into a single function. Want to sign a text and tired of forgetting how to do it right?
 You do not need to know everything about GPG or S/MIME, you do not have to bother with importing keys.
 Do not hassle with reconnecting to an SMTP server. Do not study various headers meanings

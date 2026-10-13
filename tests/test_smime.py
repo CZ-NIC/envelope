@@ -38,14 +38,12 @@ Chained certificates:
 """
 import os
 import re
+import sys
 from base64 import b64decode, b64encode
 
 import pytest
 
-pytest.importorskip("M2Crypto")
 pytest.importorskip("cryptography")
-
-from M2Crypto import BIO, SMIME  # noqa: E402
 
 from envelope import Envelope  # noqa: E402
 from envelope.parser import Parser  # noqa: E402
@@ -209,8 +207,25 @@ def test_detection_implicit_smime_encrypt():
                  min_lines=10)
 
 
+@pytest.mark.parametrize("ciphering", [{"sign": SMIME_KEY, "cert": SMIME_CERT},
+                                       {"sign": KEY_CERT_TOGETHER_PASSPHRASE, "passphrase": GPG_PASSPHRASE},
+                                       {"encrypt": SMIME_CERT}])
+def test_detection_implicit_smime_without_m2crypto(monkeypatch, ciphering):
+    """ S/MIME is detected with the `smime` extra only (M2Crypto used to be needed, otherwise GPG was tried). """
+    monkeypatch.setitem(sys.modules, "M2Crypto", None)
+    e = Envelope(MESSAGE, **ciphering).send(False)
+    assert bool(e) is True
+    assert ("smime.p7m" if "encrypt" in ciphering else "smime.p7s") in str(e)
+
+
+def test_detection_implicit_smime_without_cryptography(monkeypatch):
+    """ Without the `smime` extra, a certificate must not be passed to GPG. """
+    monkeypatch.setitem(sys.modules, "cryptography.hazmat.primitives.serialization", None)
+    with pytest.raises(ImportError, match="smime"):
+        Envelope(MESSAGE).encryption(SMIME_CERT).send(False)
+
+
 def test_multiple_recipients():
-    """ The output is generated using pyca cryptography and decrypted with M2Crypto. """
     # encrypt for both keys
     output = (Envelope(MESSAGE)
               .smime()
@@ -270,8 +285,17 @@ def test_sign_encrypt_invalid_key():
 
 
 def test_decrypt():
-    e = Envelope.load(path=str(EML_DIR / "smime_encrypt.eml"), key=str(SMIME_KEY), cert=str(SMIME_CERT))
+    """ The fixture was encrypted by `openssl smime -encrypt -aes256`. """
+    e = Envelope.load(path=str(EML_DIR / "smime_encrypt_aes.eml"), key=str(SMIME_KEY), cert=str(SMIME_CERT))
     assert e.message() == MESSAGE
+    assert e.subject() == "my message"
+
+
+def test_decrypt_legacy_3des(caplog):
+    """ pyca cryptography decrypts AES-CBC only; legacy 3DES is reported (M2Crypto used to decrypt it). """
+    e = Envelope.load(path=str(EML_DIR / "smime_encrypt.eml"), key=str(SMIME_KEY), cert=str(SMIME_CERT))
+    assert "Cannot decrypt S/MIME" in caplog.text
+    assert e.message() != MESSAGE
 
 
 def test_decrypt_attachments():
@@ -285,11 +309,7 @@ def test_decrypt_attachments():
                  .attach(IMAGE_FILE, inline=True)
                  .as_message().as_string())
 
-    # load the private key and cert and decrypt
-    s = SMIME.SMIME()
-    s.load_key(str(SMIME_KEY), str(SMIME_CERT))
-    p7, _ = SMIME.smime_load_pkcs7_bio(BIO.MemoryBuffer(encrypted.encode("utf-8")))
-    decrypted = s.decrypt(p7).decode("utf-8")
+    decrypted = decrypt(SMIME_KEY, SMIME_CERT, encrypted.encode("utf-8")).decode("utf-8")
 
     assert re.search(body, decrypted), decrypted
 
