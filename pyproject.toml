@@ -46,7 +46,7 @@ markers = [
 addopts = ["-ra", "--strict-markers"]
 filterwarnings = ["error"]
 
-# Releasing: see Makefile. The topmost "## Unreleased" CHANGELOG.md heading is required, a bump dates it.
+# Releasing: `make release PART=patch` (see Makefile). The topmost "## Unreleased" CHANGELOG.md heading is required, a bump dates it.
 [tool.bumpversion]
 current_version = "2.4.3"
 commit = true

@@ -1,27 +1,12 @@
-# Releasing: write the changes under a "## Unreleased" heading in CHANGELOG.md, then either
-#   make release-with-commit PART=patch|minor|major   bump, commit "chore(release): X", tag, push both
-#   make bump PART=…   only edit the files, commit them yourself, then: make release   check, tag, push the tag
-# Bump, commit and tag: [tool.bumpversion] in pyproject.toml. The tag push triggers CI: tests, then PyPI + GitHub release.
-.PHONY: release-with-commit bump release
-BMV := .release-venv/bin/bump-my-version
-V = $$($(BMV) show current_version)
-# Release exactly what is on origin/main: clean tree, on main, nothing unpushed, CI passed (waits for a run in progress).
-PREFLIGHT = git diff --quiet HEAD && test "$$(git branch --show-current)" = main && git fetch -q origin main && test "$$(git rev-parse HEAD)" = "$$(git rev-parse origin/main)" && scripts/wait-ci.sh run-unittest.yml
+# make release PART=patch|minor|major   bump, commit, tag, push both (after CI passed on main)
+# make release                          tag a bump committed already, push the tag
+# The logic lives in gh-safe-release (thin layer over bump-my-version), installed once per machine for all projects.
+# Upgrade: $(TOOL)/bin/pip install -U bump-my-version-gh-safe-release
+TOOL := $(HOME)/.local/share/gh-safe-release
+.PHONY: release
 
-release-with-commit: $(BMV)
-	$(PREFLIGHT)
-	$(BMV) bump $(PART)
-	git push --atomic origin main $(V)
+release: $(TOOL)/bin/gh-safe-release
+	$< $(PART)
 
-bump: $(BMV)
-	$(BMV) bump $(PART) --no-commit --no-tag --allow-dirty
-
-## Tag a clean, pushed commit whose pyproject and CHANGELOG hold the current version.
-release: $(BMV)
-	$(PREFLIGHT)
-	grep -q '^version = "'$(V)'"' pyproject.toml && grep -q '^## '$(V)' (' CHANGELOG.md
-	git tag -a $(V) -m $(V)
-	git push origin $(V)
-
-$(BMV):
-	python3 -m venv .release-venv && .release-venv/bin/pip install -q "bump-my-version>=1.3"
+$(TOOL)/bin/gh-safe-release:
+	python3 -m venv $(TOOL) && $(TOOL)/bin/pip install -q bump-my-version-gh-safe-release
