@@ -6,7 +6,11 @@ on:
       - '[0-9]+\.[0-9]+\.[0-9]+-?rc\.?[0-9]+'
 
 jobs:
+  # Publish only what passes the suite on the very tagged commit (the release commit itself never had a CI run before).
+  tests:
+    uses: ./.github/workflows/run-unittest.yml
   pypi:
+    needs: tests
     runs-on: ubuntu-latest
     permissions:
       contents: write  # create the GitHub release

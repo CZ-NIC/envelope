@@ -1,5 +1,8 @@
 name: tests
-on: [push]
+on:
+  push:
+    branches: ['**']  # tags run the suite through python-publish.yml, which waits for it
+  workflow_call:
 jobs:
   tests:
     runs-on: ubuntu-latest

@@ -1,12 +1,12 @@
 # Releasing: write the changes under a "## Unreleased" heading in CHANGELOG.md, then either
 #   make release-with-commit PART=patch|minor|major   bump, commit "chore(release): X", tag, push both
 #   make bump PART=…   only edit the files, commit them yourself, then: make release   check, tag, push the tag
-# Bump, commit and tag: [tool.bumpversion] in pyproject.toml. The tag push triggers CI: PyPI + GitHub release.
+# Bump, commit and tag: [tool.bumpversion] in pyproject.toml. The tag push triggers CI: tests, then PyPI + GitHub release.
 .PHONY: release-with-commit bump release
 BMV := .release-venv/bin/bump-my-version
 V = $$($(BMV) show current_version)
-# Release exactly what is on origin/main: clean tree, on main, nothing unpushed.
-PREFLIGHT = git diff --quiet HEAD && test "$$(git branch --show-current)" = main && git fetch -q origin main && test "$$(git rev-parse HEAD)" = "$$(git rev-parse origin/main)"
+# Release exactly what is on origin/main: clean tree, on main, nothing unpushed, CI passed (waits for a run in progress).
+PREFLIGHT = git diff --quiet HEAD && test "$$(git branch --show-current)" = main && git fetch -q origin main && test "$$(git rev-parse HEAD)" = "$$(git rev-parse origin/main)" && scripts/wait-ci.sh run-unittest.yml
 
 release-with-commit: $(BMV)
 	$(PREFLIGHT)
