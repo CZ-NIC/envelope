@@ -214,7 +214,9 @@ class Address(str):
         if not validate_email(self.address, check_dns=False, check_smtp=False, check_blacklist=False):
             logger.warning(f"Address format invalid: '{self}'")
             return False
-        elif check_mx and print(f"Verifying {self}...") and not validate_email(self.address, check_dns=True):
-            logger.warning(f"MX check failed for: '{self}'")
-            return False
+        elif check_mx:
+            print(f"Verifying {self}...")
+            if not validate_email(self.address, check_dns=True, check_smtp=False, check_blacklist=False):
+                logger.warning(f"MX check failed for: '{self}'")
+                return False
         return True

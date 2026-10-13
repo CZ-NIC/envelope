@@ -279,6 +279,22 @@ def test_loaded_invalid_contact():
     assert not e4.from_().is_valid()
 
 
+def test_is_valid_check_mx(monkeypatch):
+    """ check_mx=True really asks DNS (it used to be short-circuited by a print() returning None). """
+    calls = []
+
+    def fake_validate_email(address, check_dns, **_):
+        calls.append(check_dns)
+        return not check_dns  # format passes, DNS check fails
+
+    monkeypatch.setattr("envelope.address.validate_email", fake_validate_email)
+    address = Address("test@example.com")
+    assert address.is_valid()
+    assert calls == [False]
+    assert not address.is_valid(check_mx=True)
+    assert calls == [False, False, True]
+
+
 @pytest.mark.parametrize(("value", "expected"), [
     (IDENTITY_1, [IDENTITY_1]),
     ((IDENTITY_1,), [IDENTITY_1]),
