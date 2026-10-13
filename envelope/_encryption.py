@@ -122,98 +122,34 @@ class _EncryptionMixin:
         return set(x.address for x in self._to + self._cc + self._bcc + [x for x in [self._from] if x])
 
     def _smime_sign_encrypt(self, email, sign, encrypt):
-        load_pem_private_key, pkcs7, load_pem_x509_certificates, load_pem_x509_certificate, hashes, serialization = self._import_cryptoraphy_modules()
-
-        if self._cert:
-            sender_certs = self._cert
-        else:
-            # certificate is in sign (--sign_path file), it is key-cert-together.pem
-            sender_certs = sign
-
-        try:
-            sender_certs = load_pem_x509_certificates(sender_certs)
-        except ValueError as e:
-            logger.warning(f"Certificate not found: {e}")
-        if len(sender_certs) == 0:
-            raise ValueError("Certificate not found")
-
-        # get senders private key for signing
-        try:
-            # sign file has certificate
-            sender_key = load_pem_private_key(sign, password=self._passphrase)
-        except ValueError as e:
-            print(f"Error loading private key: {e}")
-        except TypeError as t:
-            # TODO: do something more usefull
-            print(f"Password not needed")
-
-        # sign the message first
-        signature_builder = pkcs7.PKCS7SignatureBuilder().set_data(email)
-        signature_builder = signature_builder.add_signer(sender_certs[0], sender_key, hash_algorithm=hashes.SHA256())
-        # add the whole certificate chain
-        for cert in sender_certs[1:]:
-            signature_builder = signature_builder.add_certificate(cert)
-        signed_email = signature_builder.sign(serialization.Encoding.SMIME, [pkcs7.PKCS7Options.DetachedSignature])
-
-        # get recipent's certificate for encryption
-        if self._cert:
-            pubkey = self._cert
-        else:
-            pubkey = encrypt
-
-        certificates = encrypt
-
-        recipient_certs = []
-        for cert in certificates:
-            try:
-                c = load_pem_x509_certificate(cert)
-            except ValueError as e:
-                raise ValueError("failed to load certificate from file")
-
-            recipient_certs.append(c)
-        try:
-            pubkey = load_pem_x509_certificate(pubkey)
-        except ValueError as e:
-            raise ValueError("failed to load certificate from file")
-
-        # encrypt signed email with recipient's cert
-        envelope_builder = pkcs7.PKCS7EnvelopeBuilder().set_data(signed_email)
-        envelope_builder = envelope_builder.add_recipient(pubkey)
-
-        for recip in recipient_certs:
-            envelope_builder = envelope_builder.add_recipient(recip)
-
-        options = [pkcs7.PKCS7Options.Binary]
-        encrypted_email = envelope_builder.encrypt(serialization.Encoding.SMIME, options)
-        return encrypted_email
+        """ Sign, then encrypt for the recipients and for the sender (to be able to read their own message). """
+        signer = self._smime_load_signer(sign)
+        signed_email = self._smime_sign_only(email, sign, signer)
+        return self._smime_encrypt(signed_email, [signer[0][0]] + self._smime_load_recipients(encrypt))
 
     def _smime_encrypt_only(self, email, encrypt):
-
-        _, pkcs7, _, load_pem_x509_certificate, _, serialization = self._import_cryptoraphy_modules()
-
         if self._cert:
             certificates = [self._cert]
         else:
             certificates = encrypt
+        return self._smime_encrypt(email, self._smime_load_recipients(certificates))
 
+    def _smime_load_recipients(self, certificates):
+        load_pem_x509_certificate = self._import_cryptoraphy_modules()[3]
         recipient_certs = []
-        for cert in certificates:
+        for cert in assure_list(certificates):
             try:
-                c = load_pem_x509_certificate(cert)
-            except ValueError as e:
+                recipient_certs.append(load_pem_x509_certificate(cert))
+            except ValueError:
                 raise ValueError("failed to load certificate from file")
+        return recipient_certs
 
-            recipient_certs.append(c)
-
-        options = [pkcs7.PKCS7Options.Binary]
-        encrypted_email = pkcs7.PKCS7EnvelopeBuilder().set_data(email)
-
+    def _smime_encrypt(self, email, recipient_certs):
+        _, pkcs7, _, _, _, serialization = self._import_cryptoraphy_modules()
+        envelope_builder = pkcs7.PKCS7EnvelopeBuilder().set_data(email)
         for recip in recipient_certs:
-            encrypted_email = encrypted_email.add_recipient(recip)
-
-        encrypted_email = encrypted_email.encrypt(serialization.Encoding.SMIME, options)
-
-        return encrypted_email
+            envelope_builder = envelope_builder.add_recipient(recip)
+        return envelope_builder.encrypt(serialization.Encoding.SMIME, [pkcs7.PKCS7Options.Binary])
 
     def _encrypt_smime_now(self, email, sign, encrypt: Union[None, bool, bytes, list[bytes]]):
         """

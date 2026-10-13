@@ -224,6 +224,29 @@ def test_multiple_recipients():
     assert re.search(MESSAGE, decrypt(SMIME_KEY, SMIME_CERT, output).decode("utf-8"))
 
 
+@pytest.mark.parametrize("signer", [
+    {"key": KEY_CERT_TOGETHER},  # used to crash: the certificate was not taken from the key file
+    {"key": SMIME_KEY, "cert": SMIME_CERT},
+])
+def test_sign_encrypt(signer):
+    """ Signed and encrypted both for the recipient and for the sender. """
+    output = (Envelope(MESSAGE)
+              .smime()
+              .subject("my message")
+              .signature(**signer)
+              .encrypt([IDENTITY_CERT]))
+    for key, cert in ((IDENTITY_KEY, IDENTITY_CERT), (SMIME_KEY, SMIME_CERT)):
+        decrypted = decrypt(key, cert, output)
+        assert decrypted, f"{cert.name} cannot decrypt the message"
+        assert re.search(MESSAGE, decrypted.decode("utf-8"))
+        assert b'Content-Disposition: attachment; filename="smime.p7s"' in decrypted
+
+
+def test_sign_encrypt_invalid_key():
+    with pytest.raises(ValueError, match="Error loading private key"):
+        Envelope(MESSAGE).smime().signature(IDENTITY_CERT).encrypt([IDENTITY_CERT])
+
+
 def test_decrypt():
     e = Envelope.load(path=str(EML_DIR / "smime_encrypt.eml"), key=str(SMIME_KEY), cert=str(SMIME_CERT))
     assert e.message() == MESSAGE

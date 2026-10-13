@@ -226,8 +226,9 @@ class _SigningMixin:
         except ImportError:
             raise ImportError(smime_import_error)
 
-    def _smime_sign_only(self, email, sign):
-        load_pem_private_key, pkcs7, load_pem_x509_certificates, _, hashes, serialization = self._import_cryptoraphy_modules()
+    def _smime_load_signer(self, sign):
+        """ :return: (certificate chain, private key) of the sender """
+        load_pem_private_key, _, load_pem_x509_certificates, *_ = self._import_cryptoraphy_modules()
         # get sender's cert
         # cert and private key can be one file
 
@@ -253,10 +254,16 @@ class _SigningMixin:
             key = load_pem_private_key(sign, password=self._passphrase)
         except ValueError as e:
             raise ValueError(f"Error loading private key: {e}")
-        except TypeError as t:
-            raise TypeError(f"Wrong passphrase or passphrase is not needed")
-        except UnboundLocalError as u:
-            return False
+        except TypeError:
+            raise TypeError("Wrong passphrase or passphrase is not needed")
+        return certs, key
+
+    def _smime_sign_only(self, email, sign, signer=None):
+        """
+        :param signer: (certificate chain, private key) if already loaded by `_smime_load_signer`
+        """
+        _, pkcs7, _, _, hashes, serialization = self._import_cryptoraphy_modules()
+        certs, key = signer or self._smime_load_signer(sign)
 
         options = [pkcs7.PKCS7Options.DetachedSignature]
 
