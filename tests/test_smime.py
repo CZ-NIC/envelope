@@ -110,6 +110,14 @@ def test_sign_key_cert_together_passphrase():
                  SIGNATURE_DISPOSITION, SIGNATURE_START, min_lines=10)
 
 
+def test_sign_passphrase_rendered_twice():
+    """ The passphrase used to be encoded in place, so the second render crashed. """
+    e = Envelope(MESSAGE).smime().subject("a").signature(KEY_CERT_TOGETHER_PASSPHRASE, passphrase=GPG_PASSPHRASE)
+    str(e)
+    e.subject("b")
+    assert "Subject: b" in str(e)
+
+
 def test_chained_sign(tmp_path):
     signed = (Envelope(MESSAGE)
               .smime()
@@ -220,6 +228,20 @@ def test_multiple_recipients():
               .reply_to("test-reply@example.com")
               .subject("my message")
               .encrypt([SMIME_CERT]))
+    assert not decrypt(IDENTITY_KEY, IDENTITY_CERT, output)
+    assert re.search(MESSAGE, decrypt(SMIME_KEY, SMIME_CERT, output).decode("utf-8"))
+
+
+def test_encrypt_with_cert():
+    """ Encrypted both for the recipients and for the sender's cert (that used to override the recipients). """
+    output = Envelope(MESSAGE, cert=SMIME_CERT).smime().subject("my message").encrypt([IDENTITY_CERT])
+    for key, cert in ((IDENTITY_KEY, IDENTITY_CERT), (SMIME_KEY, SMIME_CERT)):
+        decrypted = decrypt(key, cert, output)
+        assert decrypted, f"{cert.name} cannot decrypt the message"
+        assert re.search(MESSAGE, decrypted.decode("utf-8"))
+
+    # without explicit recipients, encrypted for the cert only
+    output = Envelope(MESSAGE, cert=SMIME_CERT).smime().subject("my message").encrypt()
     assert not decrypt(IDENTITY_KEY, IDENTITY_CERT, output)
     assert re.search(MESSAGE, decrypt(SMIME_KEY, SMIME_CERT, output).decode("utf-8"))
 

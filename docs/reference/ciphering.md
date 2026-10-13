@@ -50,7 +50,7 @@ You may bypass the auto-detection and pick the method yourself:
             * e-mail address of the identity whose key is to be encrypted with
             * [Any attainable contents](https://cz-nic.github.io/envelope/reference/overview/#any-attainable-contents) with the key to be encrypted with (will be imported into keyring)
             * an iterable with the identities specified by key ID / fingerprint / e-mail address / raw key data
-        * S/MIME [any attainable contents](https://cz-nic.github.io/envelope/reference/overview/#any-attainable-contents) with a certificate to be encrypted with or more in an iterable
+        * S/MIME [any attainable contents](https://cz-nic.github.io/envelope/reference/overview/#any-attainable-contents) with a certificate to be encrypted with or more in an iterable. If the sender's `cert` is set, the message is encrypted for it too (so that the sender can read their own message).
     * **--encrypt [key]**: (for `key` see above) Put 0/false/no to disable `encrypt-path`.
     * **--encrypt-path** *(CLI only)*: Filename(s) with the recipient\'s public key(s). (Alternative to the `encrypt` parameter.)
     * **.encrypt(key=True, sign=, key_path=)**:

@@ -251,7 +251,8 @@ class _SigningMixin:
         # get senders private key for signing
         try:
             # sign file has certificate
-            key = load_pem_private_key(sign, password=self._passphrase)
+            password = self._passphrase.encode("utf-8") if isinstance(self._passphrase, str) else self._passphrase
+            key = load_pem_private_key(sign, password=password)
         except ValueError as e:
             raise ValueError(f"Error loading private key: {e}")
         except TypeError:

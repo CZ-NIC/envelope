@@ -128,10 +128,8 @@ class _EncryptionMixin:
         return self._smime_encrypt(signed_email, [signer[0][0]] + self._smime_load_recipients(encrypt))
 
     def _smime_encrypt_only(self, email, encrypt):
-        if self._cert:
-            certificates = [self._cert]
-        else:
-            certificates = encrypt
+        """ Encrypt for the recipients and for the sender's certificate, if set (to be able to read their own message). """
+        certificates = [c for c in assure_list(encrypt) if c is not True] + ([self._cert] if self._cert else [])
         return self._smime_encrypt(email, self._smime_load_recipients(certificates))
 
     def _smime_load_recipients(self, certificates):
@@ -156,10 +154,6 @@ class _EncryptionMixin:
 
         :type encrypt: Can be None, False, bytes or list[bytes]
         """
-
-        # passphrase has to be bytes
-        if (self._passphrase is not None):
-            self._passphrase = self._passphrase.encode('utf-8')
 
         if sign is not None and type(sign) != bool:
             sign = assure_fetched(sign, bytes)
