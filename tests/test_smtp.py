@@ -162,6 +162,24 @@ def test_send_fails_when_every_attempt_times_out(monkeypatch, caplog):
     assert any("timed out 2 times" in m for m in caplog.messages)
 
 
+def test_send_retries_with_exponential_backoff(monkeypatch):
+    """ Delays between attempts double, capped; no needless sleep after the last attempt. """
+    class TimingOut:
+        def ehlo_or_helo_if_needed(self):
+            pass
+
+        def sendmail(self, *args, **kwargs):
+            raise TimeoutError
+
+    sleeps = []
+    monkeypatch.setattr("envelope.smtp_handler.sleep", sleeps.append)
+    monkeypatch.setattr(SMTPHandler, "_instances", {})
+    monkeypatch.setattr(SMTPHandler, "connect", lambda self: TimingOut())
+    e = Envelope("hello").from_("sender@example.com").to("to@example.com").smtp(attempts=6, delay=5)
+    assert not e.send()
+    assert sleeps == [5, 10, 20, 40, 60]
+
+
 @pytest.mark.cli
 def test_cli_blank_smtp_means_default_server(cli):
     output = cli("--smtp", "--preview", stdin="hello")

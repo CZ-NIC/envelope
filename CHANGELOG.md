@@ -1,6 +1,7 @@
 # CHANGELOG
 
-## Unreleased
+## 2.4.3 (2026-10-13)
+- chore (smime): M2Crypto is no longer used; the `smime` extra requires cryptography>=44. `Envelope.load()` decrypts AES-CBC S/MIME only — legacy 3DES messages (old Outlook, M2Crypto) raise `Cannot decrypt S/MIME: …`
 - fix (gpg): sending via sendmail broke the signature of messages with long attachment file names #19
 - enh: no global patching of `email.generator.Generator` at runtime (thread-safe output of signed messages)
 - enh: `Attachment` importable from the package (`from envelope import Attachment`)
@@ -8,8 +9,9 @@
 - fix: `Address.is_valid(check_mx=True)` never performed the MX check
 - fix: `header("To", val, replace=True)` (and Cc, Bcc, Reply-To, From, Subject) ignored the `val`
 - fix (smime): encrypting with the sender's `cert` set encrypted for the cert only, ignoring the recipients
-- fix (smime): S/MIME auto-detection (`.signature(key)`/`.encryption(cert)` without `.smime()`) and decrypting in `Envelope.load()` work with the `smime` extra alone — M2Crypto is no longer used; requires cryptography>=44. Decrypting supports AES-CBC only (legacy 3DES S/MIME no longer decrypts).
+- fix (smime): S/MIME auto-detection (`.signature(key)`/`.encryption(cert)` without `.smime()`) and decrypting in `Envelope.load()` work with the `smime` extra alone
 - fix (smime): rendering a message signed with a passphrase twice crashed (ex: changing the subject after `str(e)`)
+- enh (smtp): exponential backoff between attempts (`delay`, 2×`delay`, 4×`delay`… at most 60 s), no sleep after the last timed out attempt
 
 ## 2.4.2 (2026-10-05)
 - enh: GitHub releases created on tag push (with CHANGELOG notes and built dist files) #58

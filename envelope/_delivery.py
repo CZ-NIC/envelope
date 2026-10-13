@@ -33,7 +33,7 @@ class _DeliveryMixin:
         :param security: If not set, automatically set to `starttls` for port *587* and to `tls` for port *465*
         :param timeout: How many seconds should SMTP wait before timing out.
         :param attempts: How many times we try to send the message to an SMTP server.
-        :param delay: How many seconds to sleep before re-trying a timed out connection.
+        :param delay: How many seconds to sleep before re-trying a failed connection, doubled with every further attempt (at most 60 s).
         :param local_hostname: FQDN of the local host in the HELO/EHLO command.
         :return:
         """

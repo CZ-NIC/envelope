@@ -51,7 +51,7 @@ SMTP server.
     * `security` If not set, automatically set to `starttls` for port *587* and to `tls` for port *465*
     * `timeout` How many seconds should SMTP wait before timing out.
     * `attempts` How many times we try to send the message to an SMTP server.
-    * `delay` How many seconds to sleep before re-trying a timed out connection.
+    * `delay` How many seconds to sleep before re-trying a failed connection. Doubled with every further attempt (exponential backoff), at most 60 s.
     * `local_hostname` FQDN of the local host in the HELO/EHLO command.
 * Input format may be in the following form:
     * `None` default localhost server used

@@ -11,6 +11,8 @@ from time import sleep
 from .utils import message_as_smtp_bytes
 logger = logging.getLogger(__name__)
 
+MAX_DELAY = 60  # cap of the exponential backoff between attempts, in seconds
+
 
 class SMTPHandler:
     # cache of different smtp connections.
@@ -20,7 +22,7 @@ class SMTPHandler:
     def __init__(self, host="localhost", port=25, user=None, password=None, security=None, timeout=3, attempts=3,
                  delay=3, local_hostname=None):
         self.attempts = attempts
-        # If sending timeouts, delay N seconds before another attempt.
+        # If sending fails, delay N seconds before another attempt, doubled with each further attempt.
         self.delay = delay
 
         if isinstance(host, SMTP):
@@ -116,15 +118,14 @@ class SMTPHandler:
                         f"SMTP authentication error, will not re-try. {e}")
                     return False
                 elif isinstance(e, timeout_exc):
-                    if self.delay:
-                        sleep(self.delay)
+                    if attempt + 1 < self.attempts:
+                        self._backoff(attempt)
                     continue
                 elif isinstance(e, SMTPException):
                     if attempt + 1 < self.attempts:
                         logger.info(
                             f"{type(e).__name__}, attempt {attempt + 1}. {e}")
-                        if self.delay:
-                            sleep(self.delay)
+                        self._backoff(attempt)
                         continue
                     else:
                         logger.warning(
@@ -132,6 +133,11 @@ class SMTPHandler:
                         return False
         logger.warning(f"SMTP sending timed out {self.attempts} times at {self.obfuscated_key}.")
         return False
+
+    def _backoff(self, attempt):
+        """ Sleep before another attempt: delay, 2×delay, 4×delay… capped at MAX_DELAY. """
+        if self.delay:
+            sleep(min(self.delay * 2 ** attempt, MAX_DELAY))
 
     @staticmethod
     def _quit(smtp):

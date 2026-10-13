@@ -4,7 +4,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 name = "envelope"
-version = "2.4.2"
+version = "2.4.3"
 description = "Insert a message and attachments and send e-mail / sign / encrypt contents by a single line."
 authors = ["Edvard Rejthar <edvard.rejthar@nic.cz>"]
 license = "LGPL-3.0-or-later"
@@ -48,7 +48,7 @@ filterwarnings = ["error"]
 
 # Releasing: see Makefile. The topmost "## Unreleased" CHANGELOG.md heading is required, a bump dates it.
 [tool.bumpversion]
-current_version = "2.4.2"
+current_version = "2.4.3"
 commit = true
 tag = true
 tag_name = "{new_version}"
