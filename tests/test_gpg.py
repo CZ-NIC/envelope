@@ -423,7 +423,7 @@ def test_long_attachment_filename_payload_parts_keep_signature(signed_attachment
 
 
 def test_long_attachment_filename_as_message_breaks_signature(signed_attachment):
-    # When this test fails it means the Python package was corrected. Good news! Let's get rid of #19 mocking.
+    # When this test fails it means the Python package was corrected. Good news! Let's get rid of the #19 generator workaround (utils.message_as_string).
     assert not verify_inline_message(signed_attachment, signed_attachment.as_message().as_string())
 
 

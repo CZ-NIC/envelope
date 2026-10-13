@@ -6,9 +6,6 @@
 - enh: `Attachment` importable from the package (`from envelope import Attachment`)
 - fix (smime): signing + encrypting crashed when the key and the certificate were in a single file, or with an invalid key
 - fix: `Address.is_valid(check_mx=True)` never performed the MX check
-- docs: read receipt example (Disposition-Notification-To header)
-- refactor: split Envelope class into domain mixins (internal, API unchanged)
-- docs: warn about path traversal when forwarding user-supplied file names to `.attach(path=...)`
 
 ## 2.4.2 (2026-10-05)
 - enh: GitHub releases created on tag push (with CHANGELOG notes and built dist files) #58
