@@ -821,6 +821,16 @@ class Envelope(_AddressingMixin, _SigningMixin, _EncryptionMixin, _DeliveryMixin
         """
         :type sign: If GPG, this should be the key fingerprint.
         """
+        msg_text, html = self._compose_body(plain, html)
+        if html:
+            self._add_html_alternative(msg_text, html)
+        self._add_attachments(msg_text, sign)
+        return self._wrap_inner_message(msg_text, encrypt_gpg, sign_gpg)
+
+    def _compose_body(self, plain: bytes, html: bytes) -> tuple[EmailMessage, Optional[bytes]]:
+        """ The message text part (plain or HTML), or the raw payload if the user has set Content-Type.
+        :return: (message, HTML alternative still to be added) – if there is no plain text, HTML becomes the main part.
+        """
         # we'll send it later, transform the text to the e-mail first
         msg_text = EmailMessage()
         # XX make it possible to be "plain" here + to have "plain" as the automatically generated html for older browsers
@@ -873,39 +883,42 @@ class Envelope(_AddressingMixin, _SigningMixin, _EncryptionMixin, _DeliveryMixin
             # When the user sets Content-Type as multipart, they signalize they want to create sub-message themselves,
             # if they do not do that, the message looks badly. Ex: the text should contain boundaries and sub-messages.
             msg_text.set_payload(plain)
+        return msg_text, html
 
-        if html:
-            # prefer transferring the HTML alternative as a string,
-            # so the source code of the EML is more readable (no Content-Transfer-Encoding is used)
-            try:
-                # make sure `html` is in Unicode
-                html_s = html.decode()
-            except UnicodeError:
-                raise ValueError("Cannot decode the text/html alternative bytes correctly, it is not in Unicode."
-                                 " Pass it as str instead.")
-            try:
-                # if a line is longer than 1000 characters, force EmailMessage to encode whole message
-                if any(line for line in html.splitlines() if len(line) >= 1000):
-                    # passing bytes to EmailMessage makes its ContentManager to transfer it via base64 or quoted-printable
-                    # rather than plain text. Which could cause a transferring SMTP server to include line breaks and spaces
-                    # that might break up DKIM.
+    def _add_html_alternative(self, msg_text: EmailMessage, html: bytes):
+        # prefer transferring the HTML alternative as a string,
+        # so the source code of the EML is more readable (no Content-Transfer-Encoding is used)
+        try:
+            # make sure `html` is in Unicode
+            html_s = html.decode()
+        except UnicodeError:
+            raise ValueError("Cannot decode the text/html alternative bytes correctly, it is not in Unicode."
+                             " Pass it as str instead.")
+        try:
+            # if a line is longer than 1000 characters, force EmailMessage to encode whole message
+            if any(line for line in html.splitlines() if len(line) >= 1000):
+                # passing bytes to EmailMessage makes its ContentManager to transfer it via base64 or quoted-printable
+                # rather than plain text. Which could cause a transferring SMTP server to include line breaks and spaces
+                # that might break up DKIM.
 
-                    # create an alternative message part and set utf-8 encoding explicitly
-                    alt_msg = EmailMessage()
-                    alt_msg.set_content(html_s.encode("utf-8"), maintype="text", subtype="html")  # pass `html` as bytes
-                    alt_msg.set_param("charset", "utf-8", replace=True)
-                    msg_text.make_alternative()
-                    msg_text.attach(alt_msg)
-                else:
-                    msg_text.add_alternative(html_s, subtype='html')  # `html` as string
-            except (ValueError, TypeError):
-                # Content-Type: multipart/mixed -> ValueError: Cannot convert mixed to alternative
-                # Content-Type: multipart/alternative -> TypeError: Attach is not valid on a message with a non-multipart payload
-                raise ValueError("Failed to add HTML alternative to the message. Try not setting Content-Type.")
+                # create an alternative message part and set utf-8 encoding explicitly
+                alt_msg = EmailMessage()
+                alt_msg.set_content(html_s.encode("utf-8"), maintype="text", subtype="html")  # pass `html` as bytes
+                alt_msg.set_param("charset", "utf-8", replace=True)
+                msg_text.make_alternative()
+                msg_text.attach(alt_msg)
             else:
-                if self._message.boundary:
-                    msg_text.set_boundary(self._message.boundary)
+                msg_text.add_alternative(html_s, subtype='html')  # `html` as string
+        except (ValueError, TypeError):
+            # Content-Type: multipart/mixed -> ValueError: Cannot convert mixed to alternative
+            # Content-Type: multipart/alternative -> TypeError: Attach is not valid on a message with a non-multipart payload
+            raise ValueError("Failed to add HTML alternative to the message. Try not setting Content-Type.")
+        else:
+            if self._message.boundary:
+                msg_text.set_boundary(self._message.boundary)
 
+    def _add_attachments(self, msg_text: EmailMessage, sign):
+        """ Inline attachments go to a multipart/related part, the others are enclosed. """
         if any(a for a in self._attachments if a.inline):
             # we have to convert the HTML alternative to the multipart/relative content-type.
             # This is either the latter of the two alternatives (if the payload is a list, thus both are specified),
@@ -923,13 +936,11 @@ class Envelope(_AddressingMixin, _SigningMixin, _EncryptionMixin, _DeliveryMixin
                 raise RuntimeError("Cannot attach GPG sign key, not found.")
             self.attach(contents, "public-key.asc")
 
-        failed = False
         [msg_text.add_attachment(a.data,
                                  **dict(zip(("maintype", "subtype"), a.mimetype.split("/"))),
                                  filename=a.name) for a in self._attachments if not a.inline]
 
-        if failed:
-            return False
+    def _wrap_inner_message(self, msg_text: EmailMessage, encrypt_gpg: bool, sign_gpg: bool) -> EmailMessage:
         if encrypt_gpg:  # GPG inner message definition
             # in order to encrypt subject field → encapsulate the message into multipart having rfc822-headers submessage
             email = EmailMessage()

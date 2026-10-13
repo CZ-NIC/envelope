@@ -95,3 +95,10 @@ def test_libmagic():
          .attach(IMAGE_FILE))
     assert [a.mimetype for a in e.attachments()] == ["text/plain", "text/plain", "application/octet-stream",
                                                      "text/html", "text/html", "image/gif"]
+
+
+def test_html_only_single_part():
+    """ With no plain text, HTML becomes the main part and must not be added once more as an alternative. """
+    output = str(Envelope().message("<b>html only</b>", alternative="html").subject("test"))
+    assert output.count("text/html") == 1
+    assert "multipart/alternative" not in output
