@@ -1,6 +1,7 @@
 # CHANGELOG
 
 ## Unreleased
+- docs: read receipt example (Disposition-Notification-To header)
 - refactor: split Envelope class into domain mixins (internal, API unchanged)
 - docs: warn about path traversal when forwarding user-supplied file names to `.attach(path=...)`
 

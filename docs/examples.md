@@ -100,6 +100,18 @@ The only thing you have to do is to set the `inline=True` parameter of the attac
     .message("Hey, this is an inline image: <img src='cid:file.jpg' />"))
 ```
 
+## Read receipt
+Ask the recipient's mail client to send a read receipt ([RFC 8098](https://www.rfc-editor.org/rfc/rfc8098)) with a generic header. The client (ex: Outlook, Thunderbird) asks the recipient whether to send it; many clients and webmails (ex: Gmail) ignore the header, so a missing receipt proves nothing.
+```python3
+(Envelope()
+    .from_("me@example.org")
+    .to("user@example.org")
+    .header("Disposition-Notification-To", "me@example.org"))  # where the receipt should go
+```
+```bash
+envelope --from me@example.org --to user@example.org --header Disposition-Notification-To me@example.org
+```
+
 ## Complex example
 Send an encrypted and signed message (GPG) via the default SMTP server, via all three interfaces.
 ```bash
