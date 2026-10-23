@@ -1,13 +1,11 @@
 from email.utils import getaddresses, parseaddr
 import logging
-from os import environ
 import re
 import inspect
 import sys
 from .utils import assure_list
 
-environ['PY3VE_IGNORE_UPDATER'] = '1'
-from validate_email import validate_email  # noqa, #17 E402, the package name is py3-validate-email
+from email_validator import EmailNotValidError, validate_email
 
 
 logger = logging.getLogger(__name__)
@@ -211,12 +209,16 @@ class Address(str):
         return cls.disguised_address.sub(remedy, displayed_email)
 
     def is_valid(self, check_mx=False):
-        if not validate_email(self.address, check_dns=False, check_smtp=False, check_blacklist=False):
+        try:
+            validate_email(self.address, check_deliverability=False)
+        except EmailNotValidError:
             logger.warning(f"Address format invalid: '{self}'")
             return False
-        elif check_mx:
+        if check_mx:
             print(f"Verifying {self}...")
-            if not validate_email(self.address, check_dns=True, check_smtp=False, check_blacklist=False):
+            try:
+                validate_email(self.address, check_deliverability=True)
+            except EmailNotValidError:
                 logger.warning(f"MX check failed for: '{self}'")
                 return False
         return True

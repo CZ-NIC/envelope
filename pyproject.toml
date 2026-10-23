@@ -16,7 +16,7 @@ classifiers = ["Programming Language :: Python :: 3"]
 python = ">=3.10"
 python-magic = "*"
 python-gnupg = ">=0.5"
-py3-validate-email = "*"
+email-validator = "*"
 cryptography = { version = ">=44", optional = true }
 
 [tool.poetry.extras]
