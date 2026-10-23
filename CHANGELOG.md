@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## Unreleased
+## 2.5.0 (2026-10-23)
 - chore: replace py3-validate-email with email-validator, adopting its syntax and DNS validation defaults
 - fix (smtp): sending from multiple threads through the same SMTP server no longer uses one cached connection concurrently (ex: threaded web server, `ThreadPoolExecutor`)
 
