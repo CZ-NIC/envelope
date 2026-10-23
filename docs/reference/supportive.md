@@ -25,7 +25,7 @@
   * **check**: Check all e-mail addresses and SMTP connection and return True/False if succeeded. Tries to find SPF, DKIM and DMARC DNS records depending on the From's domain and print them out.
     * **--check**
     * **.check(check_mx=True, check_smtp=True)**
-        * `check_mx` E-mail addresses can be checked for MX record, not only for their format.
+        * `check_mx` Check DNS for mail servers (MX records, with A/AAAA fallback), not only the address format.
         * `check_smtp` We try to connect to the SMTP host.
 
     ```bash
@@ -120,7 +120,7 @@ c = a.casefold()
 a is not c, a == c, a.name == "john", a.name != c.name
 ```
 
-Method `.is_valid(check_mx=False)` returns boolean if the format is valid. When `check_mx` set to `True`, MX server is inquired too.
+Method `.is_valid(check_mx=False)` returns boolean if the format is valid. With `check_mx=True`, DNS is checked too (MX records, with A/AAAA fallback).
 
 Since the `Address` is a subclass of `str`, you can safely join such objects.
 

@@ -1,6 +1,10 @@
 import sys
 
 import pytest
+import dns.exception
+import dns.resolver
+import dns.rrset
+from email_validator import EmailUndeliverableError
 
 from envelope import Envelope
 from envelope.address import Address, _parseaddr, _getaddresses
@@ -279,20 +283,70 @@ def test_loaded_invalid_contact():
     assert not e4.from_().is_valid()
 
 
-def test_is_valid_check_mx(monkeypatch):
+@pytest.mark.parametrize("deliverable", [True, False])
+def test_is_valid_check_mx(monkeypatch, capsys, caplog, deliverable):
     """ check_mx=True really asks DNS (it used to be short-circuited by a print() returning None). """
     calls = []
 
-    def fake_validate_email(address, check_dns, **_):
-        calls.append(check_dns)
-        return not check_dns  # format passes, DNS check fails
+    def fake_validate_email(address, check_deliverability):
+        calls.append(check_deliverability)
+        if check_deliverability and not deliverable:
+            raise EmailUndeliverableError("Domain does not accept email")
+        return object()
 
     monkeypatch.setattr("envelope.address.validate_email", fake_validate_email)
     address = Address("test@example.com")
     assert address.is_valid()
     assert calls == [False]
-    assert not address.is_valid(check_mx=True)
+    assert address.is_valid(check_mx=True) is deliverable
     assert calls == [False, False, True]
+    assert capsys.readouterr().out == "Verifying test@example.com...\n"
+    assert ("MX check failed for: 'test@example.com'" in caplog.text) is not deliverable
+
+
+@pytest.mark.parametrize(("value", "expected"), [
+    ("Person@EXAMPLE.com", True),
+    ("person+tag@example.com", True),
+    ("ツ@example.com", True),
+    ("Invalid", False),
+    ("person@localhost", False),
+    ('"quoted local"@example.com', False),
+])
+def test_is_valid_format(monkeypatch, caplog, capsys, value, expected):
+    def unexpected_dns(*args, **kwargs):
+        pytest.fail("Format validation must not query DNS")
+
+    monkeypatch.setattr(dns.resolver.Resolver, "resolve", unexpected_dns)
+    address = Address(address=value)
+    assert address.is_valid() is expected
+    assert address.address == value
+    if not expected:
+        assert not address.is_valid(check_mx=True)
+        assert f"Address format invalid: '{address}'" in caplog.text
+    assert capsys.readouterr().out == ""
+
+
+@pytest.mark.parametrize(("records", "error", "expected"), [
+    ({"MX": "10 mail.company.com."}, None, True),
+    ({"A": "8.8.8.8"}, None, True),
+    ({"AAAA": "2001:4860:4860::8888"}, None, True),
+    ({"MX": "0 ."}, None, False),
+    ({}, None, False),
+    ({}, dns.resolver.NXDOMAIN, False),
+    ({}, dns.exception.Timeout, True),
+    ({}, dns.resolver.NoNameservers, True),
+], ids=["mx", "a-fallback", "aaaa-fallback", "null-mx", "no-records", "missing-domain", "timeout", "no-nameservers"])
+def test_is_valid_dns(monkeypatch, records, error, expected):
+    def resolve(self, domain, rdtype):
+        assert domain == "company.com"
+        if error:
+            raise error()
+        if rdtype not in records:
+            raise dns.resolver.NoAnswer()
+        return dns.rrset.from_text(domain, 60, "IN", rdtype, records[rdtype])
+
+    monkeypatch.setattr(dns.resolver.Resolver, "resolve", resolve)
+    assert Address("test@company.com").is_valid(check_mx=True) is expected
 
 
 @pytest.mark.parametrize(("value", "expected"), [
