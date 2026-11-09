@@ -138,11 +138,13 @@ def main():
                                  " [security, [timeout, [attempts, [delay, [local_hostname]]]]]]]` or dict.\n"
                                  "Ex: '--smtp {\"host\": \"localhost\", \"port\": 25}'."
                                  " Security may be explicitly set to 'starttls', 'tls'"
-                                 " or automatically determined by port.",
+                                 " or automatically determined by port.\n"
+                                 "Put 0/false/off to not use SMTP (eg, for Sendmail).",
                             nargs="*", action=BlankTrue, metavar=("HOST", "PORT"))
     group_send.add_argument('--sendmail', help="Path to sendmail binary. Disables SMTP."
-                                          f" Leave blank for default {SENDMAIL_PATH}.", nargs="?", action=BlankTrue,
-                                          metavar="PATH")
+                                          f" Leave blank for default {SENDMAIL_PATH}.\n"
+                                          "Put 0/false/off to explicitly not use Sendmail (or just not use the argument).", 
+                                          nargs="?", action=BlankTrue, metavar="PATH")
     group_send.add_argument('--send', help="Send e-mail. Blank to send now.", nargs="?", action=BlankTrue)
 
     group_supp = parser.add_argument_group("Supportive")

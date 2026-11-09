@@ -61,6 +61,7 @@ SMTP server.
     * `dict` specifying {"host": ..., "port": ...}
         * ex: `envelope --smtp '{"host": "localhost"}'` will set up host parameter
     * `str` hostname or path to an INI file (existing file, ending at `.ini`, with the section [SMTP])
+    * `False` do not use SMTP at all, eg, use Sendmail
 
 ```ini
 [SMTP]
@@ -74,6 +75,23 @@ Do not fear to pass the `smtp` in a loop, we make just a single connection to th
 smtp = "localhost", 25
 for mail in mails:
     Envelope(...).smtp(smtp).send()
+```
+
+## sendmail
+
+Use Envelope with local delivery instead of SMTP.
+
+* **--sendmail**
+* **.sendmail(sendmail=True)**
+* **Envelope(sendmail=)**
+* Parameters:
+  * `sendmail` defaults to `True`, enabling local delivery and _disables_ SMTP. Can be `False` to make sure Sendmail is not used, or a path (`str`, `Path`, etc.) to a `sendmail` compatible program.
+
+Otherwise should react similar to the `smtp` sending variant.
+
+```python3
+Envelope(...).sendmail().send()
+Envelope(sendmail=True).send()
 ```
 
 ## attachments

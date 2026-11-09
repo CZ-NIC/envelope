@@ -78,7 +78,7 @@ class _DeliveryMixin:
 
     def sendmail(self, sendmail=True):
         """
-        :param sendmail: String for Sendmail binary or True.
+        :param sendmail: Path/String for Sendmail binary or True.
         Disables SMTP when enabled.
         """
         self._sendmail = sendmail
@@ -204,7 +204,7 @@ class _DeliveryMixin:
             (For return compatibilty with _deliver_smtp)
         :rtype: list or False
         """
-        self._sendmail = SENDMAIL_PATH if self._sendmail == True  else str(self._sendmail)
+        self._sendmail = SENDMAIL_PATH if self._sendmail == True else str(self._sendmail)
         _unused = to_addrs
         from_addr = str(from_addr)
         if not is_safe_argv_value(from_addr):

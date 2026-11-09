@@ -78,6 +78,30 @@ Send while having specified the SMTP server via module call.
 Envelope(message="Hello world", to="user@example.org", send=True, smtp={"host":"localhost"})
 ```
 
+Send with local delivery (eg, sendmail etc.)
+```bash
+envelope --to "user@example.org" --message "Hello world" --sendmail --send
+```
+
+Send with local delivery (eg, sendmail etc.)  via module call.
+```python3
+Envelope(message="Hello world", to="user@example.org", send=True, sendmail=True)
+```
+
+Send with local delivery (eg, sendmail etc.) using a specific program
+```bash
+envelope --to "user@example.org" --message "Hello world" --sendmail /usr/local/bin/deliver --send
+```
+
+Send with local delivery (eg, sendmail etc.) using a specific program via module call.
+```python3
+Envelope(message="Hello world", to="user@example.org", send=True, sendmail="/usr/local/bin/deliver")
+# Can use Pathlib, too
+from pathlib import Path
+Envelope(message="Hello world", to="user@example.org", send=True, sendmail=Path("/usr/local/bin/deliver"))
+```
+
+
 ## Attachment
 You can attach a file in many different ways. Pick the one that suits you the best.
 ```python3
